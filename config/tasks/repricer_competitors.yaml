@@ -1,0 +1,50 @@
+task_id: repricer_competitors
+
+accounts:
+  - name: app_1
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_1"
+    stores:
+      - 30000001
+      - 30137883
+      - 30290083
+  - name: app_2
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_2"
+    stores:
+      - 30000002
+      - 30362323
+
+store_name_map:
+  UNIVERSAL: 30000001
+  ACMEWEAR: 30137883
+  11KZ: 30290083
+  MELVIS: 30362323
+  STORE-B: 30000002
+
+targets:
+  competitor_names:
+    - "Universal"
+    - "ИП STORE-B"
+    - "ИП М-GROUP"
+    - "store-d"
+    - "ИП ACMEWEAR"
+    - "ИП Store-C"
+    - "ACMEWEAR"
+    - "Store-C"
+    - "STORE-B"
+  contains_names: []
+
+run:
+  dry_run: false
+  require_confirm: true
+  max_retries: 3
+  modal_timeout_ms: 8000
+  page_timeout_ms: 240000
+  slowmo_ms: 150
+  headless: false
+  browser_profile_dir: ""
+  storage_state_path: "data/storage_state.json"
+  upload_after: false
+  checkpoint_path: "data/checkpoints/repricer_competitors.json"
+  artifacts_dir: "runs/repricer_competitors"

@@ -1,0 +1,19 @@
+task_id: repricer_dumping_enable
+
+accounts:
+  - name: app_2
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_2"
+    stores:
+      - 30362323
+
+run:
+  dry_run: false
+  require_confirm: true
+  page_timeout_ms: 240000
+  slowmo_ms: 150
+  headless: false
+  browser_profile_dir: ""
+  storage_state_path: "data/storage_state.json"
+  checkpoint_path: "data/checkpoints/repricer_dumping_enable.json"
+  artifacts_dir: "runs/repricer_dumping_enable"

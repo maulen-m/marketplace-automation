@@ -1,0 +1,21 @@
+kaspi:
+  poll_interval_min: 15
+  accounts:
+    - name: "UNIVERSAL"
+      account_id: "30000001"
+      auth: "${KASPI_TOKEN_UNIVERSAL}"
+    - name: "ACMEWEAR"
+      account_id: "30137883"
+      auth: "${KASPI_TOKEN_ACMEWEAR}"
+    - name: "11KZ"
+      account_id: "30290083"
+      auth: "${KASPI_TOKEN_11KZ}"
+    - name: "MELVIS"
+      account_id: "30362323"
+      auth: "${KASPI_TOKEN_MELVIS}"
+    - name: "STORE-B"
+      account_id: "30000002"
+      auth: "${KASPI_TOKEN_STOREB}"
+    - name: "MELVIS"
+      account_id: "30362323"
+      auth: "${KASPI_TOKEN_STOREB}"

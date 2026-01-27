@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -x ".venv/bin/python" ]; then
+  exec .venv/bin/python -m web_auto "$@"
+fi
+
+exec python3 -m web_auto "$@"

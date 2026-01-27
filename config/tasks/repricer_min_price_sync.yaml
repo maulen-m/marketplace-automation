@@ -1,0 +1,36 @@
+task_id: repricer_min_price_sync
+
+accounts:
+  - name: app_1
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_1"
+    stores:
+      - 30000001
+  - name: app_2
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_2"
+    stores:
+      - 30362323
+      - 30000002
+
+source:
+  account: app_1
+  store_id: 30000001
+  fallback_account: app_2
+  fallback_store_id: 30000002
+
+target:
+  account: app_2
+  stores:
+    - 30362323
+
+run:
+  dry_run: false
+  require_confirm: true
+  page_timeout_ms: 240000
+  slowmo_ms: 150
+  headless: false
+  browser_profile_dir: ""
+  storage_state_path: "data/storage_state.json"
+  checkpoint_path: "data/checkpoints/repricer_min_price_sync.json"
+  artifacts_dir: "runs/repricer_min_price_sync"
