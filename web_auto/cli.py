@@ -13,6 +13,7 @@ from .auth import generate_storage_state
 from .config import ConfigError, detect_task_id, load_config, load_dumping_config, load_min_price_sync_config
 from .repricer_competitors import run_repricer_competitors, run_repricer_competitors_api
 from .repricer_dumping import run_repricer_dumping_enable_api
+from .repricer_items_export import export_repricer_items_to_sqlite
 from .repricer_min_price_sync import run_repricer_min_price_sync_api
 
 
@@ -77,6 +78,21 @@ def main(argv: list[str] | None = None) -> int:
     auth_parser.add_argument("--profile-dir", help="Chrome profile dir to reuse authenticated session")
     auth_parser.add_argument("--headless", action="store_true", help="Run headless")
     auth_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    export_parser = subparsers.add_parser("export", help="Export data")
+    export_parser.add_argument("task", choices=["repricer-items"], help="Export task name")
+    export_parser.add_argument(
+        "--config",
+        default="config/tasks/repricer_competitors.yaml",
+        help="Config file path",
+    )
+    export_parser.add_argument(
+        "--out",
+        default="data/repricer_items.sqlite",
+        help="Output SQLite path",
+    )
+    export_parser.add_argument("--headless", action="store_true", help="Run headless")
+    export_parser.add_argument("--headed", action="store_true", help="Run headful")
 
     args = parser.parse_args(argv)
 
@@ -237,7 +253,32 @@ def main(argv: list[str] | None = None) -> int:
                     result["products_visited"],
                     result["min_price_updates"],
                     result["errors"],
-                )
+            )
         return 0 if result["errors"] == 0 else 4
+
+    if args.command == "export":
+        headless = True
+        if args.headed:
+            headless = False
+        if args.headless:
+            headless = True
+        if args.task == "repricer-items":
+            summary = export_repricer_items_to_sqlite(
+                config_path=args.config,
+                output_path=args.out,
+                headless=headless,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Summary: stores=%s total_items=%s total_links=%s",
+                    len(summary.get("stores", {})),
+                    summary.get("total_items"),
+                    summary.get("total_links"),
+                )
+            return 0
+        logging.error("Unknown export task")
+        return 2
 
     return 2
