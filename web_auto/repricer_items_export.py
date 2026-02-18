@@ -133,6 +133,7 @@ def export_repricer_items_to_sqlite(
     config_path: str | Path,
     output_path: str | Path,
     headless: bool = True,
+    include_all_rows: bool = False,
 ) -> dict[str, Any]:
     config = _load_config(config_path)
     output_path = Path(output_path)
@@ -148,7 +149,11 @@ def export_repricer_items_to_sqlite(
 
     summary = {
         "fetched_at": fetched_at,
+        "include_all_rows": include_all_rows,
         "stores": {},
+        "total_rows_scanned": 0,
+        "total_on_sale_rows": 0,
+        "total_off_sale_rows": 0,
         "total_items": 0,
         "total_links": 0,
     }
@@ -165,7 +170,7 @@ def export_repricer_items_to_sqlite(
 
             for store_id in account.stores:
                 store_name = config.store_name_map.get(store_id)
-                store_summary = {"rows": 0, "inserted": 0, "links": 0}
+                store_summary = {"rows": 0, "on_sale_rows": 0, "off_sale_rows": 0, "inserted": 0, "links": 0}
                 summary["stores"][str(store_id)] = store_summary
 
                 try:
@@ -227,7 +232,16 @@ def export_repricer_items_to_sqlite(
 
                     for row in rows:
                         store_summary["rows"] += 1
-                        if not _is_on_sale(row):
+                        summary["total_rows_scanned"] += 1
+                        on_sale = _is_on_sale(row)
+                        if on_sale:
+                            store_summary["on_sale_rows"] += 1
+                            summary["total_on_sale_rows"] += 1
+                        else:
+                            store_summary["off_sale_rows"] += 1
+                            summary["total_off_sale_rows"] += 1
+
+                        if not include_all_rows and not on_sale:
                             continue
 
                         row_id = _extract_row_id(row.get("DT_RowId") or row.get("id") or row.get("row_id"))

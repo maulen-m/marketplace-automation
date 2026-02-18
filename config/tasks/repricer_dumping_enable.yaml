@@ -1,11 +1,13 @@
 task_id: repricer_dumping_enable
 
 accounts:
-  - name: app_2
+  - name: app_1
     base_url: "https://repricer.kz/price_strategy/"
-    token_env: "REPRICER_TOKEN_2"
+    token_env: "REPRICER_TOKEN_1"
     stores:
-      - 30362323
+      - 30000001
+      - 30000002
+      - 30290083
 
 run:
   dry_run: false

@@ -27,10 +27,16 @@ Keep it short, operational, and task-agnostic.
 - **Atomic commits only.** One commit = one intent.
 - **Minimal blast radius.** Target ≤5 files per commit unless explicitly justified.
 - **Idempotent workflows.** Re-run safe: same inputs → same end state.
+- **No internal price competition.** Our stores must never compete with each other on price when the same offer is active for sale.
 - **Dry-run first** for any task that changes state. Require explicit `--confirm` for writes.
 - **No secrets in git or oracle packs.** (.env, tokens, credentials, cookies, storageState, PDFs with PII).
 - **No hardcoded absolute paths** in committed scripts. Use env vars + repo-relative paths.
 - **No destructive operations** (delete accounts/data, irreversible clicks) unless explicitly approved.
+- **Canonical business truth is external and read-only.**
+  - Main business repo: `~/Docs/Autonomous_business`
+  - This repo may only read/copy/reference from that repo.
+  - Never edit, write, or mutate files in `~/Docs/Autonomous_business`.
+  - On fact/variable conflicts, resolve using Autonomous_business tables/schemas/reports as canonical truth.
 
 ---
 

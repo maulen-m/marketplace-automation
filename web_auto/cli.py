@@ -15,6 +15,7 @@ from .repricer_competitors import run_repricer_competitors, run_repricer_competi
 from .repricer_dumping import run_repricer_dumping_enable_api
 from .repricer_items_export import export_repricer_items_to_sqlite
 from .repricer_min_price_sync import run_repricer_min_price_sync_api
+from .repricer_unified_truth import export_repricer_unified_report, export_repricer_unified_truth
 
 
 def _setup_logging(verbose: bool, quiet: bool) -> None:
@@ -80,7 +81,11 @@ def main(argv: list[str] | None = None) -> int:
     auth_parser.add_argument("--headed", action="store_true", help="Run headful")
 
     export_parser = subparsers.add_parser("export", help="Export data")
-    export_parser.add_argument("task", choices=["repricer-items"], help="Export task name")
+    export_parser.add_argument(
+        "task",
+        choices=["repricer-items", "repricer-unified-truth", "repricer-unified-report"],
+        help="Export task name",
+    )
     export_parser.add_argument(
         "--config",
         default="config/tasks/repricer_competitors.yaml",
@@ -90,6 +95,46 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         default="data/repricer_items.sqlite",
         help="Output SQLite path",
+    )
+    export_parser.add_argument(
+        "--db-out",
+        default="data/repricer_unified_truth.sqlite",
+        help="Unified truth DB output path",
+    )
+    export_parser.add_argument(
+        "--xlsx-out",
+        default="exports/repricer_unified_truth.xlsx",
+        help="Unified truth workbook output path",
+    )
+    export_parser.add_argument(
+        "--md-out",
+        default="exports/repricer_unified_truth.md",
+        help="Unified truth markdown report path",
+    )
+    export_parser.add_argument(
+        "--external-truth-dir",
+        default="Docs/external_db_truth",
+        help="External DB truth directory",
+    )
+    export_parser.add_argument(
+        "--legacy-snapshot",
+        default="data/repricer_items.sqlite",
+        help="Legacy Repricer snapshot SQLite path",
+    )
+    export_parser.add_argument(
+        "--kaspi-accounts",
+        default="config/tasks/kaspi_accounts.yaml",
+        help="Kaspi accounts config path",
+    )
+    export_parser.add_argument(
+        "--refresh-repricer",
+        action="store_true",
+        help="Refresh current Repricer snapshot before unified merge",
+    )
+    export_parser.add_argument(
+        "--include-all-rows",
+        action="store_true",
+        help="Include sales-off rows for repricer-items export",
     )
     export_parser.add_argument("--headless", action="store_true", help="Run headless")
     export_parser.add_argument("--headed", action="store_true", help="Run headful")
@@ -267,15 +312,55 @@ def main(argv: list[str] | None = None) -> int:
                 config_path=args.config,
                 output_path=args.out,
                 headless=headless,
+                include_all_rows=args.include_all_rows,
             )
             if args.json:
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
             else:
                 logging.info(
-                    "Summary: stores=%s total_items=%s total_links=%s",
+                    "Summary: stores=%s scanned=%s inserted=%s total_links=%s",
                     len(summary.get("stores", {})),
+                    summary.get("total_rows_scanned"),
                     summary.get("total_items"),
                     summary.get("total_links"),
+                )
+            return 0
+        if args.task == "repricer-unified-truth":
+            summary = export_repricer_unified_truth(
+                config_path=args.config,
+                db_out_path=args.db_out,
+                xlsx_out_path=args.xlsx_out,
+                markdown_out_path=args.md_out,
+                external_truth_dir=args.external_truth_dir,
+                kaspi_accounts_path=args.kaspi_accounts,
+                legacy_snapshot_path=args.legacy_snapshot,
+                refresh_repricer=args.refresh_repricer,
+                headless=headless,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Summary: history_rows=%s latest_rows=%s bridge_rows=%s db=%s xlsx=%s md=%s",
+                    summary.get("history_rows"),
+                    summary.get("latest_rows"),
+                    summary.get("bridge_rows"),
+                    summary.get("db_path"),
+                    summary.get("xlsx_path"),
+                    summary.get("markdown_path"),
+                )
+            return 0
+        if args.task == "repricer-unified-report":
+            summary = export_repricer_unified_report(db_path=args.db_out)
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Summary: history_rows=%s latest_rows=%s bridge_rows=%s unresolved_latest=%s",
+                    summary.get("history_rows"),
+                    summary.get("latest_rows"),
+                    summary.get("bridge_rows"),
+                    summary.get("unresolved_latest_rows"),
                 )
             return 0
         logging.error("Unknown export task")

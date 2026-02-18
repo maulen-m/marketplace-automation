@@ -6,20 +6,12 @@ accounts:
     token_env: "REPRICER_TOKEN_1"
     stores:
       - 30000001
-      - 30137883
-      - 30290083
-  - name: app_2
-    base_url: "https://repricer.kz/price_strategy/"
-    token_env: "REPRICER_TOKEN_2"
-    stores:
       - 30000002
-      - 30362323
+      - 30290083
 
 store_name_map:
   UNIVERSAL: 30000001
-  ACMEWEAR: 30137883
   11KZ: 30290083
-  MELVIS: 30362323
   STORE-B: 30000002
 
 targets:
@@ -28,10 +20,7 @@ targets:
     - "ИП STORE-B"
     - "ИП М-GROUP"
     - "store-d"
-    - "ИП ACMEWEAR"
-    - "ИП Store-C"
-    - "ACMEWEAR"
-    - "Store-C"
+    - "11KZ"
     - "STORE-B"
   contains_names: []
 
