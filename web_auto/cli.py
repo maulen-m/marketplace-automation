@@ -15,7 +15,13 @@ from .repricer_competitors import run_repricer_competitors, run_repricer_competi
 from .repricer_dumping import run_repricer_dumping_enable_api
 from .repricer_items_export import export_repricer_items_to_sqlite
 from .repricer_min_price_sync import run_repricer_min_price_sync_api
-from .repricer_unified_truth import export_repricer_unified_report, export_repricer_unified_truth
+from .repricer_unified_truth import (
+    DEFAULT_LINKS_BASE_XLSX,
+    DEFAULT_SCRAPE_CATALOG_XLSX,
+    DEFAULT_SCRAPE_PRICEWARS_DIR,
+    export_repricer_unified_report,
+    export_repricer_unified_truth,
+)
 
 
 def _setup_logging(verbose: bool, quiet: bool) -> None:
@@ -125,6 +131,27 @@ def main(argv: list[str] | None = None) -> int:
         "--kaspi-accounts",
         default="config/tasks/kaspi_accounts.yaml",
         help="Kaspi accounts config path",
+    )
+    export_parser.add_argument(
+        "--links-base-xlsx",
+        default=DEFAULT_LINKS_BASE_XLSX,
+        help="SKU link base workbook path",
+    )
+    export_parser.add_argument(
+        "--scrape-catalog-xlsx",
+        default=DEFAULT_SCRAPE_CATALOG_XLSX,
+        help="Scrape catalog workbook path",
+    )
+    export_parser.add_argument(
+        "--scrape-pricewars-dir",
+        default=DEFAULT_SCRAPE_PRICEWARS_DIR,
+        help="Scrape price-wars workbook directory",
+    )
+    export_parser.add_argument(
+        "--sales-window-days",
+        type=int,
+        default=90,
+        help="Rolling sales window in days for control scope",
     )
     export_parser.add_argument(
         "--refresh-repricer",
@@ -334,6 +361,10 @@ def main(argv: list[str] | None = None) -> int:
                 external_truth_dir=args.external_truth_dir,
                 kaspi_accounts_path=args.kaspi_accounts,
                 legacy_snapshot_path=args.legacy_snapshot,
+                links_base_xlsx_path=args.links_base_xlsx,
+                scrape_catalog_xlsx_path=args.scrape_catalog_xlsx,
+                scrape_pricewars_dir=args.scrape_pricewars_dir,
+                sales_window_days=args.sales_window_days,
                 refresh_repricer=args.refresh_repricer,
                 headless=headless,
             )
@@ -341,10 +372,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
             else:
                 logging.info(
-                    "Summary: history_rows=%s latest_rows=%s bridge_rows=%s db=%s xlsx=%s md=%s",
+                    "Summary: history_rows=%s latest_rows=%s control_scope_rows=%s control_ready_rows=%s db=%s xlsx=%s md=%s",
                     summary.get("history_rows"),
                     summary.get("latest_rows"),
-                    summary.get("bridge_rows"),
+                    summary.get("sold_90d_total_rows"),
+                    summary.get("sold_90d_control_ready_rows"),
                     summary.get("db_path"),
                     summary.get("xlsx_path"),
                     summary.get("markdown_path"),
