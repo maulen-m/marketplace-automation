@@ -1,0 +1,43 @@
+task_id: repricer_min_price_sync
+
+accounts:
+  - name: app_1
+    base_url: "https://repricer.kz/price_strategy/"
+    token_env: "REPRICER_TOKEN_1"
+    stores:
+      - 30000001
+      - 30000002
+      - 30290083
+
+source:
+  account: app_1
+  store_id: 30000001
+
+target:
+  account: app_1
+  stores:
+    - 30000001
+    - 30000002
+
+pricing:
+  mode: external_competitor_anchor
+  external_competitor_anchor:
+    minus_kzt: 100
+    only_if_below: true
+    exclude_not_competitors: true
+    skip_line52_locked_9990: true
+    skip_line52_locked_9990_store_ids:
+      - 30000002
+    fix_max_below_target: true
+    fix_live_price_below_target: true
+
+run:
+  dry_run: false
+  require_confirm: true
+  page_timeout_ms: 240000
+  slowmo_ms: 150
+  headless: false
+  browser_profile_dir: ""
+  storage_state_path: "data/storage_state.json"
+  checkpoint_path: "data/checkpoints/repricer_min_price_sync_external_anchor.json"
+  artifacts_dir: "runs/repricer_min_price_sync"

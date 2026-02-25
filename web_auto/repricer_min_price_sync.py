@@ -25,6 +25,15 @@ from .repricer_competitors import (
     _get_records_total,
     _wait_table_ready,
 )
+from .repricer_min_price_logic import (
+    compute_external_anchor_target,
+    extract_external_competitor_floor,
+    needs_external_live_price_fix,
+    needs_external_max_fix,
+    parse_price_int,
+    should_skip_line52_locked_9990,
+    should_apply_external_anchor,
+)
 from .utils import ensure_env
 
 
@@ -97,6 +106,7 @@ def run_repricer_min_price_sync_api(
         "run_id": run_id,
         "dry_run": effective_dry_run,
         "api_mode": True,
+        "pricing_mode": config.pricing_mode,
         "source_store_id": config.source_store_id,
         "fallback_source_store_id": config.fallback_source_store_id,
         "target_store_ids": config.target_store_ids,
@@ -112,10 +122,14 @@ def run_repricer_min_price_sync_api(
         "fallback_kaspi_added": 0,
         "products_visited": 0,
         "min_price_updates": 0,
+        "max_price_updates": 0,
+        "current_price_updates": 0,
         "api_requests": 0,
         "api_sets_attempted": 0,
         "api_sets_succeeded": 0,
         "missing_matches": 0,
+        "external_floor_found": 0,
+        "external_line52_locked_skipped": 0,
         "errors": 0,
         "per_store": {},
         "remaining_mismatches": {},
@@ -180,6 +194,7 @@ def run_repricer_min_price_sync_api(
     with sync_playwright() as p:
         source_account = _find_account(config.accounts, config.source_account)
         target_account = _find_account(config.accounts, config.target_account)
+        line52_skip_store_ids = set(config.external_skip_line52_locked_9990_store_ids)
 
         # Build reference map from source store.
         source_token = ensure_env(source_account.token_env)
@@ -258,7 +273,7 @@ def run_repricer_min_price_sync_api(
 
                 for row in rows:
                     summary["source_rows"] += 1
-                    min_price = row.get("min_price")
+                    min_price = parse_price_int(row.get("min_price"))
                     if min_price is None:
                         continue
 
@@ -270,17 +285,17 @@ def run_repricer_min_price_sync_api(
                         if link in source_by_link:
                             summary["source_link_duplicates"] += 1
                         else:
-                            source_by_link[link] = int(min_price)
+                            source_by_link[link] = min_price
                     if sku:
                         if sku in source_by_sku:
                             summary["source_sku_duplicates"] += 1
                         else:
-                            source_by_sku[sku] = int(min_price)
+                            source_by_sku[sku] = min_price
                     if kaspi_sku:
                         if kaspi_sku in source_by_kaspi:
                             summary["source_kaspi_duplicates"] += 1
                         else:
-                            source_by_kaspi[kaspi_sku] = int(min_price)
+                            source_by_kaspi[kaspi_sku] = min_price
 
                 start += length
                 draw += 1
@@ -369,20 +384,20 @@ def run_repricer_min_price_sync_api(
                                 if not rows:
                                     break
                                 for row in rows:
-                                    min_price = row.get("min_price")
+                                    min_price = parse_price_int(row.get("min_price"))
                                     if min_price is None:
                                         continue
                                     link = _normalize_link(row.get("link"))
                                     sku = _normalize_sku(row.get("merchant_sku"))
                                     kaspi_sku = _normalize_sku(row.get("kaspi_sku"))
                                     if link and link not in source_by_link:
-                                        source_by_link[link] = int(min_price)
+                                        source_by_link[link] = min_price
                                         summary["fallback_link_added"] += 1
                                     if sku and sku not in source_by_sku:
-                                        source_by_sku[sku] = int(min_price)
+                                        source_by_sku[sku] = min_price
                                         summary["fallback_sku_added"] += 1
                                     if kaspi_sku and kaspi_sku not in source_by_kaspi:
-                                        source_by_kaspi[kaspi_sku] = int(min_price)
+                                        source_by_kaspi[kaspi_sku] = min_price
                                         summary["fallback_kaspi_added"] += 1
                                 start += length
                                 draw += 1
@@ -409,10 +424,14 @@ def run_repricer_min_price_sync_api(
                     {
                         "products_visited": 0,
                         "min_price_updates": 0,
+                        "max_price_updates": 0,
+                        "current_price_updates": 0,
                         "api_requests": 0,
                         "api_sets_attempted": 0,
                         "api_sets_succeeded": 0,
                         "missing_matches": 0,
+                        "external_floor_found": 0,
+                        "external_line52_locked_skipped": 0,
                         "errors": 0,
                     },
                 )
@@ -510,63 +529,174 @@ def run_repricer_min_price_sync_api(
                             sku = _normalize_sku(row.get("merchant_sku"))
                             kaspi_sku = _normalize_sku(row.get("kaspi_sku"))
 
-                            source_min = None
-                            if link and link in source_by_link:
-                                source_min = source_by_link.get(link)
-                            elif sku and sku in source_by_sku:
-                                source_min = source_by_sku.get(sku)
-                            elif kaspi_sku and kaspi_sku in source_by_kaspi:
-                                source_min = source_by_kaspi.get(kaspi_sku)
-
-                            if source_min is None:
-                                summary["missing_matches"] += 1
-                                store_summary["missing_matches"] += 1
-                                checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
-                                save_checkpoint(effective_checkpoint, checkpoint)
-                                continue
-
-                            current_min = row.get("min_price")
+                            current_min = parse_price_int(row.get("min_price"))
                             if current_min is None:
-                                current_min = row.get("price")
-
+                                current_min = parse_price_int(row.get("price"))
                             if current_min is None:
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
                                 continue
+                            current_price = parse_price_int(row.get("price"))
+                            current_max = parse_price_int(row.get("max_price"))
 
-                            if int(current_min) == int(source_min):
-                                checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
-                                save_checkpoint(effective_checkpoint, checkpoint)
-                                continue
+                            source_min: int | None = None
+                            need_min_update = False
+                            need_max_update = False
+                            need_live_price_update = False
+                            if config.pricing_mode == "external_competitor_anchor":
+                                external_floor = extract_external_competitor_floor(
+                                    row,
+                                    store_id=store_id,
+                                    exclude_not_competitors=config.external_exclude_not_competitors,
+                                )
+                                if external_floor is None:
+                                    summary["missing_matches"] += 1
+                                    store_summary["missing_matches"] += 1
+                                    checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                    save_checkpoint(effective_checkpoint, checkpoint)
+                                    continue
+
+                                summary["external_floor_found"] += 1
+                                store_summary["external_floor_found"] += 1
+                                source_min = compute_external_anchor_target(
+                                    external_floor,
+                                    minus_kzt=config.external_competitor_minus_kzt,
+                                )
+
+                                if config.external_skip_line52_locked_9990 and should_skip_line52_locked_9990(
+                                    row=row,
+                                    current_min_price=current_min,
+                                    store_id=store_id,
+                                    allowed_store_ids=line52_skip_store_ids,
+                                ):
+                                    summary["external_line52_locked_skipped"] += 1
+                                    store_summary["external_line52_locked_skipped"] += 1
+                                    checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                    save_checkpoint(effective_checkpoint, checkpoint)
+                                    continue
+
+                                need_min_update = should_apply_external_anchor(
+                                    current_min_price=current_min,
+                                    target_min_price=source_min,
+                                    only_if_below=config.external_only_if_below,
+                                )
+                                if config.external_fix_max_below_target:
+                                    need_max_update = needs_external_max_fix(
+                                        current_max_price=current_max,
+                                        target_min_price=source_min,
+                                    )
+                                if config.external_fix_live_price_below_target:
+                                    need_live_price_update = needs_external_live_price_fix(
+                                        current_price=current_price,
+                                        target_min_price=source_min,
+                                    )
+                                if not need_min_update and not need_max_update and not need_live_price_update:
+                                    checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                    save_checkpoint(effective_checkpoint, checkpoint)
+                                    continue
+                            else:
+                                if link and link in source_by_link:
+                                    source_min = source_by_link.get(link)
+                                elif sku and sku in source_by_sku:
+                                    source_min = source_by_sku.get(sku)
+                                elif kaspi_sku and kaspi_sku in source_by_kaspi:
+                                    source_min = source_by_kaspi.get(kaspi_sku)
+
+                                if source_min is None:
+                                    summary["missing_matches"] += 1
+                                    store_summary["missing_matches"] += 1
+                                    checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                    save_checkpoint(effective_checkpoint, checkpoint)
+                                    continue
+
+                                need_min_update = current_min != source_min
+                                if not need_min_update:
+                                    checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                    save_checkpoint(effective_checkpoint, checkpoint)
+                                    continue
 
                             if effective_dry_run:
-                                summary["min_price_updates"] += 1
-                                store_summary["min_price_updates"] += 1
+                                if need_min_update:
+                                    summary["min_price_updates"] += 1
+                                    store_summary["min_price_updates"] += 1
+                                if need_max_update:
+                                    summary["max_price_updates"] += 1
+                                    store_summary["max_price_updates"] += 1
+                                if need_live_price_update:
+                                    summary["current_price_updates"] += 1
+                                    store_summary["current_price_updates"] += 1
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
                                 continue
 
-                            summary["api_sets_attempted"] += 1
-                            store_summary["api_sets_attempted"] += 1
-                            form_data = urlencode({"id": str(row_id), "min_price": str(source_min)})
-                            resp_set = target_context.request.post(
-                                "https://repricer.kz/set_new_price/",
-                                data=form_data,
-                                headers=_form_headers(bot_token, target_page.url),
-                            )
-                            summary["api_requests"] += 1
-                            store_summary["api_requests"] += 1
-                            if resp_set.status == 200:
-                                summary["api_sets_succeeded"] += 1
-                                store_summary["api_sets_succeeded"] += 1
-                                summary["min_price_updates"] += 1
-                                store_summary["min_price_updates"] += 1
-                            else:
-                                record_error(
-                                    f"API set_new_price failed store {store_id} row {row_id}",
-                                    None,
-                                    {"store_id": store_id, "row_id": row_id, "status": resp_set.status},
+                            if need_min_update:
+                                summary["api_sets_attempted"] += 1
+                                store_summary["api_sets_attempted"] += 1
+                                form_data = urlencode({"id": str(row_id), "min_price": str(source_min)})
+                                resp_set = target_context.request.post(
+                                    "https://repricer.kz/set_new_price/",
+                                    data=form_data,
+                                    headers=_form_headers(bot_token, target_page.url),
                                 )
+                                summary["api_requests"] += 1
+                                store_summary["api_requests"] += 1
+                                if resp_set.status == 200:
+                                    summary["api_sets_succeeded"] += 1
+                                    store_summary["api_sets_succeeded"] += 1
+                                    summary["min_price_updates"] += 1
+                                    store_summary["min_price_updates"] += 1
+                                else:
+                                    record_error(
+                                        f"API set_new_price failed store {store_id} row {row_id}",
+                                        None,
+                                        {"store_id": store_id, "row_id": row_id, "status": resp_set.status},
+                                    )
+
+                            if need_max_update:
+                                summary["api_sets_attempted"] += 1
+                                store_summary["api_sets_attempted"] += 1
+                                form_data = urlencode({"id": str(row_id), "max_price": str(source_min)})
+                                resp_set = target_context.request.post(
+                                    "https://repricer.kz/set_max_price/",
+                                    data=form_data,
+                                    headers=_form_headers(bot_token, target_page.url),
+                                )
+                                summary["api_requests"] += 1
+                                store_summary["api_requests"] += 1
+                                if resp_set.status == 200:
+                                    summary["api_sets_succeeded"] += 1
+                                    store_summary["api_sets_succeeded"] += 1
+                                    summary["max_price_updates"] += 1
+                                    store_summary["max_price_updates"] += 1
+                                else:
+                                    record_error(
+                                        f"API set_max_price failed store {store_id} row {row_id}",
+                                        None,
+                                        {"store_id": store_id, "row_id": row_id, "status": resp_set.status},
+                                    )
+
+                            if need_live_price_update:
+                                summary["api_sets_attempted"] += 1
+                                store_summary["api_sets_attempted"] += 1
+                                form_data = urlencode({"id": str(row_id), "price": str(source_min)})
+                                resp_set = target_context.request.post(
+                                    "https://repricer.kz/set_item_price/",
+                                    data=form_data,
+                                    headers=_form_headers(bot_token, target_page.url),
+                                )
+                                summary["api_requests"] += 1
+                                store_summary["api_requests"] += 1
+                                if resp_set.status == 200:
+                                    summary["api_sets_succeeded"] += 1
+                                    store_summary["api_sets_succeeded"] += 1
+                                    summary["current_price_updates"] += 1
+                                    store_summary["current_price_updates"] += 1
+                                else:
+                                    record_error(
+                                        f"API set_item_price failed store {store_id} row {row_id}",
+                                        None,
+                                        {"store_id": store_id, "row_id": row_id, "status": resp_set.status},
+                                    )
 
                             checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                             save_checkpoint(effective_checkpoint, checkpoint)
@@ -613,7 +743,55 @@ def run_repricer_min_price_sync_api(
                                 link = _normalize_link(row.get("link"))
                                 sku = _normalize_sku(row.get("merchant_sku"))
                                 kaspi_sku = _normalize_sku(row.get("kaspi_sku"))
-                                source_min = None
+                                current_min = parse_price_int(row.get("min_price"))
+                                if current_min is None:
+                                    current_min = parse_price_int(row.get("price"))
+                                if current_min is None:
+                                    continue
+                                current_price = parse_price_int(row.get("price"))
+                                current_max = parse_price_int(row.get("max_price"))
+
+                                source_min: int | None = None
+                                if config.pricing_mode == "external_competitor_anchor":
+                                    external_floor = extract_external_competitor_floor(
+                                        row,
+                                        store_id=store_id,
+                                        exclude_not_competitors=config.external_exclude_not_competitors,
+                                    )
+                                    if external_floor is None:
+                                        continue
+                                    source_min = compute_external_anchor_target(
+                                        external_floor,
+                                        minus_kzt=config.external_competitor_minus_kzt,
+                                    )
+                                    if config.external_skip_line52_locked_9990 and should_skip_line52_locked_9990(
+                                        row=row,
+                                        current_min_price=current_min,
+                                        store_id=store_id,
+                                        allowed_store_ids=line52_skip_store_ids,
+                                    ):
+                                        continue
+                                    need_min_update = should_apply_external_anchor(
+                                        current_min_price=current_min,
+                                        target_min_price=source_min,
+                                        only_if_below=config.external_only_if_below,
+                                    )
+                                    need_max_update = False
+                                    if config.external_fix_max_below_target:
+                                        need_max_update = needs_external_max_fix(
+                                            current_max_price=current_max,
+                                            target_min_price=source_min,
+                                        )
+                                    need_live_price_update = False
+                                    if config.external_fix_live_price_below_target:
+                                        need_live_price_update = needs_external_live_price_fix(
+                                            current_price=current_price,
+                                            target_min_price=source_min,
+                                        )
+                                    if need_min_update or need_max_update or need_live_price_update:
+                                        remaining += 1
+                                    continue
+
                                 if link and link in source_by_link:
                                     source_min = source_by_link.get(link)
                                 elif sku and sku in source_by_sku:
@@ -622,12 +800,7 @@ def run_repricer_min_price_sync_api(
                                     source_min = source_by_kaspi.get(kaspi_sku)
                                 if source_min is None:
                                     continue
-                                current_min = row.get("min_price")
-                                if current_min is None:
-                                    current_min = row.get("price")
-                                if current_min is None:
-                                    continue
-                                if int(current_min) != int(source_min):
+                                if current_min != source_min:
                                     remaining += 1
 
                             start += length

@@ -6,7 +6,7 @@ import re
 import time
 import traceback
 from urllib.parse import urlencode
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,265 @@ from playwright.sync_api import sync_playwright
 from .checkpoint import Checkpoint, Progress, load_checkpoint, progress_key, save_checkpoint
 from .config import TaskConfig
 from .utils import build_target_sets, ensure_env, normalize_name
+
+LINE52_COMPETITOR_PRICE_FLOOR = 8990
+LONG_DELIVERY_DAYS_THRESHOLD = 5
+KASPI_ASTANA_CITY_ID = "750000000"
+_KASPI_OFFER_CODE_RE = re.compile(r"-(\d+)(?:[/?#]|$)")
+_TOKEN_SPLIT_RE = re.compile(r"[^A-Z0-9]+")
+_DIGIT_SPACE_RE = re.compile(r"(?<=\d)[\s\u00A0](?=\d)")
+_PRICE_NUMBER_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
+ASTANA_TZ = timezone(timedelta(hours=5))
+KASPI_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36"
+)
+KASPI_ACCEPT = "application/json, text/plain, */*"
+KASPI_ACCEPT_LANGUAGE = "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
+
+
+def _normalize_token_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).upper()
+    text = _TOKEN_SPLIT_RE.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _is_line52_offer_row(row: dict[str, Any] | None, row_text: str | None = "") -> bool:
+    parts: list[str] = []
+    if isinstance(row, dict):
+        for key in ("resolved_sku_key", "merchant_sku", "kaspi_sku", "merchant_title", "link", "url"):
+            val = row.get(key)
+            if val:
+                parts.append(str(val))
+    if row_text:
+        parts.append(str(row_text))
+    haystack = " ".join(_normalize_token_text(v) for v in parts if v)
+    return "LINE52" in haystack
+
+
+def _parse_competitor_price_value(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    compact = text.replace("₸", "")
+    compact = _DIGIT_SPACE_RE.sub("", compact)
+    compact = compact.replace("\u00A0", "").replace(" ", "")
+    match = _PRICE_NUMBER_RE.search(compact)
+    if not match:
+        return None
+    num = match.group(0)
+    if "," in num and "." in num:
+        num = num.replace(",", "")
+    elif "," in num:
+        left, right = num.split(",", 1)
+        if len(right) <= 2:
+            num = f"{left}.{right}"
+        else:
+            num = f"{left}{right}"
+    try:
+        return float(num)
+    except ValueError:
+        return None
+
+
+def _canonical_offer_link(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = text.split("?", 1)[0].split("#", 1)[0]
+    return text.rstrip("/").lower()
+
+
+def _extract_kaspi_offer_code(value: Any) -> str | None:
+    link = str(value or "").strip()
+    if not link:
+        return None
+    match = _KASPI_OFFER_CODE_RE.search(link)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _delivery_days_to_astana(delivery_iso: Any) -> int | None:
+    text = str(delivery_iso or "").strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    today = datetime.now(ASTANA_TZ).date()
+    delivery_date = dt.astimezone(ASTANA_TZ).date()
+    return max((delivery_date - today).days, 0)
+
+
+def _kaspi_offer_headers(referer: str) -> dict[str, str]:
+    return {
+        "content-type": "application/json; charset=UTF-8",
+        "origin": "https://kaspi.kz",
+        "referer": referer,
+        "accept": KASPI_ACCEPT,
+        "user-agent": KASPI_DEFAULT_USER_AGENT,
+        "accept-language": KASPI_ACCEPT_LANGUAGE,
+    }
+
+
+def _fetch_kaspi_delivery_days_by_mid_for_offer(
+    *,
+    request_context,
+    offer_link: str,
+    city_id: str = KASPI_ASTANA_CITY_ID,
+    limit: int = 50,
+    max_pages: int = 20,
+) -> tuple[dict[str, int], int]:
+    code = _extract_kaspi_offer_code(offer_link)
+    if not code:
+        return {}, 0
+
+    canonical = _canonical_offer_link(offer_link)
+    referer = f"{canonical}/?c={city_id}" if canonical else f"https://kaspi.kz/shop/p/-{code}/?c={city_id}"
+    out: dict[str, int] = {}
+    requests_made = 0
+
+    for page_idx in range(max_pages):
+        payload = {
+            "cityId": str(city_id),
+            "id": str(code),
+            "merchantUID": [],
+            "limit": int(limit),
+            "page": int(page_idx),
+            "sortOption": "PRICE",
+        }
+        resp = request_context.post(
+            f"https://kaspi.kz/yml/offer-view/offers/{code}",
+            data=json.dumps(payload),
+            headers=_kaspi_offer_headers(referer),
+        )
+        requests_made += 1
+        if resp.status != 200:
+            break
+        try:
+            payload_out = resp.json() or {}
+        except Exception:
+            break
+        offers = payload_out.get("offers") or []
+        if not isinstance(offers, list) or not offers:
+            break
+
+        for offer in offers:
+            if not isinstance(offer, dict):
+                continue
+            mid = offer.get("merchantId")
+            if mid is None:
+                continue
+            days = _delivery_days_to_astana(offer.get("delivery"))
+            if days is None:
+                continue
+            mid_key = str(mid)
+            existing = out.get(mid_key)
+            if existing is None or days < existing:
+                out[mid_key] = days
+
+        if len(offers) < int(limit):
+            break
+
+    return out, requests_made
+
+
+def _is_partner_target_competitor(name: str, exact_targets: set[str], contains_targets: list[str]) -> bool:
+    name_norm = normalize_name(name)
+    if not name_norm:
+        return False
+    return name_norm in exact_targets or any(ct in name_norm for ct in contains_targets)
+
+
+def _should_ignore_competitor_for_row(
+    *,
+    offer_is_line52: bool,
+    competitor_name: str,
+    competitor_mid: Any,
+    competitor_price: Any,
+    competitor_delivery_days: int | None = None,
+    store_id: int,
+    already_ignored_mids: set[str],
+    exact_targets: set[str],
+    contains_targets: list[str],
+) -> tuple[bool, str]:
+    mid_str = None if competitor_mid is None else str(competitor_mid)
+    if mid_str is not None:
+        if mid_str == str(store_id):
+            return False, "self_store"
+        if mid_str in already_ignored_mids:
+            return False, "already_ignored"
+
+    if _is_partner_target_competitor(competitor_name, exact_targets, contains_targets):
+        return True, "partner_store_target"
+
+    if (
+        competitor_delivery_days is not None
+        and int(competitor_delivery_days) >= LONG_DELIVERY_DAYS_THRESHOLD
+    ):
+        return True, "long_delivery_5plus_days"
+
+    if offer_is_line52:
+        price_val = _parse_competitor_price_value(competitor_price)
+        if price_val is not None and price_val < LINE52_COMPETITOR_PRICE_FLOOR:
+            return True, "line52_competitor_price_below_8990"
+
+    return False, ""
+
+
+def _extract_competitor_price_from_modal_row(mrow) -> float | None:
+    values: list[Any] = []
+    try:
+        price_cell = mrow.locator("td:nth-child(3)")
+        if price_cell.count():
+            values.append(price_cell.first.inner_text().strip())
+    except Exception:
+        pass
+    try:
+        values.append(mrow.inner_text().strip())
+    except Exception:
+        pass
+    for value in values:
+        parsed = _parse_competitor_price_value(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _extract_competitor_mid_from_modal_row(mrow) -> int | None:
+    patterns = [
+        ("input[type=checkbox]", "data-mid"),
+        ("input[type=checkbox]", "value"),
+        ("input[type=checkbox]", "id"),
+        ("input[type=checkbox]", "onclick"),
+        ("tr", "onclick"),
+    ]
+    for selector, attr in patterns:
+        try:
+            source = mrow if selector == "tr" else mrow.locator(selector).first
+            if source.count() == 0:
+                continue
+            raw = source.get_attribute(attr)
+            if not raw:
+                continue
+            matches = re.findall(r"\d+", raw)
+            if not matches:
+                continue
+            return int(matches[-1])
+        except Exception:
+            continue
+    return None
 
 
 def _close_login_modal(page) -> None:
@@ -186,6 +445,7 @@ def _scan_remaining_targets(
             link = row.locator("a[onclick^='show_competitors']")
             if link.count() == 0:
                 continue
+            offer_is_line52 = _is_line52_offer_row(None, row.inner_text().strip())
 
             opened = False
             for _ in range(3):
@@ -204,12 +464,22 @@ def _scan_remaining_targets(
             for i in range(modal_count):
                 mrow = modal_rows.nth(i)
                 name = mrow.locator("td:nth-child(2)").inner_text().strip()
-                name_norm = normalize_name(name)
-                is_match = name_norm in exact_targets or any(ct in name_norm for ct in contains_targets)
-                if not is_match:
-                    continue
                 checkbox = mrow.locator("input[type=checkbox]")
                 if checkbox.count() == 0:
+                    continue
+                comp_price = _extract_competitor_price_from_modal_row(mrow)
+                comp_mid = _extract_competitor_mid_from_modal_row(mrow)
+                should_ignore, _ = _should_ignore_competitor_for_row(
+                    offer_is_line52=offer_is_line52,
+                    competitor_name=name,
+                    competitor_mid=comp_mid,
+                    competitor_price=comp_price,
+                    store_id=store_id,
+                    already_ignored_mids=set(),
+                    exact_targets=exact_targets,
+                    contains_targets=contains_targets,
+                )
+                if not should_ignore:
                     continue
                 if not checkbox.is_checked():
                     remaining += 1
@@ -511,6 +781,7 @@ def run_repricer_competitors(
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
                                 continue
+                            offer_is_line52 = _is_line52_offer_row(None, row.inner_text().strip())
 
                             opened = False
                             last_exc: Exception | None = None
@@ -542,14 +813,24 @@ def run_repricer_competitors(
                                 for i in range(modal_count):
                                     mrow = modal_rows.nth(i)
                                     name = mrow.locator("td:nth-child(2)").inner_text().strip()
-                                    name_norm = normalize_name(name)
-                                    is_match = name_norm in exact_targets or any(ct in name_norm for ct in contains_targets)
-                                    if not is_match:
-                                        continue
                                     checkbox = mrow.locator("input[type=checkbox]")
                                     if checkbox.count() == 0:
                                         continue
                                     if checkbox.is_checked():
+                                        continue
+                                    comp_price = _extract_competitor_price_from_modal_row(mrow)
+                                    comp_mid = _extract_competitor_mid_from_modal_row(mrow)
+                                    should_ignore, _ = _should_ignore_competitor_for_row(
+                                        offer_is_line52=offer_is_line52,
+                                        competitor_name=name,
+                                        competitor_mid=comp_mid,
+                                        competitor_price=comp_price,
+                                        store_id=store_id,
+                                        already_ignored_mids=set(),
+                                        exact_targets=exact_targets,
+                                        contains_targets=contains_targets,
+                                    )
+                                    if not should_ignore:
                                         continue
                                     if not effective_dry_run:
                                         checkbox.check(force=True)
@@ -695,6 +976,8 @@ def run_repricer_competitors_api(
         "api_requests": 0,
         "api_sets_attempted": 0,
         "api_sets_succeeded": 0,
+        "delivery_lookup_requests": 0,
+        "delivery_days_ignored": 0,
         "errors": 0,
         "per_store": {},
         "remaining_targets": {},
@@ -702,6 +985,7 @@ def run_repricer_competitors_api(
         "artifacts_dir": str(run_dir),
         "checkpoint_path": effective_checkpoint,
     }
+    delivery_days_cache: dict[str, dict[str, int]] = {}
 
     def log_error(label: str, exc: Exception | None = None, context: dict[str, Any] | None = None) -> None:
         payload: dict[str, Any] = {
@@ -724,10 +1008,6 @@ def run_repricer_competitors_api(
         if exc:
             logging.debug("%s", exc)
         log_error(label, exc, context)
-
-    def is_target(name: str) -> bool:
-        name_norm = normalize_name(name)
-        return name_norm in exact_targets or any(ct in name_norm for ct in contains_targets)
 
     with sync_playwright() as p:
         for account in config.accounts:
@@ -768,6 +1048,8 @@ def run_repricer_competitors_api(
                         "api_requests": 0,
                         "api_sets_attempted": 0,
                         "api_sets_succeeded": 0,
+                        "delivery_lookup_requests": 0,
+                        "delivery_days_ignored": 0,
                         "errors": 0,
                     },
                 )
@@ -891,20 +1173,48 @@ def run_repricer_competitors_api(
                             competitors = row.get("competitors") or []
                             not_competitors = row.get("not_competitors") or []
                             not_set = {str(x) for x in not_competitors if x is not None}
+                            offer_is_line52 = _is_line52_offer_row(row, "")
+                            delivery_days_by_mid: dict[str, int] = {}
+                            row_link = row.get("link")
+                            cache_key = _canonical_offer_link(row_link)
+                            if cache_key:
+                                if cache_key not in delivery_days_cache:
+                                    fetched_days, req_count = _fetch_kaspi_delivery_days_by_mid_for_offer(
+                                        request_context=context.request,
+                                        offer_link=row_link,
+                                    )
+                                    delivery_days_cache[cache_key] = fetched_days
+                                    summary["delivery_lookup_requests"] += req_count
+                                    store_summary["delivery_lookup_requests"] += req_count
+                                delivery_days_by_mid = delivery_days_cache.get(cache_key, {})
 
                             for comp in competitors:
                                 if not isinstance(comp, dict):
                                     continue
                                 name = comp.get("name") or ""
                                 mid = comp.get("mid")
+                                comp_price = comp.get("price")
+                                comp_delivery_days = None
+                                if mid is not None:
+                                    comp_delivery_days = delivery_days_by_mid.get(str(mid))
+                                should_ignore, reason = _should_ignore_competitor_for_row(
+                                    offer_is_line52=offer_is_line52,
+                                    competitor_name=name,
+                                    competitor_mid=mid,
+                                    competitor_price=comp_price,
+                                    competitor_delivery_days=comp_delivery_days,
+                                    store_id=store_id,
+                                    already_ignored_mids=not_set,
+                                    exact_targets=exact_targets,
+                                    contains_targets=contains_targets,
+                                )
+                                if not should_ignore:
+                                    continue
                                 if mid is None:
                                     continue
-                                if str(mid) == str(store_id):
-                                    continue
-                                if not is_target(name):
-                                    continue
-                                if str(mid) in not_set:
-                                    continue
+                                if reason == "long_delivery_5plus_days":
+                                    summary["delivery_days_ignored"] += 1
+                                    store_summary["delivery_days_ignored"] += 1
 
                                 remaining_targets += 1
                                 if effective_dry_run:
@@ -1006,19 +1316,45 @@ def run_repricer_competitors_api(
                                 competitors = row.get("competitors") or []
                                 not_competitors = row.get("not_competitors") or []
                                 not_set = {str(x) for x in not_competitors if x is not None}
+                                offer_is_line52 = _is_line52_offer_row(row, "")
+                                delivery_days_by_mid: dict[str, int] = {}
+                                row_link = row.get("link")
+                                cache_key = _canonical_offer_link(row_link)
+                                if cache_key:
+                                    if cache_key not in delivery_days_cache:
+                                        fetched_days, req_count = _fetch_kaspi_delivery_days_by_mid_for_offer(
+                                            request_context=context.request,
+                                            offer_link=row_link,
+                                        )
+                                        delivery_days_cache[cache_key] = fetched_days
+                                        summary["delivery_lookup_requests"] += req_count
+                                        store_summary["delivery_lookup_requests"] += req_count
+                                    delivery_days_by_mid = delivery_days_cache.get(cache_key, {})
                                 for comp in competitors:
                                     if not isinstance(comp, dict):
                                         continue
                                     name = comp.get("name") or ""
                                     mid = comp.get("mid")
-                                    if mid is None:
+                                    comp_price = comp.get("price")
+                                    comp_delivery_days = None
+                                    if mid is not None:
+                                        comp_delivery_days = delivery_days_by_mid.get(str(mid))
+                                    should_ignore, reason = _should_ignore_competitor_for_row(
+                                        offer_is_line52=offer_is_line52,
+                                        competitor_name=name,
+                                        competitor_mid=mid,
+                                        competitor_price=comp_price,
+                                        competitor_delivery_days=comp_delivery_days,
+                                        store_id=store_id,
+                                        already_ignored_mids=not_set,
+                                        exact_targets=exact_targets,
+                                        contains_targets=contains_targets,
+                                    )
+                                    if not should_ignore:
                                         continue
-                                    if str(mid) == str(store_id):
-                                        continue
-                                    if not is_target(name):
-                                        continue
-                                    if str(mid) in not_set:
-                                        continue
+                                    if reason == "long_delivery_5plus_days":
+                                        summary["delivery_days_ignored"] += 1
+                                        store_summary["delivery_days_ignored"] += 1
                                     verify_remaining += 1
 
                             start += length

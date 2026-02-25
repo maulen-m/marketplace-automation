@@ -57,6 +57,14 @@ class MinPriceSyncConfig:
     fallback_source_store_id: int | None
     target_account: str
     target_store_ids: list[int]
+    pricing_mode: str
+    external_competitor_minus_kzt: int
+    external_only_if_below: bool
+    external_exclude_not_competitors: bool
+    external_skip_line52_locked_9990: bool
+    external_skip_line52_locked_9990_store_ids: list[int]
+    external_fix_max_below_target: bool
+    external_fix_live_price_below_target: bool
     run: RunConfig
 
 
@@ -188,6 +196,27 @@ def load_min_price_sync_config(path: str | Path) -> MinPriceSyncConfig:
     target_stores = _as_list(target_raw.get("stores"), "target.stores must be a list")
     target_store_ids = [int(s) for s in target_stores]
 
+    pricing_raw = raw.get("pricing") or {}
+    if not isinstance(pricing_raw, dict):
+        raise ConfigError("pricing must be a mapping")
+    pricing_mode = str(pricing_raw.get("mode", "source_sync")).strip()
+    if pricing_mode not in {"source_sync", "external_competitor_anchor"}:
+        raise ConfigError("pricing.mode must be one of: source_sync, external_competitor_anchor")
+
+    external_raw = pricing_raw.get("external_competitor_anchor") or {}
+    if not isinstance(external_raw, dict):
+        raise ConfigError("pricing.external_competitor_anchor must be a mapping")
+    external_competitor_minus_kzt = int(external_raw.get("minus_kzt", 100))
+    external_only_if_below = bool(external_raw.get("only_if_below", True))
+    external_exclude_not_competitors = bool(external_raw.get("exclude_not_competitors", True))
+    external_skip_line52_locked_9990 = bool(external_raw.get("skip_line52_locked_9990", True))
+    skip_store_ids_raw = external_raw.get("skip_line52_locked_9990_store_ids", [30000002])
+    if not isinstance(skip_store_ids_raw, list):
+        raise ConfigError("pricing.external_competitor_anchor.skip_line52_locked_9990_store_ids must be a list")
+    external_skip_line52_locked_9990_store_ids = [int(v) for v in skip_store_ids_raw]
+    external_fix_max_below_target = bool(external_raw.get("fix_max_below_target", True))
+    external_fix_live_price_below_target = bool(external_raw.get("fix_live_price_below_target", True))
+
     return MinPriceSyncConfig(
         task_id=task_id,
         accounts=accounts,
@@ -201,6 +230,14 @@ def load_min_price_sync_config(path: str | Path) -> MinPriceSyncConfig:
         else None,
         target_account=str(target_account),
         target_store_ids=target_store_ids,
+        pricing_mode=pricing_mode,
+        external_competitor_minus_kzt=external_competitor_minus_kzt,
+        external_only_if_below=external_only_if_below,
+        external_exclude_not_competitors=external_exclude_not_competitors,
+        external_skip_line52_locked_9990=external_skip_line52_locked_9990,
+        external_skip_line52_locked_9990_store_ids=external_skip_line52_locked_9990_store_ids,
+        external_fix_max_below_target=external_fix_max_below_target,
+        external_fix_live_price_below_target=external_fix_live_price_below_target,
         run=run,
     )
 

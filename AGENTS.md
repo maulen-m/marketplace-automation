@@ -37,6 +37,11 @@ Keep it short, operational, and task-agnostic.
   - This repo may only read/copy/reference from that repo.
   - Never edit, write, or mutate files in `~/Docs/Autonomous_business`.
   - On fact/variable conflicts, resolve using Autonomous_business tables/schemas/reports as canonical truth.
+- **Pricelist backups are mandatory before edits.**
+  - Before any overwrite of upload/snapshot `.xlsx`, create timestamped backup in `exports/pricelist_snapshots/backups/`.
+  - Before overwriting related `.csv` artifacts (meta/log), create timestamped backup in the same backup directory.
+- **Pricelist edit log is mandatory.**
+  - Every upload pricelist rewrite must append a timestamped row to `exports/pricelist_snapshots/pricelist_edit_log.csv` with store, edited file path, and backup file path.
 
 ---
 

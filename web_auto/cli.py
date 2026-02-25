@@ -321,9 +321,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
             else:
                 logging.info(
-                    "Summary: products=%s min_price_updates=%s errors=%s",
+                    "Summary: products=%s min_price_updates=%s max_price_updates=%s current_price_updates=%s errors=%s",
                     result["products_visited"],
                     result["min_price_updates"],
+                    result.get("max_price_updates", 0),
+                    result.get("current_price_updates", 0),
                     result["errors"],
             )
         return 0 if result["errors"] == 0 else 4
