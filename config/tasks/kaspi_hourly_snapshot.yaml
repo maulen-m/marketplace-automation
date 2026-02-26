@@ -1,0 +1,25 @@
+task_id: kaspi_hourly_snapshot
+
+repricer_config_path: config/tasks/repricer_competitors.yaml
+refresh_repricer: true
+
+stores:
+  - 30000001  # Universal
+  - 30000002  # STORE-B
+
+city_id: "710000000"
+
+storage:
+  source_items_sqlite: data/repricer_items.sqlite
+  snapshot_sqlite: data/kaspi_snapshots/snapshot.sqlite
+  parquet_root: exports/kaspi_snapshots/parquet
+  artifacts_root: runs/kaspi_hourly_snapshots
+
+scrape:
+  limit: 50
+  max_pages: 20
+  timeout_seconds: 30
+
+retention:
+  hot_days: 90
+  cold_days: 365

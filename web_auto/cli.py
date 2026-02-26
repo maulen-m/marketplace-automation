@@ -11,6 +11,14 @@ from dotenv import load_dotenv
 
 from .auth import generate_storage_state
 from .config import ConfigError, detect_task_id, load_config, load_dumping_config, load_min_price_sync_config
+from .kaspi_hourly_snapshot import (
+    collect_offer_universe,
+    load_offer_rows_from_sqlite,
+    prune_snapshot_retention,
+    run_hourly_snapshot,
+)
+from .kaspi_snapshot_config import SnapshotConfigError, load_kaspi_snapshot_config
+from .kaspi_variant_refresh import run_daily_variant_refresh
 from .repricer_competitors import run_repricer_competitors, run_repricer_competitors_api
 from .repricer_dumping import run_repricer_dumping_enable_api
 from .repricer_items_export import export_repricer_items_to_sqlite
@@ -165,6 +173,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     export_parser.add_argument("--headless", action="store_true", help="Run headless")
     export_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    snapshot_parser = subparsers.add_parser("snapshot", help="Kaspi market snapshots")
+    snapshot_parser.add_argument("task", choices=["hourly", "daily-variants", "prune-retention"], help="Snapshot task")
+    snapshot_parser.add_argument(
+        "--config",
+        default="config/tasks/kaspi_hourly_snapshot.yaml",
+        help="Snapshot config file path",
+    )
+    snapshot_parser.add_argument("--run-id", help="Override run id for hourly snapshot")
+    snapshot_parser.add_argument("--run-date", help="Override run date (YYYY-MM-DD) for daily variant refresh")
+    snapshot_parser.add_argument("--refresh-repricer", action="store_true", help="Force Repricer source refresh before run")
+    snapshot_parser.add_argument("--no-refresh-repricer", action="store_true", help="Skip Repricer source refresh")
+    snapshot_parser.add_argument("--city-id", help="Override Kaspi city id")
+    snapshot_parser.add_argument("--limit", type=int, help="Override offer-view page limit")
+    snapshot_parser.add_argument("--max-pages", type=int, help="Override max pages per offer")
+    snapshot_parser.add_argument("--timeout-seconds", type=int, help="Override request timeout")
+    snapshot_parser.add_argument("--hot-days", type=int, help="Override SQLite hot retention days")
+    snapshot_parser.add_argument("--cold-days", type=int, help="Override Parquet cold retention days")
+    snapshot_parser.add_argument("--headless", action="store_true", help="Run headless")
+    snapshot_parser.add_argument("--headed", action="store_true", help="Run headful")
 
     args = parser.parse_args(argv)
 
@@ -399,5 +427,109 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         logging.error("Unknown export task")
         return 2
+
+    if args.command == "snapshot":
+        try:
+            snapshot_cfg = load_kaspi_snapshot_config(args.config)
+        except SnapshotConfigError as exc:
+            logging.error(str(exc))
+            return 2
+
+        headless = True
+        if args.headed:
+            headless = False
+        if args.headless:
+            headless = True
+
+        refresh_repricer = snapshot_cfg.refresh_repricer
+        if args.refresh_repricer:
+            refresh_repricer = True
+        if args.no_refresh_repricer:
+            refresh_repricer = False
+
+        effective_city_id = str(args.city_id or snapshot_cfg.city_id)
+        effective_limit = int(args.limit or snapshot_cfg.limit)
+        effective_max_pages = int(args.max_pages or snapshot_cfg.max_pages)
+        effective_timeout = int(args.timeout_seconds or snapshot_cfg.timeout_seconds)
+        effective_hot_days = int(args.hot_days or snapshot_cfg.hot_days)
+        effective_cold_days = int(args.cold_days or snapshot_cfg.cold_days)
+
+        if args.task == "hourly":
+            if refresh_repricer:
+                export_repricer_items_to_sqlite(
+                    config_path=snapshot_cfg.repricer_config_path,
+                    output_path=snapshot_cfg.source_items_sqlite,
+                    headless=headless,
+                    include_all_rows=False,
+                )
+            summary = run_hourly_snapshot(
+                source_items_sqlite=snapshot_cfg.source_items_sqlite,
+                snapshot_sqlite=snapshot_cfg.snapshot_sqlite,
+                parquet_root=snapshot_cfg.parquet_root,
+                artifacts_root=snapshot_cfg.artifacts_root,
+                store_ids=snapshot_cfg.stores,
+                city_id=effective_city_id,
+                run_id=args.run_id,
+                max_pages=effective_max_pages,
+                limit=effective_limit,
+                timeout_seconds=effective_timeout,
+                hot_days=effective_hot_days,
+                cold_days=effective_cold_days,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Snapshot hourly: status=%s offers_total=%s succeeded=%s failed=%s rows=%s requests=%s",
+                    summary.get("status"),
+                    summary.get("offers_total"),
+                    summary.get("offers_succeeded"),
+                    summary.get("offers_failed"),
+                    summary.get("rows_written"),
+                    summary.get("api_requests"),
+                )
+            return 0 if summary.get("status") in {"success", "partial"} else 4
+
+        if args.task == "daily-variants":
+            offer_rows = load_offer_rows_from_sqlite(
+                snapshot_cfg.source_items_sqlite,
+                store_ids=snapshot_cfg.stores,
+                on_sale_only=True,
+            )
+            offer_universe = collect_offer_universe(offer_rows)
+            summary = run_daily_variant_refresh(
+                sqlite_path=snapshot_cfg.snapshot_sqlite,
+                offer_urls=sorted(offer_universe.keys()),
+                run_date=args.run_date,
+                timeout_seconds=effective_timeout,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Variant refresh: offers_total=%s succeeded=%s failed=%s members=%s",
+                    summary.get("offers_total"),
+                    summary.get("offers_succeeded"),
+                    summary.get("offers_failed"),
+                    summary.get("members_written"),
+                )
+            return 0 if int(summary.get("offers_failed", 0)) == 0 else 4
+
+        if args.task == "prune-retention":
+            summary = prune_snapshot_retention(
+                sqlite_path=snapshot_cfg.snapshot_sqlite,
+                parquet_root=snapshot_cfg.parquet_root,
+                hot_days=effective_hot_days,
+                cold_days=effective_cold_days,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Retention prune: sqlite_rows_deleted=%s parquet_dirs_deleted=%s",
+                    summary.get("sqlite_rows_deleted"),
+                    summary.get("parquet_dirs_deleted"),
+                )
+            return 0
 
     return 2
