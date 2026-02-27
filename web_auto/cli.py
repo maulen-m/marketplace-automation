@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from .auth import generate_storage_state
 from .config import ConfigError, detect_task_id, load_config, load_dumping_config, load_min_price_sync_config
+from .kaspi_archive_export import run_kaspi_archive_sales_export
 from .kaspi_hourly_snapshot import (
     collect_offer_universe,
     load_offer_rows_from_sqlite,
@@ -97,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     export_parser = subparsers.add_parser("export", help="Export data")
     export_parser.add_argument(
         "task",
-        choices=["repricer-items", "repricer-unified-truth", "repricer-unified-report"],
+        choices=["repricer-items", "repricer-unified-truth", "repricer-unified-report", "kaspi-archive-sales"],
         help="Export task name",
     )
     export_parser.add_argument(
@@ -171,6 +172,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Include sales-off rows for repricer-items export",
     )
+    export_parser.add_argument("--dry-run", action="store_true", help="Dry-run mode")
+    export_parser.add_argument("--confirm", action="store_true", help="Confirm write/export actions")
+    export_parser.add_argument("--start-date", default="2024-06-06", help="Archive export start date (YYYY-MM-DD)")
+    export_parser.add_argument("--end-date", default="2026-02-26", help="Archive export end date (YYYY-MM-DD)")
+    export_parser.add_argument("--block-days", type=int, default=90, help="Archive export window size in days")
+    export_parser.add_argument("--window-count", type=int, default=5, help="Number of Chrome windows/accounts to use")
+    export_parser.add_argument(
+        "--store-labels",
+        default="Universal,Acmewear,store-d,Store-C,STORE-B",
+        help="Comma-separated store labels in Chrome window order",
+    )
+    export_parser.add_argument("--downloads-dir", default="~/Downloads", help="Browser downloads directory")
+    export_parser.add_argument(
+        "--output-root",
+        default="exports/kaspi_archive_sales",
+        help="Run output root directory",
+    )
+    export_parser.add_argument(
+        "--copy-dst",
+        default="~/Documents/useful tables/Main crm spreadsheets/main tables/Purchase_orders/vibe_code_PO/Sales_archive/web_automation",
+        help="Destination root to copy completed run folder",
+    )
+    export_parser.add_argument("--timeout-seconds", type=int, default=180, help="Per-block download wait timeout")
+    export_parser.add_argument("--retries", type=int, default=2, help="Retries per store/date block")
     export_parser.add_argument("--headless", action="store_true", help="Run headless")
     export_parser.add_argument("--headed", action="store_true", help="Run headful")
 
@@ -364,6 +389,34 @@ def main(argv: list[str] | None = None) -> int:
             headless = False
         if args.headless:
             headless = True
+        if args.task == "kaspi-archive-sales":
+            summary = run_kaspi_archive_sales_export(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                block_days=args.block_days,
+                window_count=args.window_count,
+                store_labels=args.store_labels,
+                downloads_dir=args.downloads_dir,
+                output_root=args.output_root,
+                copy_dst=args.copy_dst,
+                timeout_seconds=args.timeout_seconds,
+                retries=args.retries,
+                dry_run=args.dry_run,
+                confirm=args.confirm,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Archive sales export: status=%s expected=%s succeeded=%s failed=%s run_dir=%s copy_dir=%s",
+                    summary.get("status"),
+                    summary.get("exports_expected"),
+                    summary.get("exports_succeeded"),
+                    summary.get("exports_failed"),
+                    summary.get("run_dir"),
+                    summary.get("copy_dir"),
+                )
+            return 0 if summary.get("status") in {"success", "dry_run"} else 4
         if args.task == "repricer-items":
             summary = export_repricer_items_to_sqlite(
                 config_path=args.config,
