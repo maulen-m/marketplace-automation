@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -32,11 +32,21 @@ class RunConfig:
 
 
 @dataclass
+class Line52PricingProfile:
+    default_profile: str = "aggressive"
+    probable_3xl_profile: str = "conservative"
+    conservative_floor_kzt: int = 8845
+    profile_by_sku_key: dict[str, str] = field(default_factory=dict)
+    profile_by_url: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class TaskConfig:
     task_id: str
     accounts: list[Account]
     targets: list[str]
     contains_targets: list[str]
+    line52_pricing_profile: Line52PricingProfile
     run: RunConfig
 
 
@@ -65,6 +75,7 @@ class MinPriceSyncConfig:
     external_skip_line52_locked_9990_store_ids: list[int]
     external_fix_max_below_target: bool
     external_fix_live_price_below_target: bool
+    line52_pricing_profile: Line52PricingProfile
     run: RunConfig
 
 
@@ -121,6 +132,58 @@ def _load_run(raw: dict[str, Any]) -> RunConfig:
     )
 
 
+def _load_line52_pricing_profile(raw: dict[str, Any]) -> Line52PricingProfile:
+    profile_raw = raw.get("line52_pricing_profile") or {}
+    if not isinstance(profile_raw, dict):
+        raise ConfigError("line52_pricing_profile must be a mapping")
+
+    default_profile = str(profile_raw.get("default_profile", "aggressive")).strip().lower()
+    probable_3xl_profile = str(profile_raw.get("probable_3xl_profile", "conservative")).strip().lower()
+    conservative_floor_kzt = int(profile_raw.get("conservative_floor_kzt", 8845))
+    profile_by_sku_key_raw = profile_raw.get("profile_by_sku_key") or {}
+    profile_by_url_raw = profile_raw.get("profile_by_url") or {}
+
+    valid_profiles = {"aggressive", "conservative"}
+    if default_profile not in valid_profiles:
+        raise ConfigError("line52_pricing_profile.default_profile must be one of: aggressive, conservative")
+    if probable_3xl_profile not in valid_profiles:
+        raise ConfigError("line52_pricing_profile.probable_3xl_profile must be one of: aggressive, conservative")
+    if conservative_floor_kzt <= 0:
+        raise ConfigError("line52_pricing_profile.conservative_floor_kzt must be a positive integer")
+    if not isinstance(profile_by_sku_key_raw, dict):
+        raise ConfigError("line52_pricing_profile.profile_by_sku_key must be a mapping")
+    if not isinstance(profile_by_url_raw, dict):
+        raise ConfigError("line52_pricing_profile.profile_by_url must be a mapping")
+
+    profile_by_sku_key: dict[str, str] = {}
+    for key, value in profile_by_sku_key_raw.items():
+        normalized_key = str(key or "").strip().upper()
+        normalized_profile = str(value or "").strip().lower()
+        if not normalized_key:
+            continue
+        if normalized_profile not in valid_profiles:
+            raise ConfigError("line52_pricing_profile.profile_by_sku_key values must be aggressive or conservative")
+        profile_by_sku_key[normalized_key] = normalized_profile
+
+    profile_by_url: dict[str, str] = {}
+    for key, value in profile_by_url_raw.items():
+        normalized_key = str(key or "").strip()
+        normalized_profile = str(value or "").strip().lower()
+        if not normalized_key:
+            continue
+        if normalized_profile not in valid_profiles:
+            raise ConfigError("line52_pricing_profile.profile_by_url values must be aggressive or conservative")
+        profile_by_url[normalized_key] = normalized_profile
+
+    return Line52PricingProfile(
+        default_profile=default_profile,
+        probable_3xl_profile=probable_3xl_profile,
+        conservative_floor_kzt=conservative_floor_kzt,
+        profile_by_sku_key=profile_by_sku_key,
+        profile_by_url=profile_by_url,
+    )
+
+
 def load_config(path: str | Path) -> TaskConfig:
     path = Path(path)
     if not path.exists():
@@ -142,12 +205,14 @@ def load_config(path: str | Path) -> TaskConfig:
         raise ConfigError("targets.contains_names must be a list if provided")
 
     run = _load_run(raw)
+    line52_pricing_profile = _load_line52_pricing_profile(raw)
 
     return TaskConfig(
         task_id=task_id,
         accounts=accounts,
         targets=[str(v) for v in competitor_names],
         contains_targets=[str(v) for v in contains_names],
+        line52_pricing_profile=line52_pricing_profile,
         run=run,
     )
 
@@ -182,6 +247,7 @@ def load_min_price_sync_config(path: str | Path) -> MinPriceSyncConfig:
     task_id = raw.get("task_id", "repricer_min_price_sync")
     accounts = _load_accounts(raw)
     run = _load_run(raw)
+    line52_pricing_profile = _load_line52_pricing_profile(raw)
 
     source_raw = raw.get("source") or {}
     if not isinstance(source_raw, dict):
@@ -238,6 +304,7 @@ def load_min_price_sync_config(path: str | Path) -> MinPriceSyncConfig:
         external_skip_line52_locked_9990_store_ids=external_skip_line52_locked_9990_store_ids,
         external_fix_max_below_target=external_fix_max_below_target,
         external_fix_live_price_below_target=external_fix_live_price_below_target,
+        line52_pricing_profile=line52_pricing_profile,
         run=run,
     )
 

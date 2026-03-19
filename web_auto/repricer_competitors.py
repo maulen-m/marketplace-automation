@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 import logging
 import re
@@ -19,6 +20,9 @@ from .config import TaskConfig
 from .competition_rules import (
     classify_competition_scope,
     competition_floor_kzt,
+    effective_competition_floor_kzt,
+    is_scope_partner_ignore_exempt,
+    set_line52_pricing_profile,
     scoped_competitor_ignore_reason,
 )
 from .delivery_days_cache import (
@@ -266,6 +270,12 @@ def _evaluate_competitor_ignore_need(
             return False, "self_store"
 
     if _is_partner_target_competitor(competitor_name, exact_targets, contains_targets):
+        if is_scope_partner_ignore_exempt(
+            scope=competition_scope,
+            competitor_name_norm=normalize_name(competitor_name),
+            competitor_mid=mid_str,
+        ):
+            return False, ""
         return True, "partner_store_target"
 
     price_val = _parse_competitor_price_value(competitor_price)
@@ -564,8 +574,9 @@ def _scan_remaining_targets(
             link = row.locator("a[onclick^='show_competitors']")
             if link.count() == 0:
                 continue
-            competition_scope = _extract_competition_scope_for_row(None, row.inner_text().strip())
-            competitive_floor = competition_floor_kzt(competition_scope, floor_by_sku_key)
+            row_text = row.inner_text().strip()
+            competition_scope = _extract_competition_scope_for_row(None, row_text)
+            competitive_floor = effective_competition_floor_kzt(None, floor_by_sku_key, row_text)
 
             opened = False
             for _ in range(3):
@@ -741,6 +752,7 @@ def run_repricer_competitors(
     upload_after: bool,
 ) -> dict[str, Any]:
     run_cfg = config.run
+    set_line52_pricing_profile(config.line52_pricing_profile)
 
     effective_dry_run = dry_run or run_cfg.dry_run
     if not effective_dry_run and run_cfg.require_confirm and not confirm:
@@ -776,6 +788,7 @@ def run_repricer_competitors(
         "task_id": config.task_id,
         "run_id": run_id,
         "dry_run": effective_dry_run,
+        "line52_pricing_profile": asdict(config.line52_pricing_profile),
         "products_visited": 0,
         "modals_opened": 0,
         "checkboxes_changed": 0,
@@ -903,8 +916,9 @@ def run_repricer_competitors(
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
                                 continue
-                            competition_scope = _extract_competition_scope_for_row(None, row.inner_text().strip())
-                            competitive_floor = competition_floor_kzt(competition_scope, floor_by_sku_key)
+                            row_text = row.inner_text().strip()
+                            competition_scope = _extract_competition_scope_for_row(None, row_text)
+                            competitive_floor = effective_competition_floor_kzt(None, floor_by_sku_key, row_text)
 
                             opened = False
                             last_exc: Exception | None = None
@@ -1062,6 +1076,7 @@ def run_repricer_competitors_api(
     api_verify: bool,
 ) -> dict[str, Any]:
     run_cfg = config.run
+    set_line52_pricing_profile(config.line52_pricing_profile)
 
     effective_dry_run = dry_run or run_cfg.dry_run
     if not effective_dry_run and run_cfg.require_confirm and not confirm:
@@ -1098,6 +1113,7 @@ def run_repricer_competitors_api(
         "run_id": run_id,
         "dry_run": effective_dry_run,
         "api_mode": True,
+        "line52_pricing_profile": asdict(config.line52_pricing_profile),
         "products_visited": 0,
         "modals_opened": 0,
         "checkboxes_changed": 0,
@@ -1302,7 +1318,7 @@ def run_repricer_competitors_api(
                             not_competitors = row.get("not_competitors") or []
                             not_set = {str(x) for x in not_competitors if x is not None}
                             competition_scope = _extract_competition_scope_for_row(row, "")
-                            competitive_floor = competition_floor_kzt(competition_scope, floor_by_sku_key)
+                            competitive_floor = effective_competition_floor_kzt(row, floor_by_sku_key)
                             delivery_days_by_mid: dict[str, int] = {}
                             row_link = row.get("link")
                             cache_key = _canonical_offer_link(row_link)
@@ -1455,7 +1471,7 @@ def run_repricer_competitors_api(
                                 not_competitors = row.get("not_competitors") or []
                                 not_set = {str(x) for x in not_competitors if x is not None}
                                 competition_scope = _extract_competition_scope_for_row(row, "")
-                                competitive_floor = competition_floor_kzt(competition_scope, floor_by_sku_key)
+                                competitive_floor = effective_competition_floor_kzt(row, floor_by_sku_key)
                                 delivery_days_by_mid: dict[str, int] = {}
                                 row_link = row.get("link")
                                 cache_key = _canonical_offer_link(row_link)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import re
 from typing import Any
+from inventory.size_text_extraction import extract_size_from_offer_text, extract_size_from_url
 
 COMPETITION_SCOPE_DELIVERY_DAYS_THRESHOLD = 10
+LINE52_PROBABLE_3XL_FLOOR_KZT = 8845
 
 COMPETITION_SCOPE_FLOOR_SKU_KEYS: dict[str, str] = {
     "LINE52": "CL_OC_MEN_LINE52_BLACK",
@@ -13,7 +16,104 @@ COMPETITION_SCOPE_FLOOR_SKU_KEYS: dict[str, str] = {
     "KID31": "CL_NEW-CLO_KIDS_KID-31_BLACK",
 }
 
+LINE52_PARTNER_COMPETITIVE_MIDS = {
+    "12456074",  # ИП Бектасова А А
+}
+
+LINE52_PARTNER_COMPETITIVE_NAME_TOKENS = (
+    "ип бектасова а а",
+)
+
 _TOKEN_SPLIT_RE = re.compile(r"[^A-Z0-9]+")
+_EXPLICIT_3XL_RE = re.compile(r"(?<![A-Z0-9])3XL(?![A-Z0-9])")
+_EXPLICIT_4PLUS_RE = re.compile(r"(?<![A-Z0-9])(?:4XL|5XL|6XL|7XL|8XL)(?![A-Z0-9])")
+_LINE52_MANUAL_4XL_EXCEPTION_SKUS = {
+    "CL_OC_MEN_LINE52_BLACK_117193721_58_(4XL)",
+}
+
+
+@dataclass
+class Line52PricingProfile:
+    default_profile: str = "aggressive"
+    probable_3xl_profile: str = "conservative"
+    conservative_floor_kzt: int = LINE52_PROBABLE_3XL_FLOOR_KZT
+    profile_by_sku_key: dict[str, str] = field(default_factory=dict)
+    profile_by_url: dict[str, str] = field(default_factory=dict)
+
+
+DEFAULT_LINE52_PRICING_PROFILE = Line52PricingProfile()
+_ACTIVE_LINE52_PRICING_PROFILE = Line52PricingProfile()
+
+
+def set_line52_pricing_profile(profile: Line52PricingProfile | Any | None) -> None:
+    global _ACTIVE_LINE52_PRICING_PROFILE
+    if profile is None:
+        _ACTIVE_LINE52_PRICING_PROFILE = Line52PricingProfile(
+            default_profile=DEFAULT_LINE52_PRICING_PROFILE.default_profile,
+            probable_3xl_profile=DEFAULT_LINE52_PRICING_PROFILE.probable_3xl_profile,
+            conservative_floor_kzt=DEFAULT_LINE52_PRICING_PROFILE.conservative_floor_kzt,
+        )
+        return
+
+    default_profile = str(getattr(profile, "default_profile", "aggressive")).strip().lower()
+    probable_3xl_profile = str(getattr(profile, "probable_3xl_profile", "conservative")).strip().lower()
+    conservative_floor_kzt = int(getattr(profile, "conservative_floor_kzt", LINE52_PROBABLE_3XL_FLOOR_KZT))
+    profile_by_sku_key_raw = getattr(profile, "profile_by_sku_key", {}) or {}
+    profile_by_url_raw = getattr(profile, "profile_by_url", {}) or {}
+
+    if default_profile not in {"aggressive", "conservative"}:
+        raise ValueError("line52 default_profile must be aggressive or conservative")
+    if probable_3xl_profile not in {"aggressive", "conservative"}:
+        raise ValueError("line52 probable_3xl_profile must be aggressive or conservative")
+    if conservative_floor_kzt <= 0:
+        raise ValueError("line52 conservative_floor_kzt must be positive")
+    if not isinstance(profile_by_sku_key_raw, dict):
+        raise ValueError("line52 profile_by_sku_key must be a mapping")
+    if not isinstance(profile_by_url_raw, dict):
+        raise ValueError("line52 profile_by_url must be a mapping")
+
+    valid_profiles = {"aggressive", "conservative"}
+    profile_by_sku_key: dict[str, str] = {}
+    for key, value in profile_by_sku_key_raw.items():
+        normalized_key = str(key or "").strip().upper()
+        normalized_profile = str(value or "").strip().lower()
+        if not normalized_key:
+            continue
+        if normalized_profile not in valid_profiles:
+            raise ValueError("line52 profile_by_sku_key values must be aggressive or conservative")
+        profile_by_sku_key[normalized_key] = normalized_profile
+
+    profile_by_url: dict[str, str] = {}
+    for key, value in profile_by_url_raw.items():
+        normalized_key = _normalize_offer_url_key(key)
+        normalized_profile = str(value or "").strip().lower()
+        if not normalized_key:
+            continue
+        if normalized_profile not in valid_profiles:
+            raise ValueError("line52 profile_by_url values must be aggressive or conservative")
+        profile_by_url[normalized_key] = normalized_profile
+
+    _ACTIVE_LINE52_PRICING_PROFILE = Line52PricingProfile(
+        default_profile=default_profile,
+        probable_3xl_profile=probable_3xl_profile,
+        conservative_floor_kzt=conservative_floor_kzt,
+        profile_by_sku_key=profile_by_sku_key,
+        profile_by_url=profile_by_url,
+    )
+
+
+def reset_line52_pricing_profile() -> None:
+    set_line52_pricing_profile(DEFAULT_LINE52_PRICING_PROFILE)
+
+
+def get_line52_pricing_profile() -> Line52PricingProfile:
+    return Line52PricingProfile(
+        default_profile=_ACTIVE_LINE52_PRICING_PROFILE.default_profile,
+        probable_3xl_profile=_ACTIVE_LINE52_PRICING_PROFILE.probable_3xl_profile,
+        conservative_floor_kzt=_ACTIVE_LINE52_PRICING_PROFILE.conservative_floor_kzt,
+        profile_by_sku_key=dict(_ACTIVE_LINE52_PRICING_PROFILE.profile_by_sku_key),
+        profile_by_url=dict(_ACTIVE_LINE52_PRICING_PROFILE.profile_by_url),
+    )
 
 
 def normalize_token_text(value: Any) -> str:
@@ -79,6 +179,102 @@ def competition_floor_kzt(scope: str | None, floor_by_sku_key: dict[str, int] | 
     return floor if floor > 0 else None
 
 
+def _row_size_value(row: dict[str, Any] | None, *keys: str) -> str:
+    if not isinstance(row, dict):
+        return ""
+    for key in keys:
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _normalize_offer_url_key(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    text = text.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    return text
+
+
+def line52_public_size_hint(row: dict[str, Any] | None, row_text: str | None = "") -> str:
+    if not isinstance(row, dict):
+        return ""
+
+    raw_url = _row_size_value(row, "resolved_url", "link", "url")
+    raw_name = _row_size_value(row, "resolved_kaspi_offer_name", "kaspi_offer_name", "merchant_title")
+    blob = normalize_token_text(" ".join(x for x in (raw_url, raw_name, str(row_text or "")) if x))
+    has_explicit_3xl = bool(_EXPLICIT_3XL_RE.search(blob))
+    has_explicit_4plus = bool(_EXPLICIT_4PLUS_RE.search(blob))
+    if has_explicit_3xl and not has_explicit_4plus:
+        return "3XL"
+    if has_explicit_4plus and not has_explicit_3xl:
+        return "4XL"
+
+    candidates: set[str] = set()
+    for key in ("size_from_url", "size_from_offer_name", "effective_final_size", "final_attached_size", "Human_edit_size"):
+        val = str(row.get(key) or "").strip().upper()
+        if val in {"3XL", "4XL"}:
+            candidates.add(val)
+
+    if raw_url:
+        size_url, domain_url = extract_size_from_url(raw_url)
+        if domain_url == "adult":
+            val = str(size_url or "").strip().upper()
+            if val in {"3XL", "4XL"}:
+                candidates.add(val)
+    if raw_name:
+        size_name, domain_name = extract_size_from_offer_text(raw_name)
+        if domain_name == "adult":
+            val = str(size_name or "").strip().upper()
+            if val in {"3XL", "4XL"}:
+                candidates.add(val)
+
+    return next(iter(candidates)) if len(candidates) == 1 else ""
+
+
+def is_probable_line52_3xl(row: dict[str, Any] | None, row_text: str | None = "") -> bool:
+    if classify_competition_scope(row, row_text) != "LINE52":
+        return False
+    sku = _row_size_value(row, "merchant_sku", "SKU", "sku")
+    if sku.strip().upper() in _LINE52_MANUAL_4XL_EXCEPTION_SKUS:
+        return False
+    return line52_public_size_hint(row, row_text) == "3XL"
+
+
+def resolve_line52_pricing_profile(row: dict[str, Any] | None, row_text: str | None = "") -> str | None:
+    if classify_competition_scope(row, row_text) != "LINE52":
+        return None
+    profile = get_line52_pricing_profile()
+    url_key = _normalize_offer_url_key(_row_size_value(row, "resolved_url", "link", "url"))
+    if url_key and url_key in profile.profile_by_url:
+        return profile.profile_by_url[url_key]
+    sku_key = _row_size_value(row, "resolved_sku_key").upper()
+    if sku_key and sku_key in profile.profile_by_sku_key:
+        return profile.profile_by_sku_key[sku_key]
+    if is_probable_line52_3xl(row, row_text):
+        return profile.probable_3xl_profile
+    return profile.default_profile
+
+
+def effective_competition_floor_kzt(
+    row: dict[str, Any] | None,
+    floor_by_sku_key: dict[str, int] | None,
+    row_text: str | None = "",
+) -> int | None:
+    scope = classify_competition_scope(row, row_text)
+    base_floor = competition_floor_kzt(scope, floor_by_sku_key)
+    if scope != "LINE52":
+        return base_floor
+    profile_name = resolve_line52_pricing_profile(row, row_text)
+    if profile_name != "conservative":
+        return base_floor
+    conservative_floor = get_line52_pricing_profile().conservative_floor_kzt
+    if base_floor is None:
+        return conservative_floor
+    return max(int(base_floor), conservative_floor)
+
+
 def scoped_competitor_ignore_reason(
     *,
     scope: str | None,
@@ -102,3 +298,20 @@ def scoped_competitor_ignore_reason(
     except Exception:
         return ""
     return ""
+
+
+def is_scope_partner_ignore_exempt(
+    *,
+    scope: str | None,
+    competitor_name_norm: str,
+    competitor_mid: str | None,
+) -> bool:
+    if scope != "LINE52":
+        return False
+    mid = str(competitor_mid or "").strip()
+    if mid and mid in LINE52_PARTNER_COMPETITIVE_MIDS:
+        return True
+    name_norm = str(competitor_name_norm or "").strip().casefold()
+    if not name_norm:
+        return False
+    return any(token in name_norm for token in LINE52_PARTNER_COMPETITIVE_NAME_TOKENS)

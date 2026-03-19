@@ -27,6 +27,13 @@ targets:
     - "STORE-B"
   contains_names: []
 
+line52_pricing_profile:
+  default_profile: aggressive
+  probable_3xl_profile: conservative
+  conservative_floor_kzt: 8845
+  profile_by_sku_key: {}
+  profile_by_url: {}
+
 run:
   dry_run: false
   require_confirm: true
