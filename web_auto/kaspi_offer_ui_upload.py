@@ -40,6 +40,12 @@ _STORE_ALIASES = {
     "store-d": "11KZ",
 }
 
+_COLOR_ALIASES = {
+    "black": {"black", "chernyi", "черный", "чёрный"},
+    "white": {"white", "belyi", "белый"},
+    "grey": {"grey", "gray", "seryi", "серый"},
+}
+
 
 def _norm_text(value: Any) -> str:
     if value is None:
@@ -84,6 +90,39 @@ def _extract_offer_code_from_variant_url(variant_url: Any) -> str:
         return ""
     m = re.search(r"-(\d{6,})(?:[/?#]|$)", text)
     return m.group(1) if m else ""
+
+
+def _infer_color_token(*values: Any) -> str:
+    haystack = " ".join(_norm_text(v).lower() for v in values if _norm_text(v))
+    if not haystack:
+        return ""
+    for canonical, aliases in _COLOR_ALIASES.items():
+        if any(alias in haystack for alias in aliases):
+            return canonical
+    return ""
+
+
+def _normalize_color_token(value: Any) -> str:
+    text = _norm_text(value).lower()
+    if not text:
+        return ""
+    for canonical, aliases in _COLOR_ALIASES.items():
+        if text == canonical or text in aliases:
+            return canonical
+    return ""
+
+
+def _has_semantic_partner_article(article: Any, resolved_sku_key: Any, resolved_sku_id: Any) -> bool:
+    article_text = _norm_text(article)
+    if not article_text:
+        return False
+    sku_id = _norm_text(resolved_sku_id)
+    if sku_id and article_text.startswith(sku_id):
+        return True
+    sku_key = _norm_text(resolved_sku_key)
+    if sku_key and article_text.startswith(sku_key):
+        return True
+    return False
 
 
 def normalize_store_code(value: Any) -> str:
@@ -153,7 +192,13 @@ def load_offer_upload_rows(
             row[name] = ws.cell(r, idx[name]).value
 
         # Optional columns used by runtime and validations.
-        row["color"] = ws.cell(r, idx.get("color", 0)).value if idx.get("color") else ""
+        raw_color = ws.cell(r, idx.get("color", 0)).value if idx.get("color") else ""
+        row["color"] = _normalize_color_token(raw_color) or _infer_color_token(
+            row.get("variant_url"),
+            row.get("merchant_sku_article"),
+            row.get("merchant_offer_name"),
+            row.get("expected_kaspi_heading"),
+        )
         row["ui_entry_url"] = ws.cell(r, idx.get("ui_entry_url", 0)).value if idx.get("ui_entry_url") else DEFAULT_ENTRY_URL
         row["ingest_method"] = ws.cell(r, idx.get("ingest_method", 0)).value if idx.get("ingest_method") else ""
 
@@ -161,7 +206,12 @@ def load_offer_upload_rows(
     return rows
 
 
-def validate_upload_rows(rows: list[dict[str, Any]], *, required_store_codes: list[str]) -> dict[str, Any]:
+def validate_upload_rows(
+    rows: list[dict[str, Any]],
+    *,
+    required_store_codes: list[str],
+    require_black_coverage: bool = True,
+) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     required = [normalize_store_code(s) for s in required_store_codes if normalize_store_code(s)]
@@ -176,14 +226,15 @@ def validate_upload_rows(rows: list[dict[str, Any]], *, required_store_codes: li
             errors.append(f"store {store} has no active rows")
 
     # Ensure black color coverage in required stores.
-    for store in required:
-        has_black = any(
-            normalize_store_code(r.get("store_code")) == store
-            and str(r.get("color") or "").strip().lower() == "black"
-            for r in rows
-        )
-        if not has_black:
-            errors.append(f"black color row missing for store {store}")
+    if require_black_coverage:
+        for store in required:
+            has_black = any(
+                normalize_store_code(r.get("store_code")) == store
+                and str(r.get("color") or "").strip().lower() == "black"
+                for r in rows
+            )
+            if not has_black:
+                errors.append(f"black color row missing for store {store}")
 
     required_fields = [
         "merchant_id",
@@ -206,6 +257,16 @@ def validate_upload_rows(rows: list[dict[str, Any]], *, required_store_codes: li
                 _to_int(row.get(field))
             except Exception:
                 errors.append(f"row {row_no}: invalid numeric {field}={row.get(field)!r}")
+        resolved_sku_key = row.get("resolved_sku_key")
+        resolved_sku_id = row.get("resolved_sku_id")
+        if (_norm_text(resolved_sku_key) or _norm_text(resolved_sku_id)) and not _has_semantic_partner_article(
+            row.get("merchant_sku_article"),
+            resolved_sku_key,
+            resolved_sku_id,
+        ):
+            errors.append(
+                f"row {row_no}: merchant_sku_article must start with resolved_sku_key/resolved_sku_id semantics"
+            )
         if _norm_text(row.get("barcode")) and not _normalize_barcode(row.get("barcode")):
             warnings.append(f"row {row_no}: barcode ignored (invalid length)")
 
@@ -586,6 +647,27 @@ def _step_choose_card_js(expected_heading: str, offer_code: str = "") -> str:
     chooseButtons[0].click();
     return JSON.stringify({{ok:true, mode:'fallback_first_choose'}});
   }}
+  const bodyTextRaw = String(document.body?.innerText || '');
+  const bodyText = norm(bodyTextRaw);
+  const infoHeadingPresent = bodyText.includes('информация о товаре');
+  const continueButtonPresent = buttons.some(btn => /продолжить/i.test(norm(btn.innerText)));
+  const sizeOptionsPresent = Array.from(document.querySelectorAll('.matrix__values, .matrix__values *')).some(
+    el => visible(el) && norm(el.innerText)
+  );
+  const offerCodeMatch = offerCode ? new RegExp('\\\\b' + offerCode + '\\\\b').test(bodyTextRaw) : false;
+  if (
+    infoHeadingPresent
+    && continueButtonPresent
+    && sizeOptionsPresent
+    && (headingScore(bodyText) > 0 || offerCodeMatch || !expected)
+  ) {{
+    return JSON.stringify({{
+      ok: true,
+      mode: 'already_on_product_info',
+      heading_score: headingScore(bodyText),
+      offer_code_score: offerCodeMatch ? 1000 : 0,
+    }});
+  }}
   return JSON.stringify({{ok:false, reason:'choose_button_not_found'}});
 }})();
 """.strip()
@@ -602,11 +684,18 @@ def _step_select_size_js(size_rus: Any) -> str:
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   }};
   const norm = (v) => String(v || '').trim().toLowerCase();
+  const containsSizeToken = (text) => {{
+    const hay = norm(text);
+    const needle = norm(sizeNeedle);
+    if (!hay || !needle) return false;
+    if (hay === needle) return true;
+    return hay.includes(needle);
+  }};
   const querySizeOptions = () => Array.from(document.querySelectorAll('.matrix__values.icon-box, .matrix__values')).filter(visible);
   const sizeOptions = querySizeOptions();
   const availableSizes = sizeOptions.map(el => String(el.innerText || '').trim()).filter(Boolean);
   const getSelected = () => querySizeOptions().find(
-    el => /active/i.test(String(el.className || '')) && norm(el.innerText) === norm(sizeNeedle)
+    el => /active/i.test(String(el.className || '')) && containsSizeToken(el.innerText)
   );
   const activateSize = (el) => {{
     if (!el) return;
@@ -631,7 +720,7 @@ def _step_select_size_js(size_rus: Any) -> str:
       }} catch (e) {{}}
     }});
   }};
-  const matching = sizeOptions.filter(el => norm(el.innerText) === norm(sizeNeedle));
+  const matching = sizeOptions.filter(el => containsSizeToken(el.innerText));
   const selectedBefore = getSelected();
   if (selectedBefore) {{
     return JSON.stringify({{
@@ -642,8 +731,8 @@ def _step_select_size_js(size_rus: Any) -> str:
     }});
   }}
   if (matching.length === 0) {{
-    const deepNode = Array.from(document.querySelectorAll('.matrix__values, .matrix__values *')).find(
-      el => norm(el.innerText) === norm(sizeNeedle)
+  const deepNode = Array.from(document.querySelectorAll('.matrix__values, .matrix__values *')).find(
+      el => containsSizeToken(el.innerText)
     );
     const fallback = deepNode && (deepNode.closest('.matrix__values') || deepNode);
     if (!fallback) {{
@@ -683,11 +772,18 @@ def _step_verify_selected_size_js(size_rus: Any) -> str:
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   }};
   const norm = (v) => String(v || '').trim().toLowerCase();
+  const containsSizeToken = (text) => {{
+    const hay = norm(text);
+    const needle = norm(sizeNeedle);
+    if (!hay || !needle) return false;
+    if (hay === needle) return true;
+    return hay.includes(needle);
+  }};
   const sizeOptions = Array.from(document.querySelectorAll('.matrix__values.icon-box, .matrix__values')).filter(visible);
   const availableSizes = sizeOptions.map(el => String(el.innerText || '').trim()).filter(Boolean);
   const selected = sizeOptions.find(el => /active/i.test(String(el.className || '')));
   const selectedSize = selected ? String(selected.innerText || '').trim() : '';
-  if (selected && norm(selected.innerText) === norm(sizeNeedle)) {{
+  if (selected && containsSizeToken(selected.innerText)) {{
     return JSON.stringify({{
       ok: true,
       selected_size: selectedSize,
@@ -1104,7 +1200,7 @@ def _execute_row(
 
     price_ok = False
     price_reason = ""
-    for i in range(4):
+    for i in range(8):
         res_fill = _json_result(
             _execute_tab_js(
                 resolve_window(),
