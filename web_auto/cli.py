@@ -18,6 +18,10 @@ from .kaspi_hourly_snapshot import (
     prune_snapshot_retention,
     run_hourly_snapshot,
 )
+from .kaspi_merchant_common import resolve_store_credentials
+from .kaspi_pricelist_download import default_run_dir, run_kaspi_pricelist_download
+from .kaspi_pricelist_ops import apply_intent, build_store_snapshot, emit_outputs, verify_uploaded_state
+from .kaspi_pricelist_upload import resolve_upload_file_paths, run_kaspi_pricelist_upload
 from .kaspi_snapshot_config import SnapshotConfigError, load_kaspi_snapshot_config
 from .kaspi_variant_refresh import run_daily_variant_refresh
 from .repricer_competitors import run_repricer_competitors, run_repricer_competitors_api
@@ -218,6 +222,51 @@ def main(argv: list[str] | None = None) -> int:
     snapshot_parser.add_argument("--cold-days", type=int, help="Override Parquet cold retention days")
     snapshot_parser.add_argument("--headless", action="store_true", help="Run headless")
     snapshot_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    pricelist_parser = subparsers.add_parser("kaspi-pricelist", help="Kaspi merchant pricelist operations")
+    pricelist_subparsers = pricelist_parser.add_subparsers(dest="pricelist_command", required=True)
+
+    download_parser = pricelist_subparsers.add_parser("download", help="Download current ACTIVE and ARCHIVE pricelists")
+    download_parser.add_argument("--store", default="STORE-B", help="Target store name")
+    download_parser.add_argument("--run-dir", help="Run directory for artifacts")
+    download_parser.add_argument("--headless", action="store_true", help="Run headless")
+    download_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    upload_parser = pricelist_subparsers.add_parser("upload", help="Upload prepared pricelist workbook(s)")
+    upload_parser.add_argument("--store", default="STORE-B", help="Target store name")
+    upload_parser.add_argument("--run-dir", help="Run directory for artifacts")
+    upload_parser.add_argument("--archive", help="ARCHIVE workbook path")
+    upload_parser.add_argument("--active", help="ACTIVE workbook path")
+    upload_parser.add_argument("--file", action="append", dest="files", help="Upload one or more workbook paths in explicit order")
+    upload_parser.add_argument("--timeout-seconds", type=int, default=900, help="History poll timeout per file")
+    upload_parser.add_argument("--processing-grace-seconds", type=int, default=900, help="Extra history poll grace after merchant processing starts")
+    upload_parser.add_argument("--headless", action="store_true", help="Run headless")
+    upload_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    for sub_name in ("inspect", "build", "sync"):
+        sub = pricelist_subparsers.add_parser(sub_name, help=f"{sub_name.capitalize()} merchant pricelists")
+        sub.add_argument("--store", default="STORE-B", help="Target store name")
+        sub.add_argument("--run-dir", help="Run directory for artifacts")
+        sub.add_argument("--active-path", help="Existing ACTIVE workbook path")
+        sub.add_argument("--archive-path", help="Existing ARCHIVE workbook path")
+        sub.add_argument("--offers-book", default="exports/offers_book.xlsx", help="Offers book workbook path")
+        sub.add_argument("--truth-xlsx", default="exports/repricer_unified_truth.xlsx", help="Repricer unified truth workbook path")
+        sub.add_argument(
+            "--intent",
+            default="inspect-group-status",
+            help="Intent: inspect-group-status, turn-on-in-stock, turn-off-oos, repair-suspicious-off, repair-suspicious-on, set-upload-prices",
+        )
+        sub.add_argument("--sku", help="Limit to a merchant SKU")
+        sub.add_argument("--sku-key", help="Limit to an internal sku_key")
+        sub.add_argument("--group-url", help="Limit to one resolved URL")
+        sub.add_argument("--target-price", help="Explicit upload price for set-upload-prices")
+        sub.add_argument("--timeout-seconds", type=int, default=900, help="History poll timeout per file when upload is requested")
+        sub.add_argument("--processing-grace-seconds", type=int, default=900, help="Extra history poll grace after merchant processing starts")
+        sub.add_argument("--headless", action="store_true", help="Run headless")
+        sub.add_argument("--headed", action="store_true", help="Run headful")
+        if sub_name == "sync":
+            sub.add_argument("--upload", action="store_true", help="Upload generated ARCHIVE and ACTIVE workbooks")
+            sub.add_argument("--verify-after-upload", action="store_true", help="Redownload and verify the selected rows after upload")
 
     args = parser.parse_args(argv)
 
@@ -479,6 +528,165 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
         logging.error("Unknown export task")
+        return 2
+
+    if args.command == "kaspi-pricelist":
+        headless = True
+        if getattr(args, "headed", False):
+            headless = False
+        if getattr(args, "headless", False):
+            headless = True
+
+        env_path = Path(args.env_file) if args.env_file else Path("~/Docs/Autonomous_business/.env")
+        creds = resolve_store_credentials(getattr(args, "store", "STORE-B"), env_path)
+
+        if args.pricelist_command == "download":
+            run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            summary = run_kaspi_pricelist_download(
+                store_name=creds["store_name"],
+                email=creds["email"],
+                password=creds["password"],
+                run_dir=run_dir,
+                headless=headless,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi pricelist download: store=%s status=%s run_dir=%s",
+                    summary.get("store_name"),
+                    summary.get("status"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("status") == "success" else 4
+
+        if args.pricelist_command == "upload":
+            run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            try:
+                file_paths = resolve_upload_file_paths(archive=args.archive, active=args.active, files=args.files)
+            except ValueError as exc:
+                if args.json:
+                    print(json.dumps({"status": "invalid_args", "error": str(exc)}, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(str(exc))
+                return 2
+            summary = run_kaspi_pricelist_upload(
+                store_name=creds["store_name"],
+                email=creds["email"],
+                password=creds["password"],
+                file_paths=file_paths,
+                run_dir=run_dir,
+                headless=headless,
+                timeout_seconds=args.timeout_seconds,
+                processing_grace_seconds=args.processing_grace_seconds,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi pricelist upload: store=%s status=%s run_dir=%s",
+                    summary.get("store_name"),
+                    summary.get("status"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("status") == "success" else 4
+
+        if args.pricelist_command in {"inspect", "build", "sync"}:
+            run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            if args.active_path and args.archive_path:
+                active_path = Path(args.active_path)
+                archive_path = Path(args.archive_path)
+                download_summary: dict[str, Any] = {"status": "skipped", "reason": "using_explicit_source_paths"}
+            else:
+                download_summary = run_kaspi_pricelist_download(
+                    store_name=creds["store_name"],
+                    email=creds["email"],
+                    password=creds["password"],
+                    run_dir=run_dir,
+                    headless=headless,
+                )
+                if download_summary.get("status") != "success":
+                    if args.json:
+                        print(json.dumps(download_summary, ensure_ascii=False, indent=2))
+                    else:
+                        logging.error("Kaspi pricelist download failed: %s", download_summary.get("error", "unknown_error"))
+                    return 4
+                downloads_by_state = {row["sale_state"]: Path(row["saved_path"]) for row in download_summary.get("downloads", [])}
+                active_path = downloads_by_state["ACTIVE"]
+                archive_path = downloads_by_state["ARCHIVE"]
+
+            snapshot = build_store_snapshot(
+                active_path=active_path,
+                archive_path=archive_path,
+                store_name=creds["store_name"],
+                offers_book_path=Path(args.offers_book),
+                truth_xlsx_path=Path(args.truth_xlsx),
+            )
+            mutated_df = apply_intent(
+                snapshot.snapshot_df,
+                intent=args.intent,
+                sku=args.sku or "",
+                sku_key=args.sku_key or "",
+                group_url=args.group_url or "",
+                target_price=args.target_price or "",
+            )
+            build_summary = emit_outputs(snapshot, mutated_df=mutated_df, output_dir=run_dir / "outputs")
+            summary: dict[str, Any] = {
+                "store_name": creds["store_name"],
+                "run_dir": str(run_dir),
+                "download": download_summary,
+                "build": build_summary,
+            }
+            if args.pricelist_command == "sync" and args.upload:
+                upload_summary = run_kaspi_pricelist_upload(
+                    store_name=creds["store_name"],
+                    email=creds["email"],
+                    password=creds["password"],
+                    file_paths=[Path(build_summary["archive_output"]), Path(build_summary["active_output"])],
+                    run_dir=run_dir / "upload",
+                    headless=headless,
+                    timeout_seconds=args.timeout_seconds,
+                    processing_grace_seconds=args.processing_grace_seconds,
+                )
+                summary["upload"] = upload_summary
+                if upload_summary.get("status") == "success" and args.verify_after_upload:
+                    verify_download = run_kaspi_pricelist_download(
+                        store_name=creds["store_name"],
+                        email=creds["email"],
+                        password=creds["password"],
+                        run_dir=run_dir / "verify",
+                        headless=headless,
+                    )
+                    summary["verify_download"] = verify_download
+                    if verify_download.get("status") == "success":
+                        after_paths = {row["sale_state"]: Path(row["saved_path"]) for row in verify_download.get("downloads", [])}
+                        after_snapshot = build_store_snapshot(
+                            active_path=after_paths["ACTIVE"],
+                            archive_path=after_paths["ARCHIVE"],
+                            store_name=creds["store_name"],
+                            offers_book_path=Path(args.offers_book),
+                            truth_xlsx_path=Path(args.truth_xlsx),
+                        )
+                        summary["verify"] = verify_uploaded_state(before_df=mutated_df, after_snapshot=after_snapshot)
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi pricelist %s: store=%s active=%s archive=%s review=%s",
+                    args.pricelist_command,
+                    creds["store_name"],
+                    build_summary.get("active_rows"),
+                    build_summary.get("archive_rows"),
+                    build_summary.get("review_rows"),
+                )
+            if args.pricelist_command == "sync" and args.upload:
+                if summary.get("upload", {}).get("status") != "success":
+                    return 4
+                if summary.get("verify", {}).get("mismatch_count", 0):
+                    return 4
+            return 0
+
+        logging.error("Unknown kaspi-pricelist command")
         return 2
 
     if args.command == "snapshot":
