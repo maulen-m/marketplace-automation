@@ -1,0 +1,469 @@
+schema_version: 1
+generated_at_local: '2026-05-02T12:06:04+05:00'
+status: green_for_agent1_registry_discovery_only
+launch_status: LINE51 registry discovery only; no live upload or ad changes authorized
+store: ACMEWEAR
+product_family: LINE51
+raw_parent_sku_key: 'CL_OC_MEN_LINE51_WHITE '
+normalized_parent_sku_key: CL_OC_MEN_LINE51_WHITE
+owner_rules:
+  independent_offer_groups: true
+  offer_group_count: 3
+  collapse_requires_fresh_evidence: true
+  safe_merge_evidence_found: false
+  size_exclusions_seed: []
+pricelist_sources:
+  active:
+    path: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ACTIVE.xlsx
+    mtime_local: 2026-05-02T11:10:32+0500
+    sha256: 2ec2853449e4dd6606d1f425f83510f4c2d86a4765167f6413239153158ea6ee
+    data_row_count: 993
+  archive:
+    path: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ARCHIVE.xlsx
+    mtime_local: 2026-05-02T11:10:46+0500
+    sha256: 41854faa12a8abde4325cbee69c7a519360f20f1ededfa5f14d03917fd0f59f0
+    data_row_count: 993
+  download_summary: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/download_summary.json
+evidence_files:
+  public_url_verification: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/public_url_verification.json
+  pricelist_source_inventory: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_source_inventory.json
+  pricelist_offer_rows: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_offer_rows.csv
+offer_groups:
+- owner_group: group_1
+  lane_id: line51_original_sport_suit
+  independent_lane: true
+  merge_status: preserved_independent_no_safe_merge_evidence
+  surface_seed: suits/category-like
+  surface_evidence:
+    public_category_hint: sports suit / casual suit public surface
+    public_title: Купить Спортивный костюм ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    public_og_title: Купить Спортивный костюм ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    merchant_match_rule: SKU starts with CL_OC_MEN_LINE51_WHITE_ and does not contain _K-O_; model contains LINE51.
+  public_offer_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true
+  public_url_verification:
+    status: reachable
+    http_status: 200
+    verified_at_local: '2026-05-02T12:06:04+05:00'
+    final_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true
+    product_retailer_item_id: '134547494'
+    product_price_amount_kzt: 16990
+    product_availability: in stock
+    supports_owner_product_id: true
+    evidence_file: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/public_url_verification.json
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2380614?startDate=2026-05-01&endDate=2026-05-01
+  campaign_id: '2380614'
+  active_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ACTIVE.xlsx
+    row_count: 9
+    current_prices_kzt:
+    - 16990
+    merchant_articles:
+    - CL_OC_MEN_LINE51_WHITE_2XL_134547481
+    - CL_OC_MEN_LINE51_WHITE_3XL_134547477
+    - CL_OC_MEN_LINE51_WHITE_4XL_134547465
+    - CL_OC_MEN_LINE51_WHITE_4XL_134547472
+    - CL_OC_MEN_LINE51_WHITE_L_134547493
+    - CL_OC_MEN_LINE51_WHITE_M_134547494
+    - CL_OC_MEN_LINE51_WHITE_S_134547500
+    - CL_OC_MEN_LINE51_WHITE_XL_134547486
+    - CL_OC_MEN_LINE51_WHITE_XL_134547490
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL
+    - 4XL
+    - L
+    - M
+    - S
+    - XL
+    - XL
+    public_product_ids:
+    - '134547465'
+    - '134547472'
+    - '134547477'
+    - '134547481'
+    - '134547486'
+    - '134547490'
+    - '134547493'
+    - '134547494'
+    - '134547500'
+    rows:
+    - excel_row: 31
+      merchant_article: CL_OC_MEN_LINE51_WHITE_4XL_134547472
+      public_product_id: '134547472'
+      platform_size_token: 4XL
+      model_size_token: 4XL
+      price_kzt: 16990
+      model: Line51_мужской_56_134547472_(134547486)_(LINE51)_(4XL)
+    - excel_row: 32
+      merchant_article: CL_OC_MEN_LINE51_WHITE_2XL_134547481
+      public_product_id: '134547481'
+      platform_size_token: 2XL
+      model_size_token: 2XL
+      price_kzt: 16990
+      model: Line51_мужской_52_134547481_(134547486)_(LINE51)_(2XL)
+    - excel_row: 37
+      merchant_article: CL_OC_MEN_LINE51_WHITE_4XL_134547465
+      public_product_id: '134547465'
+      platform_size_token: 4XL
+      model_size_token: 4XL
+      price_kzt: 16990
+      model: Line51_мужской_58_134547465_(134547486)_(LINE51)_(4XL)
+    - excel_row: 42
+      merchant_article: CL_OC_MEN_LINE51_WHITE_3XL_134547477
+      public_product_id: '134547477'
+      platform_size_token: 3XL
+      model_size_token: 3XL
+      price_kzt: 16990
+      model: Line51_мужской_54_134547477_(134547486)_(LINE51)_(3XL)
+    - excel_row: 43
+      merchant_article: CL_OC_MEN_LINE51_WHITE_S_134547500
+      public_product_id: '134547500'
+      platform_size_token: S
+      model_size_token: S
+      price_kzt: 16990
+      model: Line51_мужской_42_134547500_(134547486)_(LINE51)_(S)
+    - excel_row: 44
+      merchant_article: CL_OC_MEN_LINE51_WHITE_XL_134547490
+      public_product_id: '134547490'
+      platform_size_token: XL
+      model_size_token: XL
+      price_kzt: 16990
+      model: Line51_мужской_48_134547490_(134547486)_(LINE51)_(XL)
+    - excel_row: 45
+      merchant_article: CL_OC_MEN_LINE51_WHITE_L_134547493
+      public_product_id: '134547493'
+      platform_size_token: L
+      model_size_token: L
+      price_kzt: 16990
+      model: Line51_мужской_46_134547493_(134547486)_(LINE51)_(L)
+    - excel_row: 46
+      merchant_article: CL_OC_MEN_LINE51_WHITE_M_134547494
+      public_product_id: '134547494'
+      platform_size_token: M
+      model_size_token: M
+      price_kzt: 16990
+      model: Line51_мужской_44_134547494_(134547486)_(LINE51)_(M)
+    - excel_row: 47
+      merchant_article: CL_OC_MEN_LINE51_WHITE_XL_134547486
+      public_product_id: '134547486'
+      platform_size_token: XL
+      model_size_token: XL
+      price_kzt: 16990
+      model: Line51_мужской_50_134547486_(134547486)_(LINE51)_(XL)
+  archive_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ARCHIVE.xlsx
+    row_count: 0
+    current_prices_kzt: []
+    merchant_articles: []
+    rows: []
+  warnings: []
+  unresolved_fields:
+  - campaign_metrics_bid_spend_orders_not_agent1_scope
+  - stock_and_order_truth_owned_by_agent2
+  - dashboard_status_owned_by_agent3
+  - price_ladder_readiness_owned_by_agent4
+- owner_group: group_2
+  lane_id: line51_ko_sport_suit
+  independent_lane: true
+  merge_status: preserved_independent_no_safe_merge_evidence
+  surface_seed: suits/category-like
+  surface_evidence:
+    public_category_hint: sports suit public surface
+    public_title: Купить Спортивный костюм ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    public_og_title: Купить Спортивный костюм ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    merchant_match_rule: SKU starts with CL_OC_MEN_LINE51_WHITE_K-O_ST_; model contains ACMEWEAR_LINE51_K-O_ST.
+  public_offer_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true
+  public_url_verification:
+    status: reachable
+    http_status: 200
+    verified_at_local: '2026-05-02T12:06:04+05:00'
+    final_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true
+    product_retailer_item_id: '159719353'
+    product_price_amount_kzt: 15990
+    product_availability: in stock
+    supports_owner_product_id: true
+    evidence_file: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/public_url_verification.json
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2626530?startDate=2026-05-01&endDate=2026-05-01
+  campaign_id: '2626530'
+  active_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ACTIVE.xlsx
+    row_count: 10
+    current_prices_kzt:
+    - 15990
+    merchant_articles:
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_2XL_159720316
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_3XL_159719543
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_1_159720206
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_2_159720193
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_3_159720368
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_L_159720638
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_M_159719353
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_S_159720195
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_XL_1_159720221
+    - CL_OC_MEN_LINE51_WHITE_K-O_ST_XL_2_159720671
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL_1
+    - 4XL_2
+    - 4XL_3
+    - L
+    - M
+    - S
+    - XL_1
+    - XL_2
+    public_product_ids:
+    - '159719353'
+    - '159719543'
+    - '159720193'
+    - '159720195'
+    - '159720206'
+    - '159720221'
+    - '159720316'
+    - '159720368'
+    - '159720638'
+    - '159720671'
+    rows:
+    - excel_row: 19
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_2XL_159720316
+      public_product_id: '159720316'
+      platform_size_token: 2XL
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 20
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_XL_1_159720221
+      public_product_id: '159720221'
+      platform_size_token: XL_1
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 21
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_1_159720206
+      public_product_id: '159720206'
+      platform_size_token: 4XL_1
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 22
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_3XL_159719543
+      public_product_id: '159719543'
+      platform_size_token: 3XL
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 26
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_XL_2_159720671
+      public_product_id: '159720671'
+      platform_size_token: XL_2
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 30
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_3_159720368
+      public_product_id: '159720368'
+      platform_size_token: 4XL_3
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 34
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_S_159720195
+      public_product_id: '159720195'
+      platform_size_token: S
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 35
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_L_159720638
+      public_product_id: '159720638'
+      platform_size_token: L
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 39
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_M_159719353
+      public_product_id: '159719353'
+      platform_size_token: M
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+    - excel_row: 41
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_ST_4XL_2_159720193
+      public_product_id: '159720193'
+      platform_size_token: 4XL_2
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Спортивный_костюм_ACMEWEAR_LINE51_K-O_ST_черный-белый
+  archive_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ARCHIVE.xlsx
+    row_count: 0
+    current_prices_kzt: []
+    merchant_articles: []
+    rows: []
+  warnings:
+  - do_not_use_public_slug_as_family_truth
+  - public_slug_contains_line61_but_merchant_sku_and_model_are_line51
+  unresolved_fields:
+  - campaign_metrics_bid_spend_orders_not_agent1_scope
+  - stock_and_order_truth_owned_by_agent2
+  - dashboard_status_owned_by_agent3
+  - price_ladder_readiness_owned_by_agent4
+- owner_group: group_3
+  lane_id: line51_ko_thermal_set
+  independent_lane: true
+  merge_status: preserved_independent_no_safe_merge_evidence
+  surface_seed: thermal/category-like
+  surface_evidence:
+    public_category_hint: thermal underwear / set public surface
+    public_title: Купить Комплект ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    public_og_title: Купить Комплект ACMEWEAR черный, белый в Алматы – Магазин на Kaspi.kz
+    merchant_match_rule: SKU starts with CL_OC_MEN_LINE51_WHITE_K-O_TRM_; model contains ACMEWEAR_LINE51_TRM.
+  public_offer_url: https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true
+  public_url_verification:
+    status: reachable
+    http_status: 200
+    verified_at_local: '2026-05-02T12:06:04+05:00'
+    final_url: https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true
+    product_retailer_item_id: '159806793'
+    product_price_amount_kzt: 15990
+    product_availability: in stock
+    supports_owner_product_id: true
+    evidence_file: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/public_url_verification.json
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2690256?startDate=2026-05-01&endDate=2026-05-01
+  campaign_id: '2690256'
+  active_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ACTIVE.xlsx
+    row_count: 10
+    current_prices_kzt:
+    - 15990
+    merchant_articles:
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_2XL_159806793
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_3XL_159806864
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_1_159806789
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_2_159806794
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_3_159806944
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_L_159806895
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_M_159806820
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_S_159806832
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_1_159806992
+    - CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_2_159806817
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL_1
+    - 4XL_2
+    - 4XL_3
+    - L
+    - M
+    - S
+    - XL_1
+    - XL_2
+    public_product_ids:
+    - '159806789'
+    - '159806793'
+    - '159806794'
+    - '159806817'
+    - '159806820'
+    - '159806832'
+    - '159806864'
+    - '159806895'
+    - '159806944'
+    - '159806992'
+    rows:
+    - excel_row: 23
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_L_159806895
+      public_product_id: '159806895'
+      platform_size_token: L
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 24
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_3_159806944
+      public_product_id: '159806944'
+      platform_size_token: 4XL_3
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 25
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_2_159806794
+      public_product_id: '159806794'
+      platform_size_token: 4XL_2
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 27
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_1_159806992
+      public_product_id: '159806992'
+      platform_size_token: XL_1
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 28
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_2_159806817
+      public_product_id: '159806817'
+      platform_size_token: XL_2
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 29
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_S_159806832
+      public_product_id: '159806832'
+      platform_size_token: S
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 33
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_1_159806789
+      public_product_id: '159806789'
+      platform_size_token: 4XL_1
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 36
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_3XL_159806864
+      public_product_id: '159806864'
+      platform_size_token: 3XL
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 38
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_2XL_159806793
+      public_product_id: '159806793'
+      platform_size_token: 2XL
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+    - excel_row: 40
+      merchant_article: CL_OC_MEN_LINE51_WHITE_K-O_TRM_M_159806820
+      public_product_id: '159806820'
+      platform_size_token: M
+      model_size_token: unknown
+      price_kzt: 15990
+      model: Комплект_ACMEWEAR_LINE51_TRM_черный-белый
+  archive_mapping:
+    source_file: runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/downloads/acmewear_ARCHIVE.xlsx
+    row_count: 0
+    current_prices_kzt: []
+    merchant_articles: []
+    rows: []
+  warnings: []
+  unresolved_fields:
+  - campaign_metrics_bid_spend_orders_not_agent1_scope
+  - stock_and_order_truth_owned_by_agent2
+  - dashboard_status_owned_by_agent3
+  - price_ladder_readiness_owned_by_agent4
+global_unresolved_fields:
+- stock_and_order_truth_agent2_pending
+- campaign_metrics_and_scheduler_agent3_pending
+- price_ladder_and_baseline_report_agent4_pending
+- live_upload_authorization_absent
+forbidden_actions_observed:
+  live_kaspi_price_upload: false
+  kaspi_stock_upload: false
+  kaspi_image_upload: false
+  campaign_edit: false
+  bid_edit: false
+  ads_change: false
+  repricer_write: false
+  autonomous_business_write: false

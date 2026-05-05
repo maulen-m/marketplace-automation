@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.delivery_promise_watch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; __REPO_ROOT__/.venv/bin/python -m web_auto --json delivery-health watch --store ACMEWEAR --merchant-id 30137883 --city Astana --city-id 710000000 --sku-key CL_NEW-CLO2_MEN_SUIT-61_BLACK --offer-url 'https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-cl-new-clo2-men-suit-61-black-m-chernyi-m-156408683/' --expected-days 1 --source kaspi_offer_view_api --note 'scheduled public delivery promise watch'</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/delivery_promise_watch/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/delivery_promise_watch/logs/stderr.log</string>
+</dict>
+</plist>

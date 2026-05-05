@@ -1,0 +1,206 @@
+schema_version: 1
+generated_at_local: "2026-05-02T12:35:28+05:00"
+timezone: "Asia/Almaty"
+status: "scaffold_planned_only"
+launch_status: "LINE51 scaffold planned only; no live upload or ad changes authorized"
+store: "ACMEWEAR"
+product_family: "LINE51"
+raw_parent_sku_key: "CL_OC_MEN_LINE51_WHITE "
+normalized_parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+
+source_inputs:
+  agent1_registry_yaml: "config/experiments/line51_offer_tracking_registry.yaml"
+  agent1_registry_markdown: "Docs/experiments/line51/line51_offer_tracking_registry.md"
+  agent1_closeout: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/AGENT_1_OFFER_REGISTRY_CLOSEOUT.md"
+  agent2_closeout: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/AGENT_2_STOCK_ORDER_TRUTH_CLOSEOUT.md"
+  agent3_calendar_yaml: "config/experiments/line51_experiment_calendar.yaml"
+  agent3_calendar_markdown: "Docs/experiments/line51/line51_experiment_calendar.md"
+  agent3_closeout: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/AGENT_3_MARKETING_SCHEDULER_CLOSEOUT.md"
+  orchestrator_manifest: "runs/tmux_orchestration/line51_full_tracking_20260502_115500/orchestration_manifest.json"
+  orchestrator_events: "runs/tmux_orchestration/line51_full_tracking_20260502_115500/events.jsonl"
+  stock_order_evidence_folder: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth"
+  line61_ladder_reference: "config/experiments/line61_price_ads_ladder.yaml"
+  line61_run_ledger_reference: "Docs/experiments/line61/line61_price_ads_run_ledger.csv"
+
+dependency_gate:
+  status: "GREEN"
+  start_condition_met: true
+  orchestrator_review_status: "reviewed_green_for_scaffold_lanes"
+  dependencies:
+    - agent_id: "1"
+      closeout_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/AGENT_1_OFFER_REGISTRY_CLOSEOUT.md"
+      closeout_gate: "GREEN"
+      orchestrator_event_type: "closeout_reviewed"
+      orchestrator_reviewed_at_utc: "2026-05-02T07:26:08Z"
+    - agent_id: "2"
+      closeout_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/AGENT_2_STOCK_ORDER_TRUTH_CLOSEOUT.md"
+      closeout_gate: "GREEN_EVIDENCE_ONLY_NO_LIVE_WRITES"
+      orchestrator_event_type: "closeout_reviewed"
+      orchestrator_reviewed_at_utc: "2026-05-02T07:26:08Z"
+    - agent_id: "3"
+      closeout_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/AGENT_3_MARKETING_SCHEDULER_CLOSEOUT.md"
+      closeout_gate: "GREEN"
+      orchestrator_event_type: "closeout_reviewed"
+      orchestrator_reviewed_at_utc: "2026-05-02T07:33:35Z"
+
+owner_rules:
+  independent_offer_groups: true
+  offer_group_count: 3
+  collapse_requires_fresh_evidence: true
+  safe_merge_evidence_found: false
+  no_line51_size_exclusion_from_owner_seed: true
+  all_owner_sizes_available: true
+  owner_approval_required_before_any_live_price_upload: true
+  owner_approval_required_before_any_bid_or_campaign_change: true
+  future_steps_executable: false
+
+stock_order_truth:
+  status: "green_evidence_only"
+  total_owner_approved_stock: 764
+  stock_truth_decision_timestamp_local: "2026-04-28 21:08:57 +0500"
+  stock_truth_source: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/owner_override_stock_by_size.csv"
+  stock_snapshot_workbook_source: "exports/stock_snapshots/2.3.26/stock_snapshot_2.3.2026_1.xlsx"
+  size_exclusion_policy: "none_for_line51"
+  available_sizes:
+    - "S"
+    - "M"
+    - "L"
+    - "XL"
+    - "2XL"
+    - "3XL"
+    - "4XL"
+  raw_order_truth_status: "fresh_through_2026-05-02_sync"
+  acmewear_order_sync_last_success_ts: "2026-05-02T11:01:00"
+  line51_raw_orders_since_2026_04_16: 58
+  line51_raw_units_since_2026_04_16: 58
+  latest_line51_raw_order_at: "2026-05-02 09:11:56"
+  finalized_economics_status: "stale_after_2026-04-15"
+  size_resolution_status: "caveat_for_size_level_projected_actual_reporting"
+
+marketing_gate:
+  status: "blocking_for_readiness_not_for_scaffold"
+  campaign_mapping_status: "mapped_to_agent1_verified_offer_groups"
+  metrics_status: "verification_required_no_local_marketing_rows"
+  dashboard_refresh_status: "not_run_for_line51"
+  required_before_readiness_claim:
+    - "fresh_read_only_line51_marketing_campaign_rows"
+    - "campaign_bid_values"
+    - "campaign_spend_views_clicks"
+    - "campaign_product_rows"
+    - "dashboard_refresh_for_line51"
+
+baseline_offer_groups:
+  - owner_group: "group_1"
+    lane_id: "line51_original_sport_suit"
+    baseline_step_id: "group_1_baseline_current_16990"
+    status: "current_baseline_verified_not_future_live_step"
+    executable: false
+    current_price_kzt: 16990
+    campaign_id: "2380614"
+    campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2380614?startDate=2026-05-01&endDate=2026-05-01"
+    public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true"
+    public_product_id: "134547494"
+    public_page_price_kzt: 16990
+    active_row_count: 9
+    archive_row_count: 0
+    active_pricelist_prices_kzt:
+      - 16990
+    marketing_metrics_status: "verification_required_no_local_marketing_rows"
+    projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
+    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+  - owner_group: "group_2"
+    lane_id: "line51_ko_sport_suit"
+    baseline_step_id: "group_2_baseline_current_15990"
+    status: "current_baseline_verified_not_future_live_step"
+    executable: false
+    current_price_kzt: 15990
+    campaign_id: "2626530"
+    campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2626530?startDate=2026-05-01&endDate=2026-05-01"
+    public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true"
+    public_product_id: "159719353"
+    public_page_price_kzt: 15990
+    active_row_count: 10
+    archive_row_count: 0
+    active_pricelist_prices_kzt:
+      - 15990
+    marketing_metrics_status: "verification_required_no_local_marketing_rows"
+    warning: "public_slug_contains_line61_but_merchant_sku_and_model_are_line51"
+    projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
+    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+  - owner_group: "group_3"
+    lane_id: "line51_ko_thermal_set"
+    baseline_step_id: "group_3_baseline_current_15990"
+    status: "current_baseline_verified_not_future_live_step"
+    executable: false
+    current_price_kzt: 15990
+    campaign_id: "2690256"
+    campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2690256?startDate=2026-05-01&endDate=2026-05-01"
+    public_offer_url: "https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true"
+    public_product_id: "159806793"
+    public_page_price_kzt: 15990
+    active_row_count: 10
+    archive_row_count: 0
+    active_pricelist_prices_kzt:
+      - 15990
+    marketing_metrics_status: "verification_required_no_local_marketing_rows"
+    projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
+    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+
+future_ladder_scaffold:
+  rule: "Future candidate prices are scaffold placeholders computed from each verified current group price. They are not recommendations and are not executable."
+  shared_gates:
+    executable: false
+    owner_approval_required: true
+    fresh_active_archive_required: true
+    fresh_stock_order_truth_required: true
+    fresh_marketing_metrics_required: true
+    campaign_edit_authorized: false
+    bid_edit_authorized: false
+    price_upload_authorized: false
+  candidate_steps:
+    - owner_group: "group_1"
+      lane_id: "line51_original_sport_suit"
+      current_price_kzt: 16990
+      candidate_price_kzt: 17990
+      step_id: "group_1_candidate_plus_1000"
+      status: "planned_owner_approval_required_not_executable"
+      owner_approval_required: true
+      executable: false
+    - owner_group: "group_2"
+      lane_id: "line51_ko_sport_suit"
+      current_price_kzt: 15990
+      candidate_price_kzt: 16990
+      step_id: "group_2_candidate_plus_1000"
+      status: "planned_owner_approval_required_not_executable"
+      owner_approval_required: true
+      executable: false
+    - owner_group: "group_3"
+      lane_id: "line51_ko_thermal_set"
+      current_price_kzt: 15990
+      candidate_price_kzt: 16990
+      step_id: "group_3_candidate_plus_1000"
+      status: "planned_owner_approval_required_not_executable"
+      owner_approval_required: true
+      executable: false
+
+projected_actual_reporting_template:
+  status: "template_only"
+  projected_fields:
+    - "projected_units"
+    - "projected_revenue_kzt"
+    - "projected_ads_spend_kzt"
+    - "projected_profit_kzt"
+    - "projected_roic"
+  actual_fields:
+    - "actual_units"
+    - "actual_revenue_kzt"
+    - "actual_ads_spend_kzt"
+    - "actual_profit_kzt"
+    - "actual_roic"
+  explicit_unknowns:
+    - "group_level_order_attribution"
+    - "LINE51_campaign_bids"
+    - "LINE51_campaign_spend"
+    - "LINE51_campaign_product_rows"
+    - "finalized_economics_after_2026-04-15"
+    - "size_conflict_resolver_for_size_level_reporting"

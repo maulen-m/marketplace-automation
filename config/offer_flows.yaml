@@ -1,0 +1,382 @@
+registry_version: 1
+doc_output_path: Docs/offer_ops/OFFER_METHOD_MATRIX.generated.md
+
+flows:
+  - flow_id: upstream-new-offer-preflight
+    title: Upstream New-Offer Preflight
+    active: true
+    goal: new-offer-package-preflight
+    artifact_state: contract-only
+    owner_surface: Oracle/Content + Business2 + Autonomous_business
+    stores: [ALL]
+    write_surface: upstream-readonly
+    priority: 10
+    summary: >
+      Use this flow before any merchant action when a new offer family still needs contract truth,
+      package truth, or stage-2 validation confirmation in the upstream repos.
+    primary_entrypoint: upstream manifest and stage-2 validation workflow
+    command_examples:
+      - Read the package contract, manifest workflow, and stage-2 validation evidence before merchant action
+    dry_run_supported: false
+    confirm_required: false
+    verify_required: true
+    repricer_followup: none
+    required_inputs: []
+    preflight_checks:
+      - Contract docs exist and match the intended product family
+      - Prepared package artifacts exist in Business2
+      - Autonomous_business stage-2 validation is green for the current package set
+    success_checks:
+      - Upload-ready ZIP queue or reviewed workbook exists for the next lane
+      - No unresolved upstream stoplines remain
+    stoplines:
+      - Stage-2 validation is not green
+      - Identity contract is still ambiguous
+      - Package artifact set is incomplete
+    fallback_flow_ids: []
+    docs_refs:
+      - ~/Docs/Oracle/Content/docs/kaspi_offer_creations_blueprint.md
+      - ~/Docs/Oracle/Content/docs/offer_creation/KASPI_MANIFEST_WORKFLOW.md
+      - ~/Docs/Web_automation/Docs/offer_ops/00_START_HERE.md
+    skill_refs:
+      - kaspi-offer-creation
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - ~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers
+      - ~/Docs/Autonomous_business/exports/validation
+
+  - flow_id: kaspi-merchant-zip-import
+    title: Kaspi Merchant ZIP Import
+    active: true
+    goal: new-offer-upload
+    artifact_state: prepared-zip-queue
+    owner_surface: Web_automation
+    stores: [ALL]
+    write_surface: merchant-import-ui
+    priority: 20
+    summary: >
+      Use this flow when upload-ready ZIPs already exist and the task is to push them through
+      Kaspi merchant import in the required order, then verify processing in merchant history.
+    primary_entrypoint: "merchant import page #/products/import?step=upload"
+    command_examples:
+      - Open https://kaspi.kz/mc/#/products/import?step=upload
+      - Upload the prepared ZIP queue in the handoff order
+      - Verify each ZIP against merchant history before continuing
+    dry_run_supported: false
+    confirm_required: true
+    verify_required: true
+    repricer_followup: none
+    required_inputs: [store, zip_queue_path, handoff_path]
+    preflight_checks:
+      - Ordered ZIP queue exists locally
+      - Family grouping rules are confirmed in the active handoff
+      - Store session and merchant identity are confirmed
+    success_checks:
+      - Each ZIP reaches processed merchant state
+      - Ordered queue evidence is saved under runs
+    stoplines:
+      - ZIP queue is missing or out of order
+      - Merchant session is not the intended store
+      - Merchant import pushes rows into TRASH clarification flow
+    fallback_flow_ids:
+      - kaspi-pending-trash-dispute-replay
+    docs_refs:
+      - Docs/offer_ops/OFFER_STATE_MACHINE.md
+      - Docs/agent_handoffs/ACMEWEAR_PAIRED_BUNDLE_MASTER_UPLOAD_HANDOFF_2026-04-25.md
+      - Docs/sessions/2026-04-26_ACMEWEAR_Bundle_Upload_and_Round2_Reapplication_Memo.md
+    skill_refs:
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - runs/acmewear_paired_bundle_master_upload
+
+  - flow_id: kaspi-existing-card-ui-upload
+    title: Kaspi Existing-Card UI Upload
+    active: true
+    goal: existing-card-onboarding
+    artifact_state: reviewed-offer-upload-workbook
+    owner_surface: Web_automation
+    stores: [UNIVERSAL, STORE-B, ACMEWEAR]
+    write_surface: existing-card-ui
+    priority: 30
+    summary: >
+      Use this flow when the public Kaspi card already exists and rows are normalized in an
+      `offer upload` workbook that must be applied through the seller cabinet card-attach flow.
+    primary_entrypoint: python3 -m web_auto.kaspi_offer_ui_upload
+    command_examples:
+      - python3 -m web_auto.kaspi_offer_ui_upload --list-windows --json
+      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores <stores> --dry-run --json
+      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores <stores> --window-map <map> --confirm --json
+    dry_run_supported: true
+    confirm_required: true
+    verify_required: true
+    repricer_followup: verify-import-and-dumping
+    required_inputs: [store, workbook_path]
+    preflight_checks:
+      - Workbook contains a valid `offer upload` sheet
+      - Merchant window mapping is correct for the target store
+      - Dry-run validation passes before any confirm run
+    success_checks:
+      - Row summary is green or failed rows are explicitly reviewed
+      - Live offer-page verification confirms commercial values
+    stoplines:
+      - Merchant header does not match the intended store
+      - Workbook rows are missing required fields
+      - Live page contradicts nominal success and requires direct repair
+    fallback_flow_ids: []
+    docs_refs:
+      - Docs/sessions/2026-03-28_ACMEWEAR_Offer_Recovery_and_Chrome_Autoconnect_Report.md
+      - Docs/offer_ops/RECOVERY_PLAYBOOK.md
+    skill_refs:
+      - kaspi-offer-ui-upload-master
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - runs/kaspi_offer_ui_upload
+
+  - flow_id: kaspi-pricelist-sync
+    title: Kaspi Pricelist Stock and Price Sync
+    active: true
+    goal: existing-offer-maintenance
+    artifact_state: existing-merchant-rows
+    owner_surface: Web_automation
+    stores: [UNIVERSAL, STORE-B, ACMEWEAR]
+    write_surface: merchant-pricelist-ui
+    priority: 40
+    summary: >
+      Use this flow when merchant rows already exist and only ACTIVE or ARCHIVE sellability,
+      warehouse stock, or upload price must change through downloaded and rebuilt pricelists.
+    primary_entrypoint: web-auto kaspi-pricelist sync
+    command_examples:
+      - python3 -m web_auto.cli kaspi-pricelist sync --store <STORE> --intent <INTENT> --headless
+      - python3 -m web_auto.cli kaspi-pricelist sync --store <STORE> --intent <INTENT> --upload --verify-after-upload --headless
+    dry_run_supported: true
+    confirm_required: true
+    verify_required: true
+    repricer_followup: verify-import-and-redflag
+    required_inputs: [store]
+    preflight_checks:
+      - Fresh ACTIVE and ARCHIVE downloads exist for the target store
+      - Local workbook build has zero stopline review rows for the intended mutation
+      - Backup and edit log rules are satisfied before upload
+    success_checks:
+      - Merchant upload history is green
+      - Post-upload re-download verifies the expected merchant row state
+    stoplines:
+      - Download failed or stale source files are being reused without approval
+      - Upload result marks truly new rows as unrecognized
+      - Post-upload verification shows mismatches
+    fallback_flow_ids: []
+    docs_refs:
+      - Docs/offer_ops/OFFER_STATE_MACHINE.md
+      - Docs/offer_ops/RECOVERY_PLAYBOOK.md
+    skill_refs:
+      - kaspi-pricelist-download-modify-upload
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - runs/kaspi_pricelist_ops
+      - exports/pricelist_snapshots
+
+  - flow_id: kaspi-pending-trash-dispute-replay
+    title: Kaspi Pending TRASH Dispute Replay
+    active: true
+    goal: rejected-offer-replay
+    artifact_state: pending-trash-rows
+    owner_surface: Web_automation
+    stores: [ACMEWEAR]
+    write_surface: merchant-dispute-api
+    priority: 50
+    summary: >
+      Use this flow when merchant transport succeeded but Kaspi moved offers into the pending
+      TRASH clarification flow and the known authenticated dispute endpoint can replay them faster
+      than row-by-row UI clicking.
+    primary_entrypoint: web-auto kaspi-pending-dispute
+    command_examples:
+      - python3 -m web_auto.cli kaspi-pending-dispute --store ACMEWEAR --json
+      - python3 -m web_auto.cli kaspi-pending-dispute --store ACMEWEAR --confirm --json
+    dry_run_supported: true
+    confirm_required: true
+    verify_required: true
+    repricer_followup: none
+    required_inputs: [store]
+    preflight_checks:
+      - Read-only preflight partitions actionable rows from already-disputed rows
+      - Merchant code and store identity are confirmed
+      - Clarification comment text is fixed and within limits
+    success_checks:
+      - All initially actionable rows are replayed successfully
+      - Remaining actionable rows reach zero
+    stoplines:
+      - New reject class appears that is not already classified
+      - Merchant auth or dispute endpoint fails
+      - Verification still shows actionable rows from the initial set
+    fallback_flow_ids: []
+    docs_refs:
+      - Docs/sessions/2026-04-26_ACMEWEAR_Bundle_Upload_and_Round2_Reapplication_Memo.md
+      - Docs/offer_ops/RECOVERY_PLAYBOOK.md
+    skill_refs:
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - runs/kaspi_pending_trash_dispute
+
+  - flow_id: post-publication-enrichment-handoff
+    title: Post-Publication Enrichment Handoff
+    active: true
+    goal: post-publication-enrichment
+    artifact_state: published-live-offers
+    owner_surface: Web_automation
+    stores: [ALL]
+    write_surface: handoff-only
+    priority: 60
+    summary: >
+      Use this flow after cards are live to capture URLs, grouped relations, and downstream truth
+      notes so the future Autonomous_business storage pass has complete publication evidence.
+    primary_entrypoint: session memo and upstream handoff closeout
+    command_examples:
+      - Record stable public URLs for each live offer
+      - Capture group color and size card relations
+      - Write session memo and upstream handoff before downstream DB mutation
+    dry_run_supported: false
+    confirm_required: false
+    verify_required: true
+    repricer_followup: none
+    required_inputs: [session_doc_path]
+    preflight_checks:
+      - Public offer pages are actually live and stable enough to capture
+      - Rollout evidence exists from the creation or upload flow
+    success_checks:
+      - URL, group, and size relations are preserved in memo or handoff form
+      - Downstream shared-stock and gift-component implications are explicitly noted
+    stoplines:
+      - Cards are not yet publicly stable
+      - Publication truth still depends on guessing unresolved group relations
+    fallback_flow_ids: []
+    docs_refs:
+      - Docs/sessions/2026-04-26_ACMEWEAR_Bundle_Upload_and_Round2_Reapplication_Memo.md
+      - exports/wiki_handoffs/20260426_104151+0500__acmewear_bundle_upload_and_round2_reapplication/01_SOURCE_MEMO.md
+    skill_refs:
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - Docs/sessions
+      - exports/wiki_handoffs
+
+  - flow_id: future-upstream-manifest-build-automation
+    title: Future Upstream Manifest Build Automation
+    active: false
+    goal: new-offer-package-preflight
+    artifact_state: contract-only
+    owner_surface: Oracle/Content + Business2 + Autonomous_business
+    stores: [ALL]
+    write_surface: upstream-readonly
+    priority: 70
+    summary: >
+      Placeholder for a future cross-repo wrapper that can launch or validate upstream manifest,
+      package, and stage-2 build work from one control-plane entrypoint before merchant upload.
+    primary_entrypoint: future upstream manifest-build bridge
+    command_examples:
+      - Future flow should validate manifest, package, and stage-2 truth in one orchestrated pass
+    dry_run_supported: false
+    confirm_required: false
+    verify_required: true
+    repricer_followup: none
+    required_inputs: [handoff_path]
+    preflight_checks:
+      - Cross-repo build inputs are explicitly identified
+      - Upstream repos are reachable in read-only mode from this control plane
+    success_checks:
+      - Ready-to-upload package queue is produced upstream
+      - Stage-2 truth is green without manual reconstruction
+    stoplines:
+      - Cross-repo automation contract is still undefined
+      - Upstream package truth would require unsafe mutation from this repo
+    fallback_flow_ids:
+      - upstream-new-offer-preflight
+    docs_refs:
+      - Docs/offer_ops/OFFER_STATE_MACHINE.md
+    skill_refs:
+      - kaspi-offer-creation
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - config/offer_flows.yaml
+    notes:
+      - Inactive template for future new-product automation work
+
+  - flow_id: future-playwright-existing-card-upload
+    title: Future Playwright Existing-Card Upload Fallback
+    active: false
+    goal: existing-card-onboarding
+    artifact_state: reviewed-offer-upload-workbook
+    owner_surface: Web_automation
+    stores: [UNIVERSAL, STORE-B, ACMEWEAR]
+    write_surface: existing-card-ui
+    priority: 80
+    summary: >
+      Placeholder fallback for cases where the everyday Chrome attach path is blocked and a fully
+      Playwright-driven merchant login flow is safer or more durable for workbook-based onboarding.
+    primary_entrypoint: python3 -m web_auto.kaspi_offer_ui_upload_playwright
+    command_examples:
+      - python3 -m web_auto.kaspi_offer_ui_upload_playwright --help
+    dry_run_supported: true
+    confirm_required: true
+    verify_required: true
+    repricer_followup: verify-import-and-dumping
+    required_inputs: [store, workbook_path]
+    preflight_checks:
+      - Playwright merchant login path is confirmed for the store
+      - Workbook dry-run validation is green
+    success_checks:
+      - Workbook rows are applied without relying on live everyday Chrome attach
+      - Live verification is still performed after writes
+    stoplines:
+      - Merchant login selectors drift
+      - Playwright path is less stable than the live Chrome attach path for this task
+    fallback_flow_ids:
+      - kaspi-existing-card-ui-upload
+    docs_refs:
+      - Docs/sessions/2026-03-28_ACMEWEAR_Offer_Recovery_and_Chrome_Autoconnect_Report.md
+    skill_refs:
+      - kaspi-offer-ui-upload-master
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - runs/kaspi_offer_ui_upload
+    notes:
+      - Inactive template for future fallback execution if the current preferred UI lane is blocked
+
+  - flow_id: future-post-publication-ab-sync
+    title: Future Post-Publication AB Sync
+    active: false
+    goal: post-publication-enrichment
+    artifact_state: published-live-offers
+    owner_surface: Web_automation + Autonomous_business handoff boundary
+    stores: [ALL]
+    write_surface: handoff-only
+    priority: 90
+    summary: >
+      Placeholder for a future explicit bridge that converts captured publication truth into a
+      structured downstream payload for Autonomous_business, while still honoring the current no-write boundary.
+    primary_entrypoint: future downstream sync bridge
+    command_examples:
+      - Future flow should transform memo and URL truth into a downstream payload without direct AB mutation from this repo
+    dry_run_supported: false
+    confirm_required: false
+    verify_required: true
+    repricer_followup: none
+    required_inputs: [session_doc_path, public_urls_path]
+    preflight_checks:
+      - Public URLs are stable
+      - Group and shared-stock relations are already documented
+    success_checks:
+      - Downstream payload is complete enough for AB ingestion
+      - Shared-stock and gift-component notes are preserved
+    stoplines:
+      - Publication truth is still incomplete
+      - The bridge would require direct AB writes from this repo
+    fallback_flow_ids:
+      - post-publication-enrichment-handoff
+    docs_refs:
+      - Docs/sessions/2026-04-26_ACMEWEAR_Bundle_Upload_and_Round2_Reapplication_Memo.md
+    skill_refs:
+      - kaspi-offer-ops-control-plane
+    artifact_roots:
+      - Docs/sessions
+      - exports/wiki_handoffs
+    notes:
+      - Inactive template for future downstream structured-sync work

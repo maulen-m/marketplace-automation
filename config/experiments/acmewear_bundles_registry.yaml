@@ -1,0 +1,457 @@
+schema_version: 1
+generated_at_local: "2026-04-27 14:35:00 +05"
+timezone: "Asia/Almaty"
+program: "ACMEWEAR child bundle activation"
+program_status: "blocked_not_launchable"
+store: "ACMEWEAR"
+merchant_id: "30137883"
+
+source_artifacts:
+  publication_capture_run_id: "20260427_104746"
+  publication_capture_csv: "exports/acmewear_bundle_publication_capture/20260427_104746/bundle_publication_capture.csv"
+  publication_capture_summary: "exports/acmewear_bundle_publication_capture/20260427_104746/landed_offer_capture_summary.md"
+  image_enrichment_run_id: "20260427_130813"
+  image_queue_by_card_group_csv: "runs/acmewear_bundle_image_enrichment/20260427_130813/image_upload_queue_by_card_group.csv"
+  image_queue_by_article_trace_csv: "runs/acmewear_bundle_image_enrichment/20260427_130813/image_upload_queue_by_article_trace.csv"
+  deferred_reupload_rows_csv: "runs/acmewear_bundle_image_enrichment/20260427_130813/deferred_reupload_rows.csv"
+  image_stage_b_summary: "runs/acmewear_bundle_image_enrichment/20260427_130813/stage_b_summary.json"
+  calendar_yaml: "config/experiments/acmewear_bundles_experiment_calendar.yaml"
+  calendar_markdown: "Docs/experiments/acmewear_bundles/acmewear_bundles_experiment_calendar.md"
+  registry_notes: "Docs/experiments/acmewear_bundles/acmewear_bundles_registry_notes.md"
+  ab_stage2_validation_dir: "~/Docs/Autonomous_business/exports/validation/acmewear_bundle_stage2/20260425_203141"
+
+publication_truth:
+  expected_rows: 200
+  landed_rows: 80
+  landed_state: "ARCHIVE inactive/no-price/no-stock"
+  active_rows: 0
+  missing_rows: 120
+  missing_interpretation: "deferred_reupload_required"
+  landed_surface: "ST paired LS/TS card groups only"
+  deferred_surface: "all TRM rows plus all SUIT-21-TK and SUIT-31-TK tank rows"
+  public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+  kaspi_product_code_status: "unresolved_not_in_pricelist_and_not_inferred"
+
+image_truth:
+  stage_b_method: "manual_review_pending"
+  stage_b_confidence: "low"
+  image_upload_automation_proven: false
+  card_group_queues_ready_for_live_upload: false
+  default_image_state: "manual_review_pending"
+  rule: "Card-group galleries are shared across size rows; one representative landed article controls a card-group image queue after owner review."
+
+global_blockers:
+  - "publication_partial_80_of_200"
+  - "deferred_reupload_required_for_missing_120"
+  - "image_method_manual_review_pending"
+  - "image_upload_owner_approval_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+landed_st_blockers:
+  - "publication_partial_80_of_200"
+  - "image_method_manual_review_pending"
+  - "image_upload_owner_approval_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+deferred_lane_blockers:
+  - "deferred_reupload_required_for_missing_120"
+  - "image_method_manual_review_pending"
+  - "image_upload_owner_approval_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+common_size_mapping:
+  same_size_component_rule: "A child bundle sale consumes each garment component at the same internal size unless AB later defines a stronger mapping."
+  internal_sizes:
+    - "S"
+    - "M"
+    - "L"
+    - "XL"
+    - "2XL"
+    - "3XL"
+    - "4XL"
+  kaspi_tokens_by_internal_size:
+    S: ["S-42"]
+    M: ["M-44"]
+    L: ["L-46"]
+    XL: ["XL-48", "XL-50"]
+    2XL: ["2XL-52"]
+    3XL: ["3XL-54"]
+    4XL: ["4XL-56", "4XL-58", "4XL-60"]
+  expected_article_rows_per_category_surface: 10
+
+shared_stock_model:
+  interpretation_status: "handoff_model_only_no_ab_write"
+  rule: "Child bundles are sales surfaces over parent component inventory, not independent stock pools."
+  gift_bag:
+    included_in_internal_economics: true
+    customer_facing_complectation_note: "Keep merchant-facing garment composition text garments-only unless source specs say otherwise."
+    internal_note: "Carry the same gift-bag economics used by parent ACMEWEAR products when future AB truth models component COGS."
+  pools:
+    line61_top_pool:
+      parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+      parent_family: "LINE61"
+      component_scope: ["long_sleeve_top", "tshirt_top", "tank_top"]
+      stock_grain: "parent_component_by_internal_size"
+    line51_top_pool:
+      parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+      parent_family: "LINE51"
+      component_scope: ["long_sleeve_top", "tshirt_top"]
+      stock_grain: "parent_component_by_internal_size"
+    shared_shorts_pool:
+      parent_family: "shared"
+      component_scope: ["shorts"]
+      consumed_by: "all 2-in-1 and 3-in-1 child bundles"
+      stock_grain: "component_by_internal_size"
+    shared_leggings_pool:
+      parent_family: "shared"
+      component_scope: ["leggings"]
+      consumed_by: "all 3-in-1 child bundles only"
+      stock_grain: "component_by_internal_size"
+
+category_surfaces:
+  ST:
+    category_surface: "men-sport-suits"
+    upload_lane: "sport_suits"
+  TRM:
+    category_surface: "men-thermal-underwear"
+    upload_lane: "thermal_underwear"
+
+bundle_registry:
+  - bundle_id: "blk-31_ls"
+    child_bundle_id: "SUIT-31-LS"
+    stage2_sku_key: "SUIT-31-LS"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "3-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "long_sleeve_top"
+      shared_components: ["shared_shorts_pool", "shared_leggings_pool"]
+      component_stock_pool: "matched_same_size_min(line61_long_sleeve_top, shared_shorts_pool, shared_leggings_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool + shared_leggings_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-31-LS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-31_ls/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE61|SUIT-31-LS|ST", representative_merchant_article: "SUIT-31-LS-ST-XL-50", member_articles_count: 10, image_count_actual: 14, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "SUIT-31-LS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-31_ls", activation_row_id: "child_step_001", calendar_row_ids: ["child_step_001", "child_step_011", "child_step_021", "child_step_031", "child_step_041", "child_step_051"], initial_price_kzt: 8490, launch_mode: "active_focus"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-31-LS-ST", agent_2a_card_group_key: "LINE61|SUIT-31-LS|ST", representative_merchant_article: "SUIT-31-LS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-31-LS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "blk-21_ls"
+    child_bundle_id: "SUIT-21-LS"
+    stage2_sku_key: "SUIT-21-LS"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "2-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "long_sleeve_top"
+      shared_components: ["shared_shorts_pool"]
+      component_stock_pool: "matched_same_size_min(line61_long_sleeve_top, shared_shorts_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-21-LS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-21_ls/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE61|SUIT-21-LS|ST", representative_merchant_article: "SUIT-21-LS-ST-XL-50", member_articles_count: 10, image_count_actual: 13, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "SUIT-21-LS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-21_ls", activation_row_id: "child_step_002", calendar_row_ids: ["child_step_002", "child_step_012", "child_step_022", "child_step_032", "child_step_042", "child_step_052"], initial_price_kzt: 7490, launch_mode: "active_focus"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-21-LS-ST", agent_2a_card_group_key: "LINE61|SUIT-21-LS|ST", representative_merchant_article: "SUIT-21-LS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-21-LS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "blk-21_ts"
+    child_bundle_id: "SUIT-21-TS"
+    stage2_sku_key: "SUIT-21-TS"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "2-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "tshirt_top"
+      shared_components: ["shared_shorts_pool"]
+      component_stock_pool: "matched_same_size_min(line61_tshirt_top, shared_shorts_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-21-TS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-21_ts/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE61|SUIT-21-TS|ST", representative_merchant_article: "SUIT-21-TS-ST-XL-50", member_articles_count: 10, image_count_actual: 14, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "SUIT-21-TS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-21_ts", activation_row_id: "child_step_003", calendar_row_ids: ["child_step_003", "child_step_013", "child_step_023", "child_step_033", "child_step_043", "child_step_053"], initial_price_kzt: 7490, launch_mode: "active_focus"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-21-TS-ST", agent_2a_card_group_key: "LINE61|SUIT-21-TS|ST", representative_merchant_article: "SUIT-21-TS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-21-TS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "beli-21_ts"
+    child_bundle_id: "LINE-21-TS"
+    stage2_sku_key: "LINE-21-TS"
+    parent_family: "LINE51"
+    parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+    bundle_shape: "2-in-1"
+    component_inheritance:
+      top_pool: "line51_top_pool"
+      top_component: "tshirt_top"
+      shared_components: ["shared_shorts_pool"]
+      component_stock_pool: "matched_same_size_min(line51_tshirt_top, shared_shorts_pool)"
+    shared_stock_pool: "line51_top_pool + shared_shorts_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-21-TS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line51/Orange/bundles/beli-21_ts/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE51|LINE-21-TS|ST", representative_merchant_article: "LINE-21-TS-ST-XL-50", member_articles_count: 10, image_count_actual: 13, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "LINE-21-TS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "beli-21_ts", activation_row_id: "child_step_004", calendar_row_ids: ["child_step_004", "child_step_014", "child_step_024", "child_step_034", "child_step_044", "child_step_054"], initial_price_kzt: 7490, launch_mode: "active_focus"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-21-TS-ST", agent_2a_card_group_key: "LINE51|LINE-21-TS|ST", representative_merchant_article: "LINE-21-TS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-21-TS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "blk-31_ts"
+    child_bundle_id: "SUIT-31-TS"
+    stage2_sku_key: "SUIT-31-TS"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "3-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "tshirt_top"
+      shared_components: ["shared_shorts_pool", "shared_leggings_pool"]
+      component_stock_pool: "matched_same_size_min(line61_tshirt_top, shared_shorts_pool, shared_leggings_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool + shared_leggings_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-31-TS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-31_ts/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE61|SUIT-31-TS|ST", representative_merchant_article: "SUIT-31-TS-ST-XL-50", member_articles_count: 10, image_count_actual: 14, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "SUIT-31-TS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-31_ts", activation_row_id: "child_step_005", calendar_row_ids: ["child_step_005", "child_step_015", "child_step_025", "child_step_035", "child_step_045", "child_step_055"], initial_price_kzt: 8490, launch_mode: "passive_capped"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-31-TS-ST", agent_2a_card_group_key: "LINE61|SUIT-31-TS|ST", representative_merchant_article: "SUIT-31-TS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-31-TS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "blk-31_tk"
+    child_bundle_id: "SUIT-31-TK"
+    stage2_sku_key: "SUIT-31-TK"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "3-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "tank_top"
+      shared_components: ["shared_shorts_pool", "shared_leggings_pool"]
+      component_stock_pool: "matched_same_size_min(line61_tank_top, shared_shorts_pool, shared_leggings_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool + shared_leggings_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "SUIT-31-TK"
+    publication_state: "deferred_reupload_required"
+    landed_deferred_state: {landed_rows: 0, deferred_reupload_rows: 20}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-31_tk/final_images"
+    image_upload_unit: {unit_type: "deferred_card_group_after_reupload", card_group_key: null, representative_merchant_article: null, member_articles_count: 0, image_count_actual: 14, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: null
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-31_tk", activation_row_id: "child_step_006", calendar_row_ids: ["child_step_006", "child_step_016", "child_step_026", "child_step_036", "child_step_046", "child_step_056"], initial_price_kzt: 7990, launch_mode: "passive_capped"}
+    category_surfaces:
+      ST: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-sport-suits", paired_card_group: "SUIT-31-TK", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "SUIT-31-TK", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "beli-21_ls"
+    child_bundle_id: "LINE-21-LS"
+    stage2_sku_key: "LINE-21-LS"
+    parent_family: "LINE51"
+    parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+    bundle_shape: "2-in-1"
+    component_inheritance:
+      top_pool: "line51_top_pool"
+      top_component: "long_sleeve_top"
+      shared_components: ["shared_shorts_pool"]
+      component_stock_pool: "matched_same_size_min(line51_long_sleeve_top, shared_shorts_pool)"
+    shared_stock_pool: "line51_top_pool + shared_shorts_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-21-LS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line51/Orange/bundles/beli-21_ls/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE51|LINE-21-LS|ST", representative_merchant_article: "LINE-21-LS-ST-XL-50", member_articles_count: 10, image_count_actual: 13, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "LINE-21-LS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "beli-21_ls", activation_row_id: "child_step_007", calendar_row_ids: ["child_step_007", "child_step_017", "child_step_027", "child_step_037", "child_step_047", "child_step_057"], initial_price_kzt: 7990, launch_mode: "passive_capped"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-21-LS-ST", agent_2a_card_group_key: "LINE51|LINE-21-LS|ST", representative_merchant_article: "LINE-21-LS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-21-LS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "beli-31_ts"
+    child_bundle_id: "LINE-31-TS"
+    stage2_sku_key: "LINE-31-TS"
+    parent_family: "LINE51"
+    parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+    bundle_shape: "3-in-1"
+    component_inheritance:
+      top_pool: "line51_top_pool"
+      top_component: "tshirt_top"
+      shared_components: ["shared_shorts_pool", "shared_leggings_pool"]
+      component_stock_pool: "matched_same_size_min(line51_tshirt_top, shared_shorts_pool, shared_leggings_pool)"
+    shared_stock_pool: "line51_top_pool + shared_shorts_pool + shared_leggings_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-31-TS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line51/Orange/bundles/beli-31_ts/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE51|LINE-31-TS|ST", representative_merchant_article: "LINE-31-TS-ST-XL-50", member_articles_count: 10, image_count_actual: 14, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "LINE-31-TS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "beli-31_ts", activation_row_id: "child_step_008", calendar_row_ids: ["child_step_008", "child_step_018", "child_step_028", "child_step_038", "child_step_048", "child_step_058"], initial_price_kzt: 8990, launch_mode: "passive_capped"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-31-TS-ST", agent_2a_card_group_key: "LINE51|LINE-31-TS|ST", representative_merchant_article: "LINE-31-TS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-31-TS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "blk-21_tk"
+    child_bundle_id: "SUIT-21-TK"
+    stage2_sku_key: "SUIT-21-TK"
+    parent_family: "LINE61"
+    parent_sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+    bundle_shape: "2-in-1"
+    component_inheritance:
+      top_pool: "line61_top_pool"
+      top_component: "tank_top"
+      shared_components: ["shared_shorts_pool"]
+      component_stock_pool: "matched_same_size_min(line61_tank_top, shared_shorts_pool)"
+    shared_stock_pool: "line61_top_pool + shared_shorts_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "SUIT-21-TK"
+    publication_state: "deferred_reupload_required"
+    landed_deferred_state: {landed_rows: 0, deferred_reupload_rows: 20}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line61/Orange/bundles/blk-21_tk/final_images"
+    image_upload_unit: {unit_type: "deferred_card_group_after_reupload", card_group_key: null, representative_merchant_article: null, member_articles_count: 0, image_count_actual: 15, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: null
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "blk-21_tk", activation_row_id: "child_step_009", calendar_row_ids: ["child_step_009", "child_step_019", "child_step_029", "child_step_039", "child_step_049", "child_step_059"], initial_price_kzt: 6990, launch_mode: "minimal_learning"}
+    category_surfaces:
+      ST: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-sport-suits", paired_card_group: "SUIT-21-TK", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "SUIT-21-TK", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+
+  - bundle_id: "beli-31_ls"
+    child_bundle_id: "LINE-31-LS"
+    stage2_sku_key: "LINE-31-LS"
+    parent_family: "LINE51"
+    parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+    bundle_shape: "3-in-1"
+    component_inheritance:
+      top_pool: "line51_top_pool"
+      top_component: "long_sleeve_top"
+      shared_components: ["shared_shorts_pool", "shared_leggings_pool"]
+      component_stock_pool: "matched_same_size_min(line51_long_sleeve_top, shared_shorts_pool, shared_leggings_pool)"
+    shared_stock_pool: "line51_top_pool + shared_shorts_pool + shared_leggings_pool"
+    gift_bag_note: "gift_bag_included_internal_economics_only"
+    size_mapping: "common_size_mapping"
+    card_grouping_id: "PAIR-31-LS"
+    publication_state: "partial_landed_st_archive_with_deferred_trm"
+    landed_deferred_state: {landed_rows: 10, deferred_reupload_rows: 10}
+    image_source_folder: "~/Docs/Business2/Content/Content_db_1/Kaspi/Product_offers/Line51/Orange/bundles/beli-31_ls/final_images"
+    image_upload_unit: {unit_type: "card_group", card_group_key: "LINE51|LINE-31-LS|ST", representative_merchant_article: "LINE-31-LS-ST-XL-50", member_articles_count: 10, image_count_actual: 15, image_state: "manual_review_pending", ready_for_live_upload: false}
+    representative_merchant_article: "LINE-31-LS-ST-XL-50"
+    image_state: "manual_review_pending"
+    activation_state: "blocked"
+    launchable: false
+    blocked_by: ["publication_partial_80_of_200", "deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]
+    public_url: null
+    public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+    campaign_ids: []
+    campaign_status: "not_assigned_do_not_invent"
+    calendar_linkage: {calendar_bundle_id: "beli-31_ls", activation_row_id: "child_step_010", calendar_row_ids: ["child_step_010", "child_step_020", "child_step_030", "child_step_040", "child_step_050", "child_step_060"], initial_price_kzt: 9490, launch_mode: "minimal_capped"}
+    category_surfaces:
+      ST: {publication_state: "landed_inactive_archive_no_price_no_stock", landed_state: "landed", expected_rows: 10, captured_rows: 10, deferred_reupload_rows: 0, category_surface: "men-sport-suits", paired_card_group: "PAIR-31-LS-ST", agent_2a_card_group_key: "LINE51|LINE-31-LS|ST", representative_merchant_article: "LINE-31-LS-ST-XL-50", image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["publication_partial_80_of_200", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}
+      TRM: {publication_state: "deferred_reupload_required", landed_state: "deferred", expected_rows: 10, captured_rows: 0, deferred_reupload_rows: 10, category_surface: "men-thermal-underwear", paired_card_group: "PAIR-31-LS-TRM", agent_2a_card_group_key: null, representative_merchant_article: null, image_state: "manual_review_pending", activation_state: "blocked", launchable: false, blocked_by: ["deferred_reupload_required_for_missing_120", "image_method_manual_review_pending", "image_upload_owner_approval_pending", "image_moderation_pending", "owner_activation_approval_pending", "campaign_surface_verification_pending", "price_stock_upload_pending"]}

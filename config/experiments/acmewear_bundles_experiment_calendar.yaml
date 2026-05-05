@@ -1,0 +1,649 @@
+schema_version: 1
+generated_at_local: "2026-04-27 12:20:00 +05"
+timezone: "Asia/Almaty"
+program_status: "pending_not_launchable"
+store: "ACMEWEAR"
+source_expert_reply_path: "~/Docs/Oracle/Web_automation/2026-04-26/expert_answers/2026-04-27_11_31_00__Negotiations - WIki_business_negotiations_22.4.26.md"
+source_publication_capture_path: "~/Docs/Web_automation/exports/acmewear_bundle_publication_capture/20260427_104746/bundle_publication_capture.csv"
+source_publication_summary_path: "~/Docs/Web_automation/exports/acmewear_bundle_publication_capture/20260427_104746/landed_offer_capture_summary.md"
+markdown_mirror_path: "~/Docs/Web_automation/Docs/experiments/acmewear_bundles/acmewear_bundles_experiment_calendar.md"
+integration_notes_path: "~/Docs/Web_automation/Docs/experiments/acmewear_bundles/acmewear_bundles_calendar_integration_notes.md"
+
+t0_definition:
+  anchor: "merchant activation timestamp after publication lanes, image gates, owner approval, price/stock upload, and campaign surface verification are explicitly green or owner-excepted"
+  provisional_t0_local: "2026-04-27 12:00:00 +05"
+  shift_rule: "Provisional timestamps are mechanically shifted by replacing provisional_t0_local with the real approved activation timestamp."
+  current_applicability: "planning_only_no_live_activation_allowed"
+
+publication_capture_truth:
+  run_id: "20260427_104746"
+  expected_rows: 200
+  landed_rows: 80
+  landed_state: "ARCHIVE inactive/no-price/no-stock"
+  active_rows: 0
+  missing_rows: 120
+  missing_interpretation: "deferred_reupload_required_for_missing_120"
+  owner_interpretation: "Missing rows came from submitting the same products into two category surfaces at the same time; re-upload separately in a next take."
+  landed_surface: "ST paired LS/TS rows only"
+  missing_surface: "all TRM rows plus all SUIT-21-TK and SUIT-31-TK tank rows"
+  public_url_status: "unresolved_not_in_pricelist_and_not_inferred"
+  kaspi_product_code_status: "unresolved_not_in_pricelist_and_not_inferred"
+
+global_launch_gates:
+  - code: "publication_partial_80_of_200"
+    status: "blocking"
+    description: "Fresh publication capture found 80 of 200 expected child-bundle article rows."
+  - code: "deferred_reupload_required_for_missing_120"
+    status: "blocking"
+    description: "The missing 120 rows require separate re-upload and fresh capture before their lanes can be planned for activation."
+  - code: "image_enrichment_pending"
+    status: "blocking"
+    description: "Final card-group images have not been enriched or reviewed in this lane."
+  - code: "image_moderation_pending"
+    status: "blocking"
+    description: "Any new or replaced product-card images still need moderation clearance or owner exception."
+  - code: "owner_activation_approval_pending"
+    status: "blocking"
+    description: "Owner has not approved live activation, price/stock upload, image upload, or ads actions."
+  - code: "campaign_surface_verification_pending"
+    status: "blocking"
+    description: "Child campaign/card surfaces and attribution are not verified."
+  - code: "price_stock_upload_pending"
+    status: "blocking"
+    description: "No live price or stock upload has been approved or executed."
+
+common_blocked_by: &common_blocked_by
+  - "publication_partial_80_of_200"
+  - "deferred_reupload_required_for_missing_120"
+  - "image_enrichment_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+landed_lane_blocked_by: &landed_lane_blocked_by
+  - "publication_partial_80_of_200"
+  - "image_enrichment_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+missing_lane_blocked_by: &missing_lane_blocked_by
+  - "deferred_reupload_required_for_missing_120"
+  - "image_enrichment_pending"
+  - "image_moderation_pending"
+  - "owner_activation_approval_pending"
+  - "campaign_surface_verification_pending"
+  - "price_stock_upload_pending"
+
+expected_bundle_ids:
+  - "blk-31_ls"
+  - "blk-21_ls"
+  - "blk-21_ts"
+  - "beli-21_ts"
+  - "blk-31_ts"
+  - "blk-31_tk"
+  - "beli-21_ls"
+  - "beli-31_ts"
+  - "blk-21_tk"
+  - "beli-31_ls"
+
+launch_mode:
+  recommendation: "hybrid_launch_with_passive_capped_listings_plus_active_focus_campaigns"
+  active_focus_first:
+    - "blk-31_ls"
+    - "blk-21_ls"
+    - "blk-21_ts"
+    - "beli-21_ts"
+  passive_capped_first:
+    - "blk-31_ts"
+    - "blk-31_tk"
+    - "beli-21_ls"
+    - "beli-31_ts"
+  minimal_discovery_first:
+    - "blk-21_tk"
+    - "beli-31_ls"
+  guardrail: "All rows remain pending_not_launchable until publication, image, owner, price/stock, and campaign gates clear."
+
+bundle_launch_rows:
+  - &bundle_blk_31_ls
+    bundle_id: "blk-31_ls"
+    stage2_sku_key: "SUIT-31-LS"
+    parent_family: "LINE61"
+    bundle_shape: "3-in-1"
+    included_items: "long-sleeve + leggings + shorts"
+    priority: "primary"
+    initial_price_kzt: 8490
+    launch_mode: "active_focus"
+    first_bid_rule: "child_min_bid capped at ST60/TRM50 if same surfaces"
+    first_stage_duration: "5 clean days or 15 orders"
+    stock_cap_by_size: "S0/M2/L4/XL5/2XL4/3XL1/4XL0"
+    clean_interpretation_threshold: "5 clean days and 15 orders or clean >=1/day"
+    next_action_if_strong: "increase_bid_same_price, then test 8990 same bid"
+    next_action_if_weak: "reduce to 7990 only if exposure is valid"
+    next_action_if_visibility_insufficient: "+20 bid after 48h if views<300 or clicks<8"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-31-LS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_blk_21_ls
+    bundle_id: "blk-21_ls"
+    stage2_sku_key: "SUIT-21-LS"
+    parent_family: "LINE61"
+    bundle_shape: "2-in-1"
+    included_items: "long-sleeve + shorts"
+    priority: "primary"
+    initial_price_kzt: 7490
+    launch_mode: "active_focus"
+    first_bid_rule: "child_min_bid capped at ST60/TRM50 if same surfaces"
+    first_stage_duration: "3-5 clean days"
+    stock_cap_by_size: "S0/M1/L3/XL4/2XL3/3XL1/4XL0"
+    clean_interpretation_threshold: "3 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 7990 same bid"
+    next_action_if_weak: "reduce to 6990"
+    next_action_if_visibility_insufficient: "+20 bid after 48h if views<300 or clicks<8"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-21-LS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_blk_21_ts
+    bundle_id: "blk-21_ts"
+    stage2_sku_key: "SUIT-21-TS"
+    parent_family: "LINE61"
+    bundle_shape: "2-in-1"
+    included_items: "t-shirt + shorts"
+    priority: "primary"
+    initial_price_kzt: 7490
+    launch_mode: "active_focus"
+    first_bid_rule: "child_min_bid capped at ST60/TRM50 if same surfaces"
+    first_stage_duration: "3-5 clean days"
+    stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0"
+    clean_interpretation_threshold: "3 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 7990 same bid"
+    next_action_if_weak: "reduce to 6990"
+    next_action_if_visibility_insufficient: "+20 bid after 48h if views<300 or clicks<8"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-21-TS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_beli_21_ts
+    bundle_id: "beli-21_ts"
+    stage2_sku_key: "LINE-21-TS"
+    parent_family: "LINE51"
+    bundle_shape: "2-in-1"
+    included_items: "t-shirt + shorts"
+    priority: "primary"
+    initial_price_kzt: 7490
+    launch_mode: "active_focus"
+    first_bid_rule: "child_min_bid capped at ST60/TRM50 if same surfaces"
+    first_stage_duration: "3-5 clean days"
+    stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0"
+    clean_interpretation_threshold: "3 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 7990 same bid"
+    next_action_if_weak: "reduce to 6990"
+    next_action_if_visibility_insufficient: "+20 bid after 48h if views<300 or clicks<8"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-21-TS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_blk_31_ts
+    bundle_id: "blk-31_ts"
+    stage2_sku_key: "SUIT-31-TS"
+    parent_family: "LINE61"
+    bundle_shape: "3-in-1"
+    included_items: "t-shirt + leggings + shorts"
+    priority: "secondary"
+    initial_price_kzt: 8490
+    launch_mode: "passive_capped"
+    first_bid_rule: "bid=0 initially; min_bid only if visibility test is approved"
+    first_stage_duration: "5-7 clean days"
+    stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "5 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 8990 same bid"
+    next_action_if_weak: "reduce to 7990"
+    next_action_if_visibility_insufficient: "min_bid after 72h if views<200"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-31-TS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_blk_31_tk
+    bundle_id: "blk-31_tk"
+    stage2_sku_key: "SUIT-31-TK"
+    parent_family: "LINE61"
+    bundle_shape: "3-in-1"
+    included_items: "tank top + leggings + shorts"
+    priority: "cautious"
+    initial_price_kzt: 7990
+    launch_mode: "passive_capped"
+    first_bid_rule: "bid=0 initially; min_bid only if visibility test is approved"
+    first_stage_duration: "5-7 clean days"
+    stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "5 clean days and 8-10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 8490 same bid"
+    next_action_if_weak: "reduce to 7490"
+    next_action_if_visibility_insufficient: "min_bid after 72h if views<200"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "SUIT-31-TK"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_beli_21_ls
+    bundle_id: "beli-21_ls"
+    stage2_sku_key: "LINE-21-LS"
+    parent_family: "LINE51"
+    bundle_shape: "2-in-1"
+    included_items: "long-sleeve + shorts"
+    priority: "cautious"
+    initial_price_kzt: 7990
+    launch_mode: "passive_capped"
+    first_bid_rule: "bid=0 initially; min_bid only if visibility test is approved"
+    first_stage_duration: "3-7 clean days"
+    stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "3 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 8490 same bid"
+    next_action_if_weak: "reduce to 7490"
+    next_action_if_visibility_insufficient: "min_bid after 72h if views<200"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-21-LS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_beli_31_ts
+    bundle_id: "beli-31_ts"
+    stage2_sku_key: "LINE-31-TS"
+    parent_family: "LINE51"
+    bundle_shape: "3-in-1"
+    included_items: "t-shirt + leggings + shorts"
+    priority: "cautious"
+    initial_price_kzt: 8990
+    launch_mode: "passive_capped"
+    first_bid_rule: "bid=0 initially; min_bid only if visibility test is approved"
+    first_stage_duration: "5-7 clean days"
+    stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "5 clean days and 10 orders"
+    next_action_if_strong: "increase_bid_same_price, then test 9490 same bid"
+    next_action_if_weak: "reduce to 8490 if ROIC remains acceptable"
+    next_action_if_visibility_insufficient: "min_bid after 72h if views<200"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-31-TS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_blk_21_tk
+    bundle_id: "blk-21_tk"
+    stage2_sku_key: "SUIT-21-TK"
+    parent_family: "LINE61"
+    bundle_shape: "2-in-1"
+    included_items: "tank top + shorts"
+    priority: "minimal"
+    initial_price_kzt: 6990
+    launch_mode: "minimal_learning"
+    first_bid_rule: "bid=0; min_bid only with owner approval"
+    first_stage_duration: "3-7 clean days"
+    stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "3 clean days and 5 orders"
+    next_action_if_strong: "hold; no scale until tank confidence improves"
+    next_action_if_weak: "reduce to 6490"
+    next_action_if_visibility_insufficient: "min_bid only after owner approval"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "SUIT-21-TK"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+  - &bundle_beli_31_ls
+    bundle_id: "beli-31_ls"
+    stage2_sku_key: "LINE-31-LS"
+    parent_family: "LINE51"
+    bundle_shape: "3-in-1"
+    included_items: "long-sleeve + leggings + shorts"
+    priority: "minimal"
+    initial_price_kzt: 9490
+    launch_mode: "minimal_capped"
+    first_bid_rule: "bid=0; min_bid only with owner approval"
+    first_stage_duration: "5-7 clean days"
+    stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0"
+    clean_interpretation_threshold: "5 clean days and 8 orders"
+    next_action_if_strong: "hold; 9990 only after unusually strong signal"
+    next_action_if_weak: "reduce to 8990 learning-only if ROIC remains acceptable"
+    next_action_if_visibility_insufficient: "min_bid only after owner approval"
+    next_action_if_delivery_contaminated: "pause interpretation and extend clean window"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    image_readiness_grain: "card_group_level_not_per_size"
+    paired_grouping: "PAIR-31-LS"
+    publication_lanes:
+      ST: {expected_rows: 10, captured_rows: 10, state: "landed_archive_inactive_no_price_no_stock", lane_status: "pending_not_launchable", blocked_by: *landed_lane_blocked_by}
+      TRM: {expected_rows: 10, captured_rows: 0, state: "deferred_reupload_required", lane_status: "pending_not_launchable", blocked_by: *missing_lane_blocked_by}
+
+phase_templates:
+  activation: &phase_activation
+    phase: "activation"
+    relative_start: "T0+0h"
+    relative_end: "T0+2h"
+    provisional_start_at_local: "2026-04-27 12:00:00 +05"
+    provisional_end_at_local: "2026-04-27 14:00:00 +05"
+    clean_days_required: 0
+    minimum_orders: 0
+    bid_adjustment_rule: "hold until fair_signal; no interpretation in activation phase"
+    success_criteria: "price visible, correct inactive/active state per owner-approved activation pack, stock cap visible"
+    reduce_price_condition: "not_applicable"
+    scale_bid_condition: "not_applicable"
+    raise_price_condition: "not_applicable"
+    stop_or_defer_condition: "any missing owner approval, image gate, publication gate, or platform verification"
+    evidence_required: "owner approval reference, price verification, stock-cap verification, product-card state, screenshot or export evidence"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert section 2 activation rows; adapted to current 80/200 publication stopline."
+  fair_primary: &phase_fair_primary
+    phase: "fair_signal"
+    relative_start: "T0+2h"
+    relative_end: "T0+5d"
+    provisional_start_at_local: "2026-04-27 14:00:00 +05"
+    provisional_end_at_local: "2026-05-02 12:00:00 +05"
+    clean_days_required: 3
+    bid_adjustment_rule: "+20 only if visibility is below the row threshold; do not change price and bid in the same stage"
+    reduce_price_condition: "if valid clicks exist but order signal is weak at the current fair price"
+    scale_bid_condition: "if order signal is good and ads/u cap has room"
+    raise_price_condition: "after bid_scale winner proof only"
+    evidence_required: "daily views, clicks, ad cost, orders, shipped units, delivery promise, parent sales, stock draw, operator notes"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert fair-signal primary stage; gated pending publication/image/owner approval."
+  fair_late: &phase_fair_late
+    phase: "fair_signal"
+    relative_start: "T0+2h"
+    relative_end: "T0+7d"
+    provisional_start_at_local: "2026-04-27 14:00:00 +05"
+    provisional_end_at_local: "2026-05-04 12:00:00 +05"
+    clean_days_required: 5
+    bid_adjustment_rule: "min_bid or +20 only after low-visibility proof; do not change price and bid in the same stage"
+    reduce_price_condition: "if valid exposure exists but order signal is weak at the current fair price"
+    scale_bid_condition: "if order signal is good and ads/u cap has room"
+    raise_price_condition: "after bid_scale winner proof only"
+    evidence_required: "daily views, clicks, ad cost, orders, shipped units, delivery promise, parent sales, stock draw, operator notes"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert fair-signal passive/cautious/minimal stage; gated pending publication/image/owner approval."
+  hold_primary: &phase_hold_primary
+    phase: "hold_reduce"
+    relative_start: "T0+5d"
+    relative_end: "T0+8d"
+    provisional_start_at_local: "2026-05-02 12:00:00 +05"
+    provisional_end_at_local: "2026-05-05 12:00:00 +05"
+    clean_days_required: 3
+    minimum_orders: 5
+    bid_strategy: "same_bid_as_prior_or_lower"
+    bid_adjustment_rule: "no bid increase during price-reduction stage"
+    scale_bid_condition: "after reduced-price proof only"
+    raise_price_condition: "not_applicable_in_this_stage"
+    evidence_required: "price-change timestamp, bid unchanged proof, daily sales/ads/delivery/stock ledger"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert hold/reduce primary fallback stage."
+  hold_late: &phase_hold_late
+    phase: "hold_reduce"
+    relative_start: "T0+7d"
+    relative_end: "T0+10d"
+    provisional_start_at_local: "2026-05-04 12:00:00 +05"
+    provisional_end_at_local: "2026-05-07 12:00:00 +05"
+    clean_days_required: 3
+    minimum_orders: 5
+    bid_strategy: "same_bid_as_prior_or_lower"
+    bid_adjustment_rule: "no bid increase during price-reduction stage"
+    scale_bid_condition: "after reduced-price proof only"
+    raise_price_condition: "not_applicable_in_this_stage"
+    evidence_required: "price-change timestamp, bid unchanged proof, daily sales/ads/delivery/stock ledger"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert hold/reduce passive/cautious/minimal fallback stage."
+  bid_primary: &phase_bid_primary
+    phase: "bid_scale"
+    relative_start: "T0+5d"
+    relative_end: "T0+8d"
+    provisional_start_at_local: "2026-05-02 12:00:00 +05"
+    provisional_end_at_local: "2026-05-05 12:00:00 +05"
+    clean_days_required: 3
+    bid_strategy: "same_price_bid_plus_20_from_current"
+    bid_adjustment_rule: "fail if demand lift <15% and ads/u rises >25%"
+    reduce_price_condition: "no price reduction in bid_scale stage"
+    scale_bid_condition: "already_scaling"
+    raise_price_condition: "after bid_scale winner proof only"
+    evidence_required: "bid timestamp, bid visible proof, daily ads/u, orders, delivery, stock draw"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert same-price BID scale stage."
+  bid_late: &phase_bid_late
+    phase: "bid_scale"
+    relative_start: "T0+7d"
+    relative_end: "T0+10d"
+    provisional_start_at_local: "2026-05-04 12:00:00 +05"
+    provisional_end_at_local: "2026-05-07 12:00:00 +05"
+    clean_days_required: 3
+    bid_strategy: "same_price_min_bid_or_bid_plus_20"
+    bid_adjustment_rule: "fail if demand lift <15% and ads/u rises >25%"
+    reduce_price_condition: "no price reduction in bid_scale stage"
+    scale_bid_condition: "already_scaling"
+    raise_price_condition: "after bid_scale winner proof only"
+    evidence_required: "bid timestamp, bid visible proof, daily ads/u, orders, delivery, stock draw"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert same-price BID scale stage for non-primary lanes."
+  raise_primary: &phase_raise_primary
+    phase: "price_raise"
+    relative_start: "T0+8d"
+    relative_end: "T0+11d"
+    provisional_start_at_local: "2026-05-05 12:00:00 +05"
+    provisional_end_at_local: "2026-05-08 12:00:00 +05"
+    clean_days_required: 3
+    minimum_orders: 8
+    bid_strategy: "same_bid_as_winning_stage"
+    bid_adjustment_rule: "no bid change during price raise"
+    reduce_price_condition: "if conversion falls, revert to last winning price after closeout"
+    scale_bid_condition: "no bid scale in price_raise stage"
+    raise_price_condition: "+500 KZT only after winner proof"
+    evidence_required: "price timestamp, bid unchanged proof, daily data, stock draw, delivery status"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert +500 KZT same-bid price raise stage."
+  raise_late: &phase_raise_late
+    phase: "price_raise"
+    relative_start: "T0+10d"
+    relative_end: "T0+13d"
+    provisional_start_at_local: "2026-05-07 12:00:00 +05"
+    provisional_end_at_local: "2026-05-10 12:00:00 +05"
+    clean_days_required: 3
+    minimum_orders: 5
+    bid_strategy: "same_bid_as_winning_stage"
+    bid_adjustment_rule: "no bid change during price raise"
+    reduce_price_condition: "if conversion falls, revert to last winning price after closeout"
+    scale_bid_condition: "no bid scale in price_raise stage"
+    raise_price_condition: "+500 KZT only after winner proof"
+    evidence_required: "price timestamp, bid unchanged proof, daily data, stock draw, delivery status"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert +500 KZT same-bid price raise stage for non-primary lanes."
+  close_primary: &phase_close_primary
+    phase: "closeout"
+    relative_start: "T0+11d"
+    relative_end: "T0+12d"
+    provisional_start_at_local: "2026-05-08 12:00:00 +05"
+    provisional_end_at_local: "2026-05-09 12:00:00 +05"
+    bid_strategy: "no_new_bid"
+    bid_adjustment_rule: "classify only"
+    price_kzt: "decision"
+    evidence_required: "full stage ledger with price/bid timestamps, daily metrics, delivery status, shipped truth, stock draw, parent sales, contamination flags"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert closeout stage."
+  close_late: &phase_close_late
+    phase: "closeout"
+    relative_start: "T0+13d"
+    relative_end: "T0+14d"
+    provisional_start_at_local: "2026-05-10 12:00:00 +05"
+    provisional_end_at_local: "2026-05-11 12:00:00 +05"
+    bid_strategy: "no_new_bid"
+    bid_adjustment_rule: "classify only"
+    price_kzt: "decision"
+    evidence_required: "full stage ledger with price/bid timestamps, daily metrics, delivery status, shipped truth, stock draw, parent sales, contamination flags"
+    launch_status: "pending_not_launchable"
+    blocked_by: *common_blocked_by
+    source_note: "External expert closeout stage for non-primary lanes."
+
+calendar_rows:
+  - {<<: *phase_activation, calendar_row_id: "child_step_001", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", price_kzt: 8490, bid_strategy: "active_focus; child_min_bid capped at ST60/TRM50 if same surfaces", stock_cap_by_size: "S0/M2/L4/XL5/2XL4/3XL1/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_002", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7490, bid_strategy: "active_focus; child_min_bid capped at ST60/TRM50 if same surfaces", stock_cap_by_size: "S0/M1/L3/XL4/2XL3/3XL1/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_003", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7490, bid_strategy: "active_focus; child_min_bid capped at ST60/TRM50 if same surfaces", stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_004", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7490, bid_strategy: "active_focus; child_min_bid capped at ST60/TRM50 if same surfaces", stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_005", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", price_kzt: 8490, bid_strategy: "passive_capped; bid=0 unless visibility test approved", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_006", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 7990, bid_strategy: "passive_capped; bid=0 unless visibility test approved", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_007", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", price_kzt: 7990, bid_strategy: "passive_capped; bid=0 unless visibility test approved", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_008", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 8990, bid_strategy: "passive_capped; bid=0 unless visibility test approved", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_009", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", price_kzt: 6990, bid_strategy: "passive_minimal; bid=0", stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0"}
+  - {<<: *phase_activation, calendar_row_id: "child_step_010", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", price_kzt: 9490, bid_strategy: "passive_minimal; bid=0", stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0"}
+  - {<<: *phase_fair_primary, calendar_row_id: "child_step_011", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", minimum_orders: 15, price_kzt: 8490, bid_strategy: "low_bid; daily ad budget cap 3000", stock_cap_by_size: "S0/M2/L4/XL5/2XL4/3XL1/4XL0", success_criteria: ">=15 orders or >=1/day; ads/u<=900; no delivery contamination", stop_or_defer_condition: "delivery delay, ads/u>1100, or shared leggings cap hit"}
+  - {<<: *phase_fair_primary, calendar_row_id: "child_step_012", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 10, price_kzt: 7490, bid_strategy: "low_bid; daily ad budget cap 2500", stock_cap_by_size: "S0/M1/L3/XL4/2XL3/3XL1/4XL0", success_criteria: ">=10 orders or >=1/day; ads/u<=800", stop_or_defer_condition: "ads/u>900 or shorts cap hit"}
+  - {<<: *phase_fair_primary, calendar_row_id: "child_step_013", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 10, price_kzt: 7490, bid_strategy: "low_bid; daily ad budget cap 2500", stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0", success_criteria: ">=10 orders or >=1/day; ads/u<=750", stop_or_defer_condition: "ads/u>850 or t-shirt cost issue"}
+  - {<<: *phase_fair_primary, calendar_row_id: "child_step_014", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 10, price_kzt: 7490, bid_strategy: "low_bid; daily ad budget cap 2500", stock_cap_by_size: "S0/M1/L3/XL3/2XL2/3XL1/4XL0", success_criteria: ">=10 orders or >=1/day; ads/u<=850", stop_or_defer_condition: "ads/u>950 or LINE cap hit"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_015", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", minimum_orders: 10, price_kzt: 8490, bid_strategy: "passive; bid=0 unless visibility insufficient", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0", success_criteria: ">=10 orders; ads/u<=900; no stock stress", stop_or_defer_condition: "shared leggings cap hit"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_016", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", minimum_orders: 10, price_kzt: 7990, bid_strategy: "passive; bid=0 unless visibility insufficient", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0", success_criteria: ">=8 orders; ads/u<=900", stop_or_defer_condition: "tank weak signal or stock stress"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_017", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", clean_days_required: 3, minimum_orders: 10, price_kzt: 7990, bid_strategy: "passive; bid=0 unless visibility insufficient", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0", success_criteria: ">=8 orders; ads/u<=850", stop_or_defer_condition: "LINE parent protection needed"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_018", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", minimum_orders: 10, price_kzt: 8990, bid_strategy: "passive; bid=0 unless visibility insufficient", stock_cap_by_size: "S0/M1/L2/XL2/2XL1/3XL0/4XL0", success_criteria: ">=8 orders; ads/u<=1100; ROIC>=50", stop_or_defer_condition: "if fair price ROIC<50 then economically_unattractive"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_019", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", clean_days_required: 3, minimum_orders: 5, price_kzt: 6990, bid_strategy: "passive_minimal; bid=0", stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0", success_criteria: ">=5 orders; ads/u<=700", stop_or_defer_condition: "weak_concept only if fair/reduced price fails with valid exposure"}
+  - {<<: *phase_fair_late, calendar_row_id: "child_step_020", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", minimum_orders: 8, price_kzt: 9490, bid_strategy: "passive_minimal; bid=0", stock_cap_by_size: "S0/M0/L1/XL1/2XL1/3XL0/4XL0", success_criteria: ">=8 orders; ads/u<=1100; ROIC>=50", stop_or_defer_condition: "if fair market price cannot clear ROIC then economically_unattractive"}
+  - {<<: *phase_hold_primary, calendar_row_id: "child_step_021", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", price_kzt: 7990, stock_cap_by_size: "remaining CAP_A only", success_criteria: "orders recover to >=1/day; ads/u<=900", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if ROIC<50 at 7990, stop as economically_unattractive"}
+  - {<<: *phase_hold_primary, calendar_row_id: "child_step_022", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 6990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "orders recover; ads/u<=800", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if no orders with exposure, weak_concept"}
+  - {<<: *phase_hold_primary, calendar_row_id: "child_step_023", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 6990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "orders recover; ads/u<=750", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if no orders with exposure, weak_concept"}
+  - {<<: *phase_hold_primary, calendar_row_id: "child_step_024", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", price_kzt: 6990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "orders recover; ads/u<=850", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if no orders with exposure, weak_concept"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_025", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", price_kzt: 7990, stock_cap_by_size: "remaining CAP_C only", success_criteria: "orders recover; ads/u<=900", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if weak after reduced fair price, weak_concept"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_026", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 7490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "orders recover; ads/u<=900", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if weak after 7490 with exposure, weak_concept"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_027", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", price_kzt: 7490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "orders recover; ads/u<=850", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if weak after 7490 with exposure, weak_concept"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_028", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 8490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "orders recover; ads/u<=1100", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if ROIC<50 at 8490, economically_unattractive"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_029", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", minimum_orders: 3, price_kzt: 6490, bid_strategy: "no_ads_or_min_bid_only", stock_cap_by_size: "remaining CAP_D only", success_criteria: "at least 3 orders; ads/u<=600", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if no orders with exposure, weak_concept"}
+  - {<<: *phase_hold_late, calendar_row_id: "child_step_030", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", minimum_orders: 3, price_kzt: 8990, bid_strategy: "no_ads_or_min_bid_only", stock_cap_by_size: "remaining CAP_D only", success_criteria: "at least 3 orders; ROIC>=50", reduce_price_condition: "already_reduced", stop_or_defer_condition: "if ROIC<50 at fair price, economically_unattractive"}
+  - {<<: *phase_bid_primary, calendar_row_id: "child_step_031", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", minimum_orders: 10, price_kzt: 8490, stock_cap_by_size: "remaining CAP_A only", success_criteria: "demand lift>=15%; ads/u<=900", stop_or_defer_condition: "ads/u>1100 or stock cap hit"}
+  - {<<: *phase_bid_primary, calendar_row_id: "child_step_032", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 8, price_kzt: 7490, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand lift>=15%; ads/u<=800", stop_or_defer_condition: "ads/u>900 or shorts cap hit"}
+  - {<<: *phase_bid_primary, calendar_row_id: "child_step_033", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 8, price_kzt: 7490, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand lift>=15%; ads/u<=750", stop_or_defer_condition: "ads/u>850 or shorts cap hit"}
+  - {<<: *phase_bid_primary, calendar_row_id: "child_step_034", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", minimum_orders: 8, price_kzt: 7490, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand lift>=15%; ads/u<=850", stop_or_defer_condition: "ads/u>950 or LINE cap hit"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_035", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", minimum_orders: 8, price_kzt: 8490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand lift>=15%; ads/u<=900", stop_or_defer_condition: "ads/u>1000 or leggings cap hit"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_036", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", minimum_orders: 6, price_kzt: 7990, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand lift>=15%; ads/u<=900", stop_or_defer_condition: "ads/u>1000 or tank weak"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_037", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", minimum_orders: 6, price_kzt: 7990, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand lift>=15%; ads/u<=850", stop_or_defer_condition: "ads/u>950 or LINE cap hit"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_038", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", minimum_orders: 6, price_kzt: 8990, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand lift>=15%; ads/u<=1100", stop_or_defer_condition: "ads/u>1200 or ROIC<50"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_039", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", clean_days_required: 3, minimum_orders: 5, price_kzt: 6990, bid_strategy: "same_price_min_bid_only_if_owner_approves", stock_cap_by_size: "remaining CAP_D only", success_criteria: "orders>=5; ads/u<=600", stop_or_defer_condition: "ads/u>700 or shorts cap hit"}
+  - {<<: *phase_bid_late, calendar_row_id: "child_step_040", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", minimum_orders: 5, price_kzt: 9490, bid_strategy: "same_price_min_bid_only_if_owner_approves", stock_cap_by_size: "remaining CAP_D only", success_criteria: "orders>=5; ads/u<=900", stop_or_defer_condition: "ROIC<50 or ads/u>1100"}
+  - {<<: *phase_raise_primary, calendar_row_id: "child_step_041", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", price_kzt: 8990, stock_cap_by_size: "remaining CAP_A only", success_criteria: "demand holds within -20%; ads/u<=900; ROIC>=70", stop_or_defer_condition: "if orders collapse, prior price was ceiling"}
+  - {<<: *phase_raise_primary, calendar_row_id: "child_step_042", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand holds within -20%; ads/u<=800; ROIC>=70", stop_or_defer_condition: "if orders collapse, prior price was ceiling"}
+  - {<<: *phase_raise_primary, calendar_row_id: "child_step_043", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand holds within -20%; ads/u<=750; ROIC>=70", stop_or_defer_condition: "if orders collapse, prior price was ceiling"}
+  - {<<: *phase_raise_primary, calendar_row_id: "child_step_044", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", price_kzt: 7990, stock_cap_by_size: "remaining CAP_B only", success_criteria: "demand holds within -20%; ads/u<=850; ROIC>=70", stop_or_defer_condition: "if LINE parent impact rises, stop"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_045", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", minimum_orders: 6, price_kzt: 8990, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand holds within -20%; ads/u<=900; ROIC>=70", stop_or_defer_condition: "if weak, keep passive"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_046", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 8490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand holds within -20%; ads/u<=900; ROIC>=70", stop_or_defer_condition: "if weak, keep passive"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_047", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", price_kzt: 8490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand holds within -20%; ads/u<=850; ROIC>=70", stop_or_defer_condition: "if weak, keep passive"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_048", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", price_kzt: 9490, stock_cap_by_size: "remaining CAP_C only", success_criteria: "demand holds within -20%; ads/u<=1100; ROIC>=60", stop_or_defer_condition: "if ROIC<50, economically_unattractive"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_049", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", price_kzt: 7490, stock_cap_by_size: "remaining CAP_D only", success_criteria: "demand holds; ads/u<=700; ROIC>=70", stop_or_defer_condition: "if weak, passive only"}
+  - {<<: *phase_raise_late, calendar_row_id: "child_step_050", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", price_kzt: 9990, stock_cap_by_size: "remaining CAP_D only", success_criteria: "demand holds; ads/u<=1100; ROIC>=60", stop_or_defer_condition: "if fair market price cannot clear ROIC, economically_unattractive"}
+  - {<<: *phase_close_primary, calendar_row_id: "child_step_051", bundle_id: "blk-31_ls", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "primary", clean_days_required: 5, minimum_orders: 15, stock_cap_by_size: "final consumed sizes", success_criteria: "winner if clean ROIC>=60 and ads/u<=900", reduce_price_condition: "reduce if price signal weak but exposure valid", scale_bid_condition: "increase_bid_same_price if visibility low", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "inconclusive if contaminated or low data"}
+  - {<<: *phase_close_primary, calendar_row_id: "child_step_052", bundle_id: "blk-21_ls", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", clean_days_required: 3, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "winner if clean ROIC>=60 and ads/u<=800", reduce_price_condition: "reduce if valid exposure weak at 7490", scale_bid_condition: "increase_bid_same_price if low visibility", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "inconclusive if contaminated or low data"}
+  - {<<: *phase_close_primary, calendar_row_id: "child_step_053", bundle_id: "blk-21_ts", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "primary", clean_days_required: 3, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "winner if clean ROIC>=60 and ads/u<=750", reduce_price_condition: "reduce if valid exposure weak at 7490", scale_bid_condition: "increase_bid_same_price if low visibility", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "defer if t-shirt cost unresolved and scale needed"}
+  - {<<: *phase_close_primary, calendar_row_id: "child_step_054", bundle_id: "beli-21_ts", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "primary", clean_days_required: 3, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "winner if clean ROIC>=60 and ads/u<=850", reduce_price_condition: "reduce if valid exposure weak at 7490", scale_bid_condition: "increase_bid_same_price if low visibility", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "defer if LINE parent impact appears"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_055", bundle_id: "blk-31_ts", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "secondary", clean_days_required: 5, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "winner if clean ROIC>=60 and no leggings stress", reduce_price_condition: "reduce if valid exposure weak", scale_bid_condition: "increase_bid_same_price if low visibility", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "keep passive if low signal"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_056", bundle_id: "blk-31_tk", parent_family: "LINE61", bundle_shape: "3-in-1", priority: "cautious", clean_days_required: 5, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "continue if clean ROIC>=60", reduce_price_condition: "reduce if valid exposure weak", scale_bid_condition: "increase_bid_same_price only after demand proof", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "weak_concept if fails at fair price"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_057", bundle_id: "beli-21_ls", parent_family: "LINE51", bundle_shape: "2-in-1", priority: "cautious", clean_days_required: 3, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "continue if clean ROIC>=60", reduce_price_condition: "reduce if valid exposure weak", scale_bid_condition: "increase_bid_same_price if low visibility", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "defer if LINE stock risk"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_058", bundle_id: "beli-31_ts", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "cautious", clean_days_required: 5, minimum_orders: 10, stock_cap_by_size: "final consumed sizes", success_criteria: "continue if ROIC>=50-60 and ads/u<=1100", reduce_price_condition: "reduce if valid exposure weak", scale_bid_condition: "increase_bid_same_price only after demand proof", raise_price_condition: "raise_price_same_bid if winner", stop_or_defer_condition: "economically_unattractive if fair price cannot clear ROIC"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_059", bundle_id: "blk-21_tk", parent_family: "LINE61", bundle_shape: "2-in-1", priority: "minimal", clean_days_required: 3, minimum_orders: 5, stock_cap_by_size: "final consumed sizes", success_criteria: "continue only if clean demand and ROIC>=70", reduce_price_condition: "reduce if fair exposure weak", scale_bid_condition: "no bid scale without owner approval", raise_price_condition: "no raise without cost proof", stop_or_defer_condition: "weak_concept if fails at 6490 with exposure"}
+  - {<<: *phase_close_late, calendar_row_id: "child_step_060", bundle_id: "beli-31_ls", parent_family: "LINE51", bundle_shape: "3-in-1", priority: "minimal", clean_days_required: 5, minimum_orders: 8, stock_cap_by_size: "final consumed sizes", success_criteria: "continue only if ROIC>=50-60 and low ads", reduce_price_condition: "reduce only as learning", scale_bid_condition: "no bid scale without owner approval", raise_price_condition: "no raise unless unusually strong", stop_or_defer_condition: "economically_unattractive if fair price fails ROIC"}
+
+decision_labels:
+  - {decision_label: "winner_scale", definition: "Clean stage hits minimum orders, ads/u cap, no contamination, projected monthly ROIC >=60%, and stock caps not stressed.", required_evidence: "full stage ledger, price/bid timestamps, delivery normal, stock draw", allowed_next_action: "increase BID same price or allocate larger stock cap", disallowed_next_action: "simultaneous price raise and BID raise", operator_warning: "scale exposure before price"}
+  - {decision_label: "hold_more_data", definition: "Stage is directionally good but below minimum orders or clean days.", required_evidence: "daily views/clicks/orders, contamination clear", allowed_next_action: "extend same price/same bid 2-3 clean days", disallowed_next_action: "calling winner early", operator_warning: "do not overread tiny samples"}
+  - {decision_label: "reduce_price", definition: "Visibility and clicks are present but conversion/orders are weak at current price.", required_evidence: "enough views/clicks, low orders, normal delivery", allowed_next_action: "reduce price one ladder step and hold or lower bid", disallowed_next_action: "raising BID to rescue overpriced listing", operator_warning: "protects false-negative risk"}
+  - {decision_label: "increase_bid_same_price", definition: "Price signal is good or visibility is too low, and ads/u cap has room.", required_evidence: "low visibility or good conversion; bid timestamp", allowed_next_action: "+20 BID at same price", disallowed_next_action: "price raise at same time", operator_warning: "isolate BID effect"}
+  - {decision_label: "raise_price_same_bid", definition: "Demand is clean, ads/u is below cap, ROIC is above target, and price has held.", required_evidence: "winner evidence plus bid unchanged proof", allowed_next_action: "+500 KZT same BID", disallowed_next_action: "BID increase same stage", operator_warning: "avoid whiplash"}
+  - {decision_label: "inconclusive_visibility", definition: "Views/clicks are too low to judge product demand.", required_evidence: "low impressions/clicks report", allowed_next_action: "same-price low-BID visibility test", disallowed_next_action: "marking weak_concept", operator_warning: "no visibility means no market signal"}
+  - {decision_label: "inconclusive_delivery_contaminated", definition: "Delivery promise or platform penalty affects the window.", required_evidence: "delivery promise evidence", allowed_next_action: "extend or restart clean window", disallowed_next_action: "using window for final failure", operator_warning: "contamination is not demand"}
+  - {decision_label: "inconclusive_insufficient_orders", definition: "Clean days exist but orders are below threshold.", required_evidence: "orders below minimum", allowed_next_action: "extend same setup or keep passive", disallowed_next_action: "closing as failure", operator_warning: "low-data result is not proof"}
+  - {decision_label: "weak_concept", definition: "Bundle failed at fair price with enough exposure, normal delivery, enough sizes, and acceptable economics.", required_evidence: "fair-price test, exposure, no contamination, min orders/days", allowed_next_action: "pause, creative review, passive only", disallowed_next_action: "scaling ads or PO", operator_warning: "only after fair signal price"}
+  - {decision_label: "economically_unattractive", definition: "Fair market price cannot clear 50-60% projected monthly ROIC even with tight ads.", required_evidence: "economics model, price test, ads/u cap", allowed_next_action: "passive/fallback/liquidation only", disallowed_next_action: "active scale", operator_warning: "demand can exist but be low quality"}
+  - {decision_label: "defer_stock_protection", definition: "Demand may be good but shared parent components or core sizes are at risk.", required_evidence: "stock draw by size, parent sales, component caps", allowed_next_action: "pause child, protect parent, wait for stock", disallowed_next_action: "increasing child caps", operator_warning: "stock protection beats growth excitement"}
+
+stock_protection_rules:
+  - {parent_family: "LINE61", bundle_id: "all", size: "S", cap_rule: "cap 0 in active focus; owner may allow 1 total display unit", reason: "shallow size and not safe for active child tests", owner_confirmation_needed: true}
+  - {parent_family: "LINE61", bundle_id: "all", size: "M", cap_rule: "max 1-2 per active focus bundle; max 6 total first week", reason: "moderate stock but not core test depth", owner_confirmation_needed: true}
+  - {parent_family: "LINE61", bundle_id: "all", size: "L/XL/2XL", cap_rule: "primary test sizes within row caps", reason: "best clean signal sizes", owner_confirmation_needed: true}
+  - {parent_family: "LINE61", bundle_id: "all", size: "3XL", cap_rule: "max 1 per active focus; no passive caps unless owner approves", reason: "tail demand protection", owner_confirmation_needed: true}
+  - {parent_family: "LINE61", bundle_id: "all", size: "4XL", cap_rule: "exclude", reason: "LINE61 4XL unavailable/starved; not a clean demand proxy", owner_confirmation_needed: true}
+  - {parent_family: "LINE51", bundle_id: "all", size: "S/M/3XL", cap_rule: "protect shallow/tail sizes; only tiny display caps", reason: "avoid draining parent/tail inventory", owner_confirmation_needed: true}
+  - {parent_family: "LINE51", bundle_id: "all", size: "L/XL/2XL", cap_rule: "primary test sizes within row caps", reason: "best clean signal sizes", owner_confirmation_needed: true}
+  - {parent_family: "LINE51", bundle_id: "all", size: "4XL", cap_rule: "exclude unless explicitly approved", reason: "protect LINE51 tail size", owner_confirmation_needed: true}
+  - {parent_family: "shared_pool", bundle_id: "all shorts-consuming bundles", size: "all", cap_rule: "first-week shared shorts cap 70 child orders", reason: "every child bundle consumes shorts", owner_confirmation_needed: true}
+  - {parent_family: "shared_pool", bundle_id: "all 3-in-1 bundles", size: "all", cap_rule: "first-week shared leggings cap 30 child orders", reason: "all 3-in-1 child bundles consume leggings", owner_confirmation_needed: true}
+
+ad_bid_calendar:
+  - {bundle_id: "blk-31_ls", parent_family: "LINE61", category_or_surface: "ST/TRM or child surface", initial_bid: "child_min_bid; if same surfaces cap seed at ST60/TRM50", minimum_exposure_threshold_before_bid_increase: "48h with views<300 or clicks<8", bid_increase_step: "+20", maximum_bid: "do not exceed ST100/TRM80 before closeout", maximum_acceptable_ads_per_unit: 900, hold_condition: "orders>=1/day and ads/u<=900", cut_or_pause_condition: "ads/u>1100 or leggings cap hit", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "active focus"}
+  - {bundle_id: "blk-21_ls", parent_family: "LINE61", category_or_surface: "ST/TRM or child surface", initial_bid: "child_min_bid; if same surfaces cap seed at ST60/TRM50", minimum_exposure_threshold_before_bid_increase: "48h with views<300 or clicks<8", bid_increase_step: "+20", maximum_bid: "do not exceed ST100/TRM80 before closeout", maximum_acceptable_ads_per_unit: 800, hold_condition: "orders>=1/day and ads/u<=800", cut_or_pause_condition: "ads/u>900 or shorts cap hit", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "active focus"}
+  - {bundle_id: "blk-21_ts", parent_family: "LINE61", category_or_surface: "ST/TRM or child surface", initial_bid: "child_min_bid; if same surfaces cap seed at ST60/TRM50", minimum_exposure_threshold_before_bid_increase: "48h with views<300 or clicks<8", bid_increase_step: "+20", maximum_bid: "do not exceed ST100/TRM80 before closeout", maximum_acceptable_ads_per_unit: 750, hold_condition: "orders>=1/day and ads/u<=750", cut_or_pause_condition: "ads/u>850 or shorts cap hit", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "t-shirt cost provisional"}
+  - {bundle_id: "beli-21_ts", parent_family: "LINE51", category_or_surface: "ST/TRM or child surface", initial_bid: "child_min_bid; if same surfaces cap seed at ST60/TRM50", minimum_exposure_threshold_before_bid_increase: "48h with views<300 or clicks<8", bid_increase_step: "+20", maximum_bid: "do not exceed ST100/TRM80 before closeout", maximum_acceptable_ads_per_unit: 850, hold_condition: "orders>=1/day and ads/u<=850", cut_or_pause_condition: "ads/u>950 or LINE cap hit", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "best LINE pilot"}
+  - {bundle_id: "blk-31_ts", parent_family: "LINE61", category_or_surface: "child surface", initial_bid: "no ads initially; min_bid if visibility low", minimum_exposure_threshold_before_bid_increase: "72h with views<200", bid_increase_step: "+20", maximum_bid: "do not exceed ST80/TRM70 before closeout", maximum_acceptable_ads_per_unit: 900, hold_condition: "organic or low-bid orders appear", cut_or_pause_condition: "ads/u>1000 or leggings cap hit", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "passive/capped"}
+  - {bundle_id: "blk-31_tk", parent_family: "LINE61", category_or_surface: "child surface", initial_bid: "no ads initially; min_bid if visibility low", minimum_exposure_threshold_before_bid_increase: "72h with views<200", bid_increase_step: "+20", maximum_bid: "do not exceed ST80/TRM70 before closeout", maximum_acceptable_ads_per_unit: 900, hold_condition: "organic or low-bid orders appear", cut_or_pause_condition: "ads/u>1000 or tank weak", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "cautious"}
+  - {bundle_id: "beli-21_ls", parent_family: "LINE51", category_or_surface: "child surface", initial_bid: "no ads initially; min_bid if visibility low", minimum_exposure_threshold_before_bid_increase: "72h with views<200", bid_increase_step: "+20", maximum_bid: "do not exceed ST80/TRM70 before closeout", maximum_acceptable_ads_per_unit: 850, hold_condition: "organic or low-bid orders appear", cut_or_pause_condition: "ads/u>950 or LINE stock risk", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "cautious"}
+  - {bundle_id: "beli-31_ts", parent_family: "LINE51", category_or_surface: "child surface", initial_bid: "no ads initially; min_bid if visibility low", minimum_exposure_threshold_before_bid_increase: "72h with views<200", bid_increase_step: "+20", maximum_bid: "do not exceed ST80/TRM70 before closeout", maximum_acceptable_ads_per_unit: 1100, hold_condition: "organic or low-bid orders appear", cut_or_pause_condition: "ads/u>1200 or ROIC<50", failure_rule_for_bid_increase: "demand lift<15% while ads/u rises>25%", notes: "capped discovery"}
+  - {bundle_id: "blk-21_tk", parent_family: "LINE61", category_or_surface: "child surface", initial_bid: "no ads; owner-approved min_bid only", minimum_exposure_threshold_before_bid_increase: "72h with views<150 and owner wants visibility", bid_increase_step: "+20", maximum_bid: "min_bid+20 only", maximum_acceptable_ads_per_unit: 700, hold_condition: "small organic signal", cut_or_pause_condition: "ads/u>700", failure_rule_for_bid_increase: "any bid increase that does not produce orders", notes: "learning-only"}
+  - {bundle_id: "beli-31_ls", parent_family: "LINE51", category_or_surface: "child surface", initial_bid: "no ads; owner-approved min_bid only", minimum_exposure_threshold_before_bid_increase: "72h with views<150 and owner wants visibility", bid_increase_step: "+20", maximum_bid: "min_bid+20 only", maximum_acceptable_ads_per_unit: 1100, hold_condition: "small organic signal", cut_or_pause_condition: "ads/u>1100 or ROIC<50", failure_rule_for_bid_increase: "any bid increase that does not produce orders", notes: "minimal capped"}
+
+data_capture_schema:
+  - {field_name: "experiment_id", required: true, source: "Web_automation ledger", logged_by: "operator_or_script", when_to_log: "before activation", why_it_matters: "stable join key"}
+  - {field_name: "bundle_id", required: true, source: "bundle registry/calendar", logged_by: "operator_or_script", when_to_log: "every row", why_it_matters: "identifies child offer"}
+  - {field_name: "price_upload_timestamp", required: true, source: "Kaspi price upload history", logged_by: "operator_or_script", when_to_log: "at price write", why_it_matters: "proves price start"}
+  - {field_name: "price_verification_timestamp", required: true, source: "Kaspi public or merchant check", logged_by: "operator", when_to_log: "after price visible", why_it_matters: "avoids false timestamp"}
+  - {field_name: "bid_upload_timestamp", required: "true_if_ads_used", source: "Kaspi Marketing/card surface", logged_by: "operator_or_script", when_to_log: "at bid write", why_it_matters: "proves BID start"}
+  - {field_name: "bid_verification_timestamp", required: "true_if_ads_used", source: "Kaspi Marketing/card surface", logged_by: "operator", when_to_log: "after bid visible", why_it_matters: "avoids mixed-stage data"}
+  - {field_name: "active_status", required: true, source: "merchant card status", logged_by: "operator", when_to_log: "activation and daily", why_it_matters: "confirms live/passive/deferred status"}
+  - {field_name: "moderation_status", required: true, source: "Kaspi merchant cabinet", logged_by: "operator", when_to_log: "before activation and daily until clear", why_it_matters: "no test before moderation"}
+  - {field_name: "stock_cap_by_size", required: true, source: "operator cap ledger", logged_by: "operator", when_to_log: "before activation and daily", why_it_matters: "prevents component leakage"}
+  - {field_name: "component_pool_decrement", required: true, source: "stock/component ledger", logged_by: "operator_or_script", when_to_log: "daily", why_it_matters: "tracks shorts/leggings/gift bag consumption"}
+  - {field_name: "delivery_promise_status", required: true, source: "delivery promise watch or manual check", logged_by: "operator", when_to_log: "daily before interpreting", why_it_matters: "flags contaminated windows"}
+  - {field_name: "views_by_day", required: true, source: "Kaspi card/campaign report", logged_by: "operator_or_script", when_to_log: "daily", why_it_matters: "distinguishes low visibility from failure"}
+  - {field_name: "clicks_by_day", required: true, source: "Kaspi card/campaign report", logged_by: "operator_or_script", when_to_log: "daily", why_it_matters: "detects interest without orders"}
+  - {field_name: "ad_cost_by_day", required: "true_if_ads_used", source: "Kaspi Marketing/card report", logged_by: "operator_or_script", when_to_log: "daily", why_it_matters: "ads/u and ROIC"}
+  - {field_name: "orders_by_day", required: true, source: "order DB/Kaspi", logged_by: "operator_or_script", when_to_log: "daily", why_it_matters: "demand signal"}
+  - {field_name: "shipped_units", required: true, source: "shipped truth", logged_by: "operator_or_script", when_to_log: "daily and closeout", why_it_matters: "realized economics maturity"}
+  - {field_name: "cancellations", required: true, source: "order DB/Kaspi", logged_by: "operator_or_script", when_to_log: "daily and closeout", why_it_matters: "quality and profit drag"}
+  - {field_name: "returns", required: true, source: "returns/order DB", logged_by: "operator_or_script", when_to_log: "when available", why_it_matters: "realized economics risk"}
+  - {field_name: "ads_per_unit", required: "true_if_ads_used", source: "calculated ledger", logged_by: "script", when_to_log: "daily and closeout", why_it_matters: "ad quality"}
+  - {field_name: "gross_profit_estimate", required: true, source: "economics model", logged_by: "script", when_to_log: "daily and closeout", why_it_matters: "early profitability"}
+  - {field_name: "projected_monthly_roic", required: true, source: "economics model", logged_by: "script", when_to_log: "daily and closeout", why_it_matters: "capital gate"}
+  - {field_name: "parent_product_sales_same_window", required: true, source: "parent SKU sales truth", logged_by: "script", when_to_log: "daily and closeout", why_it_matters: "cannibalization read"}
+  - {field_name: "parent_cannibalization_risk", required: true, source: "calculated/operator note", logged_by: "operator", when_to_log: "closeout", why_it_matters: "protects parent push"}
+  - {field_name: "contamination_flags", required: true, source: "delivery/stock/ads ledger", logged_by: "operator", when_to_log: "daily and closeout", why_it_matters: "prevents false conclusions"}
+  - {field_name: "operator_notes", required: true, source: "manual ledger", logged_by: "operator", when_to_log: "every transition", why_it_matters: "explains anomalies"}

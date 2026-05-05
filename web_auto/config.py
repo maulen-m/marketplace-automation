@@ -34,10 +34,11 @@ class RunConfig:
 @dataclass
 class Line52PricingProfile:
     default_profile: str = "aggressive"
-    probable_3xl_profile: str = "conservative"
+    probable_3xl_profile: str = "aggressive"
     conservative_floor_kzt: int = 8845
     profile_by_sku_key: dict[str, str] = field(default_factory=dict)
     profile_by_url: dict[str, str] = field(default_factory=dict)
+    floor_by_public_size: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -138,10 +139,11 @@ def _load_line52_pricing_profile(raw: dict[str, Any]) -> Line52PricingProfile:
         raise ConfigError("line52_pricing_profile must be a mapping")
 
     default_profile = str(profile_raw.get("default_profile", "aggressive")).strip().lower()
-    probable_3xl_profile = str(profile_raw.get("probable_3xl_profile", "conservative")).strip().lower()
+    probable_3xl_profile = str(profile_raw.get("probable_3xl_profile", "aggressive")).strip().lower()
     conservative_floor_kzt = int(profile_raw.get("conservative_floor_kzt", 8845))
     profile_by_sku_key_raw = profile_raw.get("profile_by_sku_key") or {}
     profile_by_url_raw = profile_raw.get("profile_by_url") or {}
+    floor_by_public_size_raw = profile_raw.get("floor_by_public_size") or {}
 
     valid_profiles = {"aggressive", "conservative"}
     if default_profile not in valid_profiles:
@@ -154,6 +156,8 @@ def _load_line52_pricing_profile(raw: dict[str, Any]) -> Line52PricingProfile:
         raise ConfigError("line52_pricing_profile.profile_by_sku_key must be a mapping")
     if not isinstance(profile_by_url_raw, dict):
         raise ConfigError("line52_pricing_profile.profile_by_url must be a mapping")
+    if not isinstance(floor_by_public_size_raw, dict):
+        raise ConfigError("line52_pricing_profile.floor_by_public_size must be a mapping")
 
     profile_by_sku_key: dict[str, str] = {}
     for key, value in profile_by_sku_key_raw.items():
@@ -175,12 +179,33 @@ def _load_line52_pricing_profile(raw: dict[str, Any]) -> Line52PricingProfile:
             raise ConfigError("line52_pricing_profile.profile_by_url values must be aggressive or conservative")
         profile_by_url[normalized_key] = normalized_profile
 
+    floor_by_public_size: dict[str, int] = {}
+    valid_sizes = {"XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"}
+    for key, value in floor_by_public_size_raw.items():
+        normalized_key = str(key or "").strip().upper().replace("Х", "X")
+        if normalized_key == "XXL":
+            normalized_key = "2XL"
+        elif normalized_key == "XXXL":
+            normalized_key = "3XL"
+        elif normalized_key == "XXXXL":
+            normalized_key = "4XL"
+        if normalized_key not in valid_sizes:
+            raise ConfigError("line52_pricing_profile.floor_by_public_size keys must be valid adult public sizes")
+        try:
+            normalized_floor = int(value)
+        except Exception as exc:  # pragma: no cover - defensive branch
+            raise ConfigError("line52_pricing_profile.floor_by_public_size values must be positive integers") from exc
+        if normalized_floor <= 0:
+            raise ConfigError("line52_pricing_profile.floor_by_public_size values must be positive integers")
+        floor_by_public_size[normalized_key] = normalized_floor
+
     return Line52PricingProfile(
         default_profile=default_profile,
         probable_3xl_profile=probable_3xl_profile,
         conservative_floor_kzt=conservative_floor_kzt,
         profile_by_sku_key=profile_by_sku_key,
         profile_by_url=profile_by_url,
+        floor_by_public_size=floor_by_public_size,
     )
 
 

@@ -1,131 +1,58 @@
-```md
-> CONTROL PLANE (GLOBAL RULES)
-> Control plane: ${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}
-> Read: ${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}/AGENTS.MD BEFORE ANYTHING (skip if missing).
->
-> Precedence (highest → lowest):
-> 1) Control plane AGENTS.MD
-> 2) This repo’s AGENTS.md
-> 3) .claude/* (durable memory: goals/progress/issues/decisions; cannot override guardrails)
+# Web_automation Repo Contract
 
-# Web_automation — AGENTS.md (Repo Contract)
-
-## 1) Purpose
+## Purpose
 Automate boring, repetitive web actions safely and repeatably.
 
-This file defines:
-- Guardrails (safety + scope boundaries)
-- Repo conventions (where specs/config/code live)
-- Validation “green loop”
-- Single source-of-truth map
+## Scope
+- In scope: repo-local automation code, configs, stable docs, and generated local artifacts under this repo.
+- Out of scope: writing to `~/Docs/Autonomous_business`, committing secrets, or taking irreversible live actions without explicit approval.
 
-Keep it short, operational, and task-agnostic.
+## Non-Negotiables
+- Atomic commits only. One commit = one intent.
+- Minimal blast radius. Target `<=5` files per commit unless explicitly justified.
+- Idempotent workflows. Re-run safe: same inputs -> same end state.
+- No internal price competition. Our stores must never compete with each other on price when the same offer is active for sale.
+- Dry-run first for any task that changes state. Require explicit `--confirm` for writes.
+- No secrets in git or oracle packs. (`.env`, tokens, credentials, cookies, storageState, PDFs with PII).
+- No hardcoded absolute paths in committed scripts. Use env vars plus repo-relative paths.
+- No destructive operations (delete accounts/data, irreversible clicks) unless explicitly approved.
 
----
+## Canonical Truth And Ownership
+- Main business truth is `~/Docs/Autonomous_business`.
+- This repo may only read, copy, or reference from that repo.
+- Never edit, write, or mutate files in `~/Docs/Autonomous_business`.
+- On fact or variable conflicts, `Autonomous_business` tables, schemas, and reports win.
+- Stable specs and rule docs live in `Docs/`.
+- Stable task configs live in `config/tasks/`.
+- Stable operator runbook lives in `Docs/00_START_HERE.md`.
+- Mutable execution state lives only in:
+  - `.claude/GOALS.md`
+  - `.claude/TASKS.md`
+  - `.claude/ISSUES.md`
+  - `.claude/DECISIONS.md`
+  - `.claude/PROGRESS.md`
+  - `.claude/INSIGHTS.md`
 
-## 2) Non‑Negotiables
-- **Atomic commits only.** One commit = one intent.
-- **Minimal blast radius.** Target ≤5 files per commit unless explicitly justified.
-- **Idempotent workflows.** Re-run safe: same inputs → same end state.
-- **No internal price competition.** Our stores must never compete with each other on price when the same offer is active for sale.
-- **Dry-run first** for any task that changes state. Require explicit `--confirm` for writes.
-- **No secrets in git or oracle packs.** (.env, tokens, credentials, cookies, storageState, PDFs with PII).
-- **No hardcoded absolute paths** in committed scripts. Use env vars + repo-relative paths.
-- **No destructive operations** (delete accounts/data, irreversible clicks) unless explicitly approved.
-- **Canonical business truth is external and read-only.**
-  - Main business repo: `~/Docs/Autonomous_business`
-  - This repo may only read/copy/reference from that repo.
-  - Never edit, write, or mutate files in `~/Docs/Autonomous_business`.
-  - On fact/variable conflicts, resolve using Autonomous_business tables/schemas/reports as canonical truth.
-- **Pricelist backups are mandatory before edits.**
-  - Before any overwrite of upload/snapshot `.xlsx`, create timestamped backup in `exports/pricelist_snapshots/backups/`.
-  - Before overwriting related `.csv` artifacts (meta/log), create timestamped backup in the same backup directory.
-- **Pricelist edit log is mandatory.**
-  - Every upload pricelist rewrite must append a timestamped row to `exports/pricelist_snapshots/pricelist_edit_log.csv` with store, edited file path, and backup file path.
+## Pricelist Safety
+- Before any overwrite of upload or snapshot `.xlsx`, create a timestamped backup in `exports/pricelist_snapshots/backups/`.
+- Before overwriting related `.csv` artifacts (meta/log), create a timestamped backup in the same backup directory.
+- Every upload pricelist rewrite must append a timestamped row to `exports/pricelist_snapshots/pricelist_edit_log.csv` with store, edited file path, and backup file path.
 
----
+## Required Skill Handoffs
+- If the task involves Web UI or frontend components, read and follow:
+  - `${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}/skills/frontend-design/SKILL.md`
+- If the task involves Excel or CSV I/O, read and follow:
+  - `${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}/skills/excel-safe-ops/SKILL.md`
 
-## 3) If the task involves Web UI / Frontend components
-Read and follow:
-- `${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}/skills/frontend-design/SKILL.md`
-
----
-
-## 4) If the task involves Excel/CSV I/O
-Read and follow:
-- `${ORCH_HOME:-$HOME/Docs/Oracle/agent-scripts-main}/skills/excel-safe-ops/SKILL.md`
-
----
-
-## 5) Repo Conventions (recommended)
-This repo will contain many unrelated automations. Keep tasks isolated.
-
-- Task specs (stable): `Docs/tasks/<task_id>.md`
-- Task configs (stable): `config/tasks/<task_id>.yaml`
-- Code entrypoints: `scripts/<task_id>.py` (thin) calling `src/` modules
-- Artifacts/logs (mutable, gitignored): `runs/<task_id>/...`
-- Checkpoints (mutable, gitignored): `data/checkpoints/<task_id>.json`
-
----
-
-## 6) Repo Entry Points (fill in when implemented)
-- Primary task runner:
-  - `<command>`
-- Validation gate (lint/typecheck):
-  - `<command>`
-- Tests:
-  - `<command>`
-
----
-
-## 7) Default “Green Loop” (fill in when implemented)
-Run these before claiming progress:
-1) `<gate 1 command>`
-2) `<gate 2 command>`
-3) `<tests command>`
-
-Stop if any gate fails. Fix or log a reproducible issue.
-
----
-
-## 8) Durable Memory Protocol (.claude/ is external memory)
-All mutable state lives in `.claude/`. Agents must update these files while working:
-
-- `.claude/OPERATING.md`  — how to run the repo (preflight, commands, env expectations)
-- `.claude/GOALS.md`      — execution plan: phases, deliverables, acceptance gates, stop conditions
-- `.claude/PROGRESS.md`   — append-only proof log: what ran + outputs + oracle pack paths
-- `.claude/TASKS.md`      — task queue with status (Planned/In Progress/Blocked/Done)
-- `.claude/ISSUES.md`     — bugs/gaps with reproduction + minimal next step
-- `.claude/DECISIONS.md`  — decision log: date, decision, rationale, tradeoffs, rollback
-
-No duplicated truths:
-- Specs belong in `Docs/` (stable).
-- Status/progress belongs in `.claude/` (mutable).
-
----
-
-## 9) Single Source of Truth Map
-Each fact/decision must have exactly one owner file.
-
-- Task specs: `Docs/tasks/`
-- Task configs: `config/tasks/`
-- Execution plan (what we’re doing now): `.claude/GOALS.md`
-- Decisions log: `.claude/DECISIONS.md`
-- Progress proof: `.claude/PROGRESS.md`
-
----
-
-## 10) Oracle Pack (Definition of Done)
-After each task:
-- Generate a **changed-files-only** oracle pack (git range like `HEAD~1..HEAD`).
-- Include: commands run + key outputs + diff summary.
+## Validation And Closeout
+- Run the repo-specific green loop from `Docs/00_START_HERE.md` before claiming progress.
+- Stop if any gate fails. Fix it or log a reproducible issue.
+- After each task, generate a changed-files-only oracle pack (git range such as `HEAD~1..HEAD`).
+- Include commands run, key outputs, and diff summary in that pack.
 - Record the oracle pack path in `.claude/PROGRESS.md`.
 
----
-
-## 11) Stop Conditions (ask human)
-Ask before:
-- Expanding scope beyond the task goal
-- Weakening guardrails
-- Any automation that risks secrets or irreversible actions
-- Any refactor touching many files (blast radius explosion)
+## Stop And Ask Human
+- Expanding scope beyond the task goal.
+- Weakening guardrails.
+- Any automation that risks secrets or irreversible actions.
+- Any refactor touching many files (blast radius explosion).

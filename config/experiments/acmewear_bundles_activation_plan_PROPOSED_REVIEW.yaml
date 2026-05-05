@@ -1,0 +1,155 @@
+schema_version: 1
+generated_at_local: '2026-04-27 16:39:37 +05'
+timezone: Asia/Almaty
+artifact_type: proposed_review_only_not_executable
+program: ACMEWEAR child bundle activation plan
+status: blocked_not_executable
+live_write_allowed: false
+run_dir: ~/Docs/Web_automation/runs/acmewear_bundle_activation_plan/20260427_163802
+source_artifacts:
+  registry_yaml: ~/Docs/Web_automation/config/experiments/acmewear_bundles_registry.yaml
+  calendar_yaml: ~/Docs/Web_automation/config/experiments/acmewear_bundles_experiment_calendar.yaml
+  image_run_dir: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813
+  stage_b_summary: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813/stage_b_summary.json
+  landed_image_state_csv: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813/landed_image_state.csv
+  deferred_reupload_rows_csv: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813/deferred_reupload_rows.csv
+  image_queue_by_card_group_csv: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813/image_upload_queue_by_card_group.csv
+canonical_inputs:
+  registry: ~/Docs/Web_automation/config/experiments/acmewear_bundles_registry.yaml
+  expert_calendar: ~/Docs/Web_automation/config/experiments/acmewear_bundles_experiment_calendar.yaml
+  image_run: ~/Docs/Web_automation/runs/acmewear_bundle_image_enrichment/20260427_130813
+global_gates:
+  image_stage_b_method: manual_review_pending
+  image_stage_b_confidence: low
+  image_upload_automation_proven: false
+  image_upload_pilot_approved: false
+  missing_rows_state: deferred_reupload_required
+  landed_st_cards_activation_ready: false
+  campaign_ids_known: false
+  public_urls_known: false
+  owner_activation_approved: false
+default_policy:
+  activation_rows_launchable: false
+  candidate_plan_executable: false
+  active_upload_rows: 0
+  missing_trm_tank_in_active_upload_plan: false
+  public_urls_or_campaign_ids_inferred: false
+candidate_rows:
+- bundle_id: blk-31_ls
+  calendar_activation_row_id: child_step_001
+  price_kzt: 8490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-31_ls].initial_price_kzt;
+    calendar_rows[child_step_001].price_kzt
+  stock_cap_by_size: S0/M2/L4/XL5/2XL4/3XL1/4XL0
+  initial_bid_rule: child_min_bid; if same surfaces cap seed at ST60/TRM50
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: blk-21_ls
+  calendar_activation_row_id: child_step_002
+  price_kzt: 7490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-21_ls].initial_price_kzt;
+    calendar_rows[child_step_002].price_kzt
+  stock_cap_by_size: S0/M1/L3/XL4/2XL3/3XL1/4XL0
+  initial_bid_rule: child_min_bid; if same surfaces cap seed at ST60/TRM50
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: blk-21_ts
+  calendar_activation_row_id: child_step_003
+  price_kzt: 7490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-21_ts].initial_price_kzt;
+    calendar_rows[child_step_003].price_kzt
+  stock_cap_by_size: S0/M1/L3/XL3/2XL2/3XL1/4XL0
+  initial_bid_rule: child_min_bid; if same surfaces cap seed at ST60/TRM50
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: beli-21_ts
+  calendar_activation_row_id: child_step_004
+  price_kzt: 7490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[beli-21_ts].initial_price_kzt;
+    calendar_rows[child_step_004].price_kzt
+  stock_cap_by_size: S0/M1/L3/XL3/2XL2/3XL1/4XL0
+  initial_bid_rule: child_min_bid; if same surfaces cap seed at ST60/TRM50
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: blk-31_ts
+  calendar_activation_row_id: child_step_005
+  price_kzt: 8490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-31_ts].initial_price_kzt;
+    calendar_rows[child_step_005].price_kzt
+  stock_cap_by_size: S0/M1/L2/XL2/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads initially; min_bid if visibility low
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: blk-31_tk
+  calendar_activation_row_id: child_step_006
+  price_kzt: 7990
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-31_tk].initial_price_kzt;
+    calendar_rows[child_step_006].price_kzt
+  stock_cap_by_size: S0/M1/L2/XL2/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads initially; min_bid if visibility low
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: beli-21_ls
+  calendar_activation_row_id: child_step_007
+  price_kzt: 7990
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[beli-21_ls].initial_price_kzt;
+    calendar_rows[child_step_007].price_kzt
+  stock_cap_by_size: S0/M1/L2/XL2/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads initially; min_bid if visibility low
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: beli-31_ts
+  calendar_activation_row_id: child_step_008
+  price_kzt: 8990
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[beli-31_ts].initial_price_kzt;
+    calendar_rows[child_step_008].price_kzt
+  stock_cap_by_size: S0/M1/L2/XL2/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads initially; min_bid if visibility low
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: blk-21_tk
+  calendar_activation_row_id: child_step_009
+  price_kzt: 6990
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[blk-21_tk].initial_price_kzt;
+    calendar_rows[child_step_009].price_kzt
+  stock_cap_by_size: S0/M0/L1/XL1/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads; owner-approved min_bid only
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+- bundle_id: beli-31_ls
+  calendar_activation_row_id: child_step_010
+  price_kzt: 9490
+  price_source: acmewear_bundles_experiment_calendar.yaml::bundle_launch_rows[beli-31_ls].initial_price_kzt;
+    calendar_rows[child_step_010].price_kzt
+  stock_cap_by_size: S0/M0/L1/XL1/2XL1/3XL0/4XL0
+  initial_bid_rule: no ads; owner-approved min_bid only
+  executable: false
+  blocked_by: manual_review_pending image gate; deferred_reupload_required missing
+    rows; owner approval pending; campaign/publication/price-stock gates pending
+required_before_live_pricelist_upload:
+- image method resolved from manual_review_pending and owner-approved
+- image moderation verified after any approved upload
+- publication capture proves row scope; deferred TRM/tank lanes excluded unless re-uploaded
+  and verified
+- public URL/product code/campaign surfaces verified from evidence
+- fresh pricelist preflight and owner approval naming exact row scope
+required_before_live_ad_change:
+- campaign id and surface verified; not inferred
+- price/stock activation verified first
+- owner approval naming exact campaign/action/bid cap
+optional_owner_exception_scenarios:
+- scenario: owner_exception_landed_st_only_image_pending
+  default: false
+  executable_from_this_pack: false
+  description: Owner may later request a narrow ST-only exception while image state
+    remains pending, but it needs separate explicit approval plus fresh publication,
+    public/product, campaign, and pricelist evidence.

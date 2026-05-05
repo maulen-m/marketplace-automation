@@ -1,0 +1,351 @@
+schema_version: 1
+generated_at_local: '2026-05-02T12:32:12+05:00'
+timezone: Asia/Almaty
+status: green_for_agent3_marketing_scheduler_scaffold_only
+launch_status: LINE51 marketing/scheduler scaffold only; no live upload or ad changes authorized
+store: ACMEWEAR
+product_family: LINE51
+raw_parent_sku_key: 'CL_OC_MEN_LINE51_WHITE '
+normalized_parent_sku_key: CL_OC_MEN_LINE51_WHITE
+source_inputs:
+  agent1_registry_yaml: config/experiments/line51_offer_tracking_registry.yaml
+  agent1_registry_markdown: Docs/experiments/line51/line51_offer_tracking_registry.md
+  agent1_closeout: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/AGENT_1_OFFER_REGISTRY_CLOSEOUT.md
+  agent1_gate: GREEN
+  agent2_closeout_informational: runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/AGENT_2_STOCK_ORDER_TRUTH_CLOSEOUT.md
+  agent2_gate_informational: GREEN_EVIDENCE_ONLY_NO_LIVE_WRITES
+  marketing_db: data/kaspi_marketing.sqlite
+  marketing_change_log_csv: data/marketing_experiment_change_log.csv
+  line61_ladder_convention_yaml: config/experiments/line61_price_ads_ladder.yaml
+  dashboard_runbook: Docs/00_START_HERE.md
+  kaspi_marketing_runbook: Docs/kaspi_marketing_local.md
+owner_rules:
+  independent_offer_groups: true
+  offer_group_count: 3
+  collapse_requires_fresh_evidence: true
+  safe_merge_evidence_found: false
+  no_line51_size_exclusion_from_owner_seed: true
+  live_action_owner_approval_required: true
+campaign_offer_group_mappings:
+- owner_group: group_1
+  lane_id: line51_original_sport_suit
+  independent_lane: true
+  surface_seed: suits/category-like
+  campaign_id: '2380614'
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2380614?startDate=2026-05-01&endDate=2026-05-01
+  public_offer_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true
+  public_product_id: '134547494'
+  agent1_mapping_evidence:
+    public_url_status: reachable
+    http_status: 200
+    public_price_amount_kzt: 16990
+    public_availability: in stock
+    active_row_count: 9
+    archive_row_count: 0
+    current_prices_kzt:
+    - 16990
+    merchant_article_count: 9
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL
+    - 4XL
+    - L
+    - M
+    - S
+    - XL
+    - XL
+    merge_status: preserved_independent_no_safe_merge_evidence
+    warnings: []
+  campaign_mapping_status: mapped_to_agent1_verified_offer_group
+  campaign_metadata_status: verification_required_campaign_not_found_in_local_marketing_sources
+  marketing_metrics_status: verification_required_no_local_marketing_rows
+  local_marketing_coverage:
+    campaign_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+  dashboard_state: pending_no_line51_dashboard_run
+  readiness_state: not_ready_for_live_or_decision_claim
+  blocked_by:
+  - fresh_read_only_line51_marketing_campaign_rows_required
+  - campaign_bid_spend_metrics_required_before_readiness_claim
+  - owner_approval_required_before_any_live_ad_or_scheduler_action
+- owner_group: group_2
+  lane_id: line51_ko_sport_suit
+  independent_lane: true
+  surface_seed: suits/category-like
+  campaign_id: '2626530'
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2626530?startDate=2026-05-01&endDate=2026-05-01
+  public_offer_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true
+  public_product_id: '159719353'
+  agent1_mapping_evidence:
+    public_url_status: reachable
+    http_status: 200
+    public_price_amount_kzt: 15990
+    public_availability: in stock
+    active_row_count: 10
+    archive_row_count: 0
+    current_prices_kzt:
+    - 15990
+    merchant_article_count: 10
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL_1
+    - 4XL_2
+    - 4XL_3
+    - L
+    - M
+    - S
+    - XL_1
+    - XL_2
+    merge_status: preserved_independent_no_safe_merge_evidence
+    warnings:
+    - do_not_use_public_slug_as_family_truth
+    - public_slug_contains_line61_but_merchant_sku_and_model_are_line51
+  campaign_mapping_status: mapped_to_agent1_verified_offer_group
+  campaign_metadata_status: verification_required_campaign_not_found_in_local_marketing_sources
+  marketing_metrics_status: verification_required_no_local_marketing_rows
+  local_marketing_coverage:
+    campaign_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+  dashboard_state: pending_no_line51_dashboard_run
+  readiness_state: not_ready_for_live_or_decision_claim
+  blocked_by:
+  - fresh_read_only_line51_marketing_campaign_rows_required
+  - campaign_bid_spend_metrics_required_before_readiness_claim
+  - owner_approval_required_before_any_live_ad_or_scheduler_action
+- owner_group: group_3
+  lane_id: line51_ko_thermal_set
+  independent_lane: true
+  surface_seed: thermal/category-like
+  campaign_id: '2690256'
+  marketing_campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2690256?startDate=2026-05-01&endDate=2026-05-01
+  public_offer_url: https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true
+  public_product_id: '159806793'
+  agent1_mapping_evidence:
+    public_url_status: reachable
+    http_status: 200
+    public_price_amount_kzt: 15990
+    public_availability: in stock
+    active_row_count: 10
+    archive_row_count: 0
+    current_prices_kzt:
+    - 15990
+    merchant_article_count: 10
+    platform_size_tokens:
+    - 2XL
+    - 3XL
+    - 4XL_1
+    - 4XL_2
+    - 4XL_3
+    - L
+    - M
+    - S
+    - XL_1
+    - XL_2
+    merge_status: preserved_independent_no_safe_merge_evidence
+    warnings: []
+  campaign_mapping_status: mapped_to_agent1_verified_offer_group
+  campaign_metadata_status: verification_required_campaign_not_found_in_local_marketing_sources
+  marketing_metrics_status: verification_required_no_local_marketing_rows
+  local_marketing_coverage:
+    campaign_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_current:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+    campaign_product_daily_history:
+      c: 0
+      min_date: null
+      max_date: null
+      max_ingested_at: null
+  dashboard_state: pending_no_line51_dashboard_run
+  readiness_state: not_ready_for_live_or_decision_claim
+  blocked_by:
+  - fresh_read_only_line51_marketing_campaign_rows_required
+  - campaign_bid_spend_metrics_required_before_readiness_claim
+  - owner_approval_required_before_any_live_ad_or_scheduler_action
+marketing_source_gate:
+  state: blocking_for_readiness_not_for_scaffold
+  local_db_exists: true
+  local_db_line51_campaign_rows_found: false
+  change_log_line51_events_found: 0
+  staleness_interpretation: local source is fresh for existing Line61 dashboard/watch conventions but has zero LINE51 campaign
+    rows; LINE51 campaign metrics, bids, and spend remain verification_required
+  fresh_fetch_decision: not_run
+  fresh_fetch_reason: Agent 3 owned scaffold does not require a readiness claim; repo-local sources were inspected first and
+    no campaign edit or data-source write was authorized.
+dashboard_watch_heartbeat:
+  state: scaffold_only_not_activated
+  dashboard_cache_dir: runs/experiment_dashboard
+  live_dashboard_fallback: runs/experiment_dashboard/live/index.html
+  serve_url_convention: http://127.0.0.1:8765/
+  current_line61_heartbeat_reference:
+    path: runs/experiment_dashboard/sync_heartbeat.json
+    exists: true
+    overall_status: green
+    last_sync_at: '2026-05-02 11:59:28'
+    latest_dashboard_dir: runs/experiment_dashboard/20260502_115928
+    sources:
+      marketing_db:
+        status: OK
+        required: true
+        max_event_at: '2026-05-02T11:59:04.183635'
+        failure_step: null
+        failure_message: null
+      external_marketing_db:
+        status: OPTIONAL_UNAVAILABLE
+        required: false
+        max_event_at: null
+        failure_step: sqlite_query
+        failure_message: unable to open database file
+      change_log:
+        status: OK
+        required: true
+        max_event_at: '2026-05-02 10:54:00'
+        failure_step: null
+        failure_message: null
+      ab_order_db:
+        status: OK
+        required: true
+        max_event_at: '2026-05-02 10:56:34'
+        failure_step: null
+        failure_message: null
+      watcher_heartbeat:
+        status: OK
+        required: true
+        max_event_at: '2026-05-02 11:17:16'
+        failure_step: null
+        failure_message: null
+      delivery_promise_watch:
+        status: OK
+        required: true
+        max_event_at: '2026-05-02 11:09:00'
+        failure_step: null
+        failure_message: null
+  current_kaspi_marketing_watch_reference:
+    path: runs/kaspi_marketing_watch/latest_heartbeat.json
+    exists: true
+    status: success
+    heartbeat_status: green
+    last_success_at: '2026-05-02 12:17:33'
+    campaign_ids:
+    - '2545773'
+    - '2629982'
+    run_dir: runs/kaspi_marketing_watch/20260502_121733
+  applicability_to_line51: convention_only_until_line51_campaign_rows_are_fetched
+  manual_refresh_stub:
+    status: not_run
+    command: ./web-auto experiment-dashboard refresh --sku-key CL_OC_MEN_LINE51_WHITE --store ACMEWEAR --campaign-id 2380614
+      --campaign-id 2626530 --campaign-id 2690256 --date-from 2026-05-01 --date-to today --headless --allow-stale --json
+    run_rule: Run only as a read-only/dashboard rebuild after LINE51 marketing rows are available or an explicitly approved
+      read-only fetch populates them.
+  heartbeat_stub:
+    status: available_not_run_by_agent3
+    command: ./web-auto experiment-dashboard heartbeat --cache-dir runs/experiment_dashboard --json
+  watch_health_stub:
+    status: planned_not_installed
+    command: ./web-auto experiment-dashboard watch-health --sku-key CL_OC_MEN_LINE51_WHITE --store ACMEWEAR --campaign-id 2380614
+      --campaign-id 2626530 --campaign-id 2690256 --date-from-days 90 --date-to today --headless --allow-stale --json
+    launchd_install_status: not_installed_not_authorized
+experiment_calendar_phases:
+- phase_id: phase_0_agent1_registry
+  state: complete_green
+  meaning: Three LINE51 offer groups are independently verified against public URLs and ACTIVE/ARCHIVE pricelist rows.
+  evidence: runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/AGENT_1_OFFER_REGISTRY_CLOSEOUT.md
+- phase_id: phase_1_agent2_stock_order_truth
+  state: complete_green_evidence_only
+  meaning: Stock/order truth exists for future tracking input, but finalized economics and size resolution caveats remain
+    separate from Agent 3 marketing metrics.
+  evidence: runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/AGENT_2_STOCK_ORDER_TRUTH_CLOSEOUT.md
+- phase_id: phase_2_agent3_campaign_mapping_scaffold
+  state: complete_scaffold_after_this_closeout
+  meaning: Campaign IDs are mapped to Agent 1 lanes; campaign metrics remain verification_required because local marketing
+    sources have zero LINE51 campaign rows.
+  evidence: runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/campaign_mapping.csv
+- phase_id: phase_3_read_only_line51_marketing_refresh
+  state: pending_required_before_readiness_claim
+  meaning: Fetch or otherwise prove campaign-level and product-level rows for campaign IDs 2380614, 2626530, and 2690256 without
+    edits.
+  blocked_by:
+  - credentials_or_source_authorization
+  - owned_write_scope_for_marketing_source_refresh
+- phase_id: phase_4_dashboard_watch_heartbeat_activation
+  state: pending_manual_only
+  meaning: Run LINE51 dashboard refresh/watch-health only after marketing coverage exists; do not install or update launchd
+    from this lane.
+  blocked_by:
+  - fresh_line51_marketing_coverage_required
+  - owner_approval_required_for_scheduler_activation
+- phase_id: phase_5_agent4_price_ladder_baseline_qa
+  state: waiting_for_orchestrator_review_of_agents_1_2_3
+  meaning: Agent 4 may consume the scaffold after orchestrator review, but must not claim campaign-readiness until marketing
+    rows are proved.
+forbidden_actions_observed:
+  live_kaspi_price_upload: false
+  kaspi_stock_upload: false
+  kaspi_image_upload: false
+  campaign_edit: false
+  bid_edit: false
+  ads_change: false
+  repricer_write: false
+  launchd_install_or_activation: false
+  autonomous_business_write: false
+evidence_files:
+  agent1_dependency_check: runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/agent1_dependency_check.json
+  marketing_source_inventory: runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/marketing_source_inventory.json
+  campaign_mapping_csv: runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/campaign_mapping.csv
+  dashboard_watch_plan: runs/line51_full_tracking_experiment/20260502_agent_execution/agent3_marketing_scheduler/dashboard_watch_plan.md
+unresolved_fields:
+- campaign_rows_for_2380614_2626530_2690256_missing_from_local_marketing_db
+- campaign_names_states_bids_budgets_spend_views_clicks_orders_verification_required
+- line51_dashboard_refresh_not_run
+- launchd_scheduler_not_installed_and_not_authorized
+- owner_approval_required_before_any_live_upload_or_ad_change
+

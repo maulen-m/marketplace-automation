@@ -33,10 +33,14 @@ pricing:
 
 line52_pricing_profile:
   default_profile: aggressive
-  probable_3xl_profile: conservative
+  probable_3xl_profile: aggressive
   conservative_floor_kzt: 8845
   profile_by_sku_key: {}
   profile_by_url: {}
+  floor_by_public_size:
+    S: 7700
+    2XL: 7700
+    3XL: 7700
 
 run:
   dry_run: false

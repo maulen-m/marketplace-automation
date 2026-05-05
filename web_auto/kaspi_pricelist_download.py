@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,16 @@ from .kaspi_merchant_common import (
 
 
 PRODUCTS_URL = "https://kaspi.kz/mc/#/products/active/1"
+DOWNLOAD_EVENT_TIMEOUT_MS = 30000
+DOWNLOAD_FALLBACK_TIMEOUT_SECONDS = 45
+DOWNLOAD_FALLBACK_POLL_SECONDS = 0.5
+TEMP_DOWNLOAD_SUFFIXES = (".crdownload", ".download", ".part", ".tmp")
+
+
+class PricelistDownloadTransportError(RuntimeError):
+    def __init__(self, message: str, diagnostics: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics or {}
 
 
 def download_target_filename(store_name: str, sale_state: str) -> str:
@@ -83,8 +95,11 @@ def _select_sale_state(page: Page, sale_state: str, sale_state_select=None) -> s
 def _open_pricelist_dropdown(page: Page):
     button = page.locator("button").filter(has_text=re.compile(r"Прайс-лист")).first
     button.click()
-    page.wait_for_timeout(500)
+    # Kaspi sometimes renders the Excel export item before the download handler
+    # is ready; clicking during that brief loading state produces no download.
+    page.wait_for_timeout(5000)
     dropdown_item = page.locator("a.dropdown-item").filter(has_text="Скачать в Excel").first
+    dropdown_item.wait_for(timeout=15000, state="visible")
     return dropdown_item
 
 
@@ -92,28 +107,224 @@ def _click_hidden_dropdown_item(dropdown_item) -> None:
     dropdown_item.evaluate("(el) => el.click()")
 
 
-def _download_excel(page: Page, *, store_name: str, sale_state: str, downloads_dir: Path) -> dict[str, Any]:
+def _is_temporary_download(path: Path) -> bool:
+    name = path.name.lower()
+    return any(name.endswith(suffix) for suffix in TEMP_DOWNLOAD_SUFFIXES)
+
+
+def _iter_download_files(download_dirs: list[Path]) -> list[Path]:
+    files: list[Path] = []
+    for directory in download_dirs:
+        try:
+            entries = list(directory.iterdir()) if directory.exists() else []
+        except OSError:
+            continue
+        for path in entries:
+            if path.is_file():
+                files.append(path)
+    return files
+
+
+def _capture_download_snapshot(download_dirs: list[Path]) -> set[Path]:
+    snapshot: set[Path] = set()
+    for path in _iter_download_files(download_dirs):
+        try:
+            snapshot.add(path.resolve())
+        except OSError:
+            continue
+    return snapshot
+
+
+def _describe_download_dirs(download_dirs: list[Path], known_paths: set[Path]) -> list[dict[str, Any]]:
+    known = {p.resolve() for p in known_paths}
+    diagnostics: list[dict[str, Any]] = []
+    for directory in download_dirs:
+        entry: dict[str, Any] = {
+            "dir": str(directory),
+            "exists": directory.exists(),
+            "files": [],
+        }
+        for path in _iter_download_files([directory]):
+            try:
+                resolved = path.resolve()
+                stat = path.stat()
+            except OSError as exc:
+                entry["files"].append({"name": path.name, "error": str(exc)})
+                continue
+            entry["files"].append(
+                {
+                    "name": path.name,
+                    "size": stat.st_size,
+                    "mtime": stat.st_mtime,
+                    "is_known": resolved in known,
+                    "is_temporary": _is_temporary_download(path),
+                }
+            )
+        diagnostics.append(entry)
+    return diagnostics
+
+
+def _detect_new_completed_xlsx(download_dirs: list[Path], known_paths: set[Path], *, started_at: float) -> Path | None:
+    known = {p.resolve() for p in known_paths}
+    candidates: list[Path] = []
+    for path in _iter_download_files(download_dirs):
+        if _is_temporary_download(path):
+            continue
+        if path.suffix.lower() != ".xlsx":
+            continue
+        if path.name.startswith("~$"):
+            continue
+        try:
+            resolved = path.resolve()
+            stat = resolved.stat()
+        except OSError:
+            continue
+        if resolved in known:
+            continue
+        if stat.st_size <= 0:
+            continue
+        if stat.st_mtime < started_at - 2:
+            continue
+        candidates.append(resolved)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def _wait_for_new_completed_xlsx(
+    download_dirs: list[Path],
+    known_paths: set[Path],
+    *,
+    started_at: float,
+    timeout_seconds: int = DOWNLOAD_FALLBACK_TIMEOUT_SECONDS,
+    poll_seconds: float = DOWNLOAD_FALLBACK_POLL_SECONDS,
+) -> Path:
+    deadline = time.time() + max(timeout_seconds, 1)
+    while time.time() <= deadline:
+        candidate = _detect_new_completed_xlsx(download_dirs, known_paths, started_at=started_at)
+        if candidate is not None:
+            size1 = candidate.stat().st_size
+            time.sleep(0.75)
+            if candidate.exists():
+                size2 = candidate.stat().st_size
+                if size1 > 0 and size1 == size2:
+                    return candidate
+        time.sleep(max(poll_seconds, 0.1))
+    dirs = ", ".join(str(path) for path in download_dirs)
+    raise TimeoutError(f"Timed out waiting for new completed .xlsx in: {dirs}")
+
+
+def _copy_downloaded_file(source_path: Path, target_path: Path) -> None:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    source_resolved = source_path.resolve()
+    target_resolved = target_path.resolve()
+    if source_resolved == target_resolved:
+        return
+    temp_path = target_path.with_name(f"{target_path.name}.tmp")
+    if temp_path.exists():
+        temp_path.unlink()
+    shutil.copy2(source_resolved, temp_path)
+    temp_path.replace(target_path)
+
+
+def _download_excel(
+    page: Page,
+    *,
+    store_name: str,
+    sale_state: str,
+    downloads_dir: Path,
+    poll_dirs: list[Path] | None = None,
+    event_timeout_ms: int = DOWNLOAD_EVENT_TIMEOUT_MS,
+    fallback_timeout_seconds: int = DOWNLOAD_FALLBACK_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     state_label = _select_sale_state(page, sale_state)
     page.screenshot(path=str(downloads_dir / f"before_download_{sale_state}.png"), full_page=True)
     excel_item = _open_pricelist_dropdown(page)
-    with page.expect_download(timeout=30000) as download_info:
-        _click_hidden_dropdown_item(excel_item)
-    download = download_info.value
     target_path = downloads_dir / download_target_filename(store_name, sale_state)
-    _save_download(download, target_path)
+    effective_poll_dirs = [Path(path) for path in (poll_dirs or [downloads_dir])]
+    for directory in effective_poll_dirs:
+        directory.mkdir(parents=True, exist_ok=True)
+    known_paths = _capture_download_snapshot(effective_poll_dirs)
+    started_at = time.time()
+    download_method = "playwright_event"
+    event_error = ""
+    downloaded_filename = ""
+    source_path = ""
+    try:
+        with page.expect_download(timeout=event_timeout_ms) as download_info:
+            _click_hidden_dropdown_item(excel_item)
+        download = download_info.value
+        downloaded_filename = download.suggested_filename
+        _save_download(download, target_path)
+    except PlaywrightTimeoutError as exc:
+        event_error = f"playwright_timeout:{exc}"
+        try:
+            fallback_path = _wait_for_new_completed_xlsx(
+                effective_poll_dirs,
+                known_paths,
+                started_at=started_at,
+                timeout_seconds=fallback_timeout_seconds,
+            )
+        except TimeoutError as fallback_exc:
+            diagnostics = {
+                "sale_state": sale_state,
+                "target_path": str(target_path),
+                "event_timeout_ms": event_timeout_ms,
+                "fallback_timeout_seconds": fallback_timeout_seconds,
+                "event_error": event_error,
+                "fallback_error": str(fallback_exc),
+                "download_dirs": _describe_download_dirs(effective_poll_dirs, known_paths),
+            }
+            raise PricelistDownloadTransportError(
+                f"download_event_and_filesystem_fallback_timeout:{sale_state}",
+                diagnostics=diagnostics,
+            ) from exc
+        _copy_downloaded_file(fallback_path, target_path)
+        download_method = "filesystem_fallback"
+        downloaded_filename = fallback_path.name
+        source_path = str(fallback_path)
     page.wait_for_timeout(1000)
     page.screenshot(path=str(downloads_dir / f"after_download_{sale_state}.png"), full_page=True)
     return {
         "sale_state": sale_state,
         "filter_label": state_label,
-        "downloaded_filename": download.suggested_filename,
+        "downloaded_filename": downloaded_filename,
+        "download_method": download_method,
+        "source_path": source_path,
         "saved_path": str(target_path),
+        "event_timeout_ms": event_timeout_ms,
+        "fallback_timeout_seconds": fallback_timeout_seconds,
+        "fallback_poll_dirs": [str(path) for path in effective_poll_dirs],
+        "event_error": event_error,
     }
 
 
 def _save_download(download: Download, target_path: Path) -> None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     download.save_as(str(target_path))
+
+
+def _configure_browser_download_dir(context, page: Page, download_dir: Path) -> dict[str, Any]:
+    download_dir.mkdir(parents=True, exist_ok=True)
+    diagnostics: dict[str, Any] = {
+        "download_dir": str(download_dir),
+        "cdp_set_download_behavior": "not_attempted",
+    }
+    try:
+        session = context.new_cdp_session(page)
+        session.send("Browser.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(download_dir)})
+        diagnostics["cdp_set_download_behavior"] = "ok"
+    except Exception as exc:
+        diagnostics["cdp_set_download_behavior"] = "failed"
+        diagnostics["cdp_error"] = str(exc)
+    return diagnostics
+
+
+def _write_download_summary(run_dir: Path, summary: dict[str, Any]) -> None:
+    summary_path = run_dir / "download_summary.json"
+    summary["summary_path"] = str(summary_path)
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def run_kaspi_pricelist_download(
@@ -123,36 +334,71 @@ def run_kaspi_pricelist_download(
     password: str,
     run_dir: Path,
     headless: bool,
+    event_timeout_ms: int = DOWNLOAD_EVENT_TIMEOUT_MS,
+    fallback_timeout_seconds: int = DOWNLOAD_FALLBACK_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
     downloads_dir = run_dir / "downloads"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    browser_downloads_dir = (downloads_dir / "_browser_downloads").resolve()
     summary: dict[str, Any] = {
         "run_dir": str(run_dir),
         "downloads_dir": str(downloads_dir),
+        "browser_downloads_dir": str(browser_downloads_dir),
         "store_name": normalize_store_name(store_name),
+        "download_event_timeout_ms": event_timeout_ms,
+        "filesystem_fallback_timeout_seconds": fallback_timeout_seconds,
         "downloads": [],
         "status": "unknown",
     }
     with sync_playwright() as p:
-        browser = p.chromium.launch(**merchant_browser_launch_kwargs(headless=headless))
+        launch_kwargs = merchant_browser_launch_kwargs(headless=headless)
+        launch_kwargs["downloads_path"] = str(browser_downloads_dir)
+        browser = p.chromium.launch(**launch_kwargs)
         context = browser.new_context(accept_downloads=True, viewport={"width": 1440, "height": 1400})
         page = context.new_page()
+        summary["download_behavior"] = _configure_browser_download_dir(context, page, browser_downloads_dir)
         login_kaspi_merchant(page, email=email, password=password)
         page.screenshot(path=str(run_dir / "logged_in_home.png"), full_page=True)
         _wait_for_products_page(page)
         try:
-            summary["downloads"].append(_download_excel(page, store_name=store_name, sale_state="ACTIVE", downloads_dir=downloads_dir))
-            summary["downloads"].append(_download_excel(page, store_name=store_name, sale_state="ARCHIVE", downloads_dir=downloads_dir))
-        except PlaywrightTimeoutError as exc:
+            poll_dirs = [downloads_dir, browser_downloads_dir]
+            summary["downloads"].append(
+                _download_excel(
+                    page,
+                    store_name=store_name,
+                    sale_state="ACTIVE",
+                    downloads_dir=downloads_dir,
+                    poll_dirs=poll_dirs,
+                    event_timeout_ms=event_timeout_ms,
+                    fallback_timeout_seconds=fallback_timeout_seconds,
+                )
+            )
+            summary["downloads"].append(
+                _download_excel(
+                    page,
+                    store_name=store_name,
+                    sale_state="ARCHIVE",
+                    downloads_dir=downloads_dir,
+                    poll_dirs=poll_dirs,
+                    event_timeout_ms=event_timeout_ms,
+                    fallback_timeout_seconds=fallback_timeout_seconds,
+                )
+            )
+        except (PlaywrightTimeoutError, PricelistDownloadTransportError) as exc:
             page.screenshot(path=str(run_dir / "download_error.png"), full_page=True)
             summary["status"] = "failed"
-            summary["error"] = f"playwright_timeout:{exc}"
+            summary["error"] = str(exc) if isinstance(exc, PricelistDownloadTransportError) else f"playwright_timeout:{exc}"
+            if isinstance(exc, PricelistDownloadTransportError):
+                summary["download_diagnostics"] = exc.diagnostics
             context.close()
             browser.close()
+            _write_download_summary(run_dir, summary)
             return summary
         context.close()
         browser.close()
     summary["status"] = "success"
+    _write_download_summary(run_dir, summary)
     return summary
 
 

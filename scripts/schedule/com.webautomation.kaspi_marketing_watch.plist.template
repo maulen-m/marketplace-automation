@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.kaspi_marketing_watch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; __REPO_ROOT__/.venv/bin/python -m web_auto --env-file __ENV_FILE__ --json kaspi-marketing watch --store ACMEWEAR --active-only --headless</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/kaspi_marketing_watch/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/kaspi_marketing_watch/logs/stderr.log</string>
+</dict>
+</plist>

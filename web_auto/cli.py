@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,74 @@ from .kaspi_hourly_snapshot import (
     prune_snapshot_retention,
     run_hourly_snapshot,
 )
+from .kaspi_marketing import default_marketing_run_dir, resolve_marketing_credentials, run_kaspi_marketing_fetch
+from .marketing_experiments import (
+    DEFAULT_AB_ROOT,
+    DEFAULT_CHANGE_LOG,
+    DEFAULT_EXPERIMENT_ROOT,
+    DEFAULT_MARKETING_DB,
+    DEFAULT_WATCH_ROOT,
+    build_experiment_report,
+    close_experiment,
+    active_events,
+    dedupe_campaign_ids,
+    log_change_event,
+    now_local_text,
+    run_marketing_watch,
+)
+from .offer_flow_registry import (
+    DEFAULT_OFFER_FLOW_CONFIG,
+    OFFER_FLOW_ARTIFACT_STATES,
+    OFFER_FLOW_GOALS,
+    OfferFlow,
+    OfferFlowRegistryError,
+    filter_offer_flows,
+    load_offer_flow_registry,
+    render_offer_flow_registry_markdown,
+    select_offer_flow,
+)
+from .offer_run import (
+    DEFAULT_OFFER_RUN_ROOT,
+    OfferRunError,
+    OfferRunRequest,
+    build_offer_run_plan,
+    execute_offer_run_plan,
+    write_offer_run_bundle,
+)
+from .acmewear_bundle_activation import (
+    DEFAULT_CALENDAR_PATH as DEFAULT_ACMEWEAR_BUNDLE_CALENDAR_PATH,
+    DEFAULT_CAPTURE_PATH as DEFAULT_ACMEWEAR_BUNDLE_CAPTURE_PATH,
+    DEFAULT_REGISTRY_PATH as DEFAULT_ACMEWEAR_BUNDLE_REGISTRY_PATH,
+    BundleActivationError,
+    build_acmewear_bundle_activation_pack,
+)
+from .experiment_dashboard import (
+    DEFAULT_DASHBOARD_CACHE_DIR,
+    DEFAULT_DASHBOARD_PORT,
+    build_experiment_dashboard_payload,
+    build_sync_heartbeat,
+    parse_gap_report,
+    plan_gap_backfill,
+    read_sync_heartbeat,
+    serve_dashboard,
+    sync_experiment_dashboard,
+    write_dashboard_artifacts,
+    write_sync_heartbeat,
+)
+from .delivery_promise import (
+    DEFAULT_DELIVERY_PROMISE_ROOT,
+    build_delivery_capture,
+    fetch_delivery_promise_capture,
+    record_delivery_capture,
+    record_delivery_watch_failure,
+)
 from .kaspi_merchant_common import resolve_store_credentials
+from .kaspi_pending_trash_dispute import (
+    FIXED_DISPUTE_COMMENT,
+    default_run_dir as default_pending_dispute_run_dir,
+    resolve_pending_merchant_code,
+    run_kaspi_pending_trash_dispute,
+)
 from .kaspi_pricelist_download import default_run_dir, run_kaspi_pricelist_download
 from .kaspi_pricelist_ops import apply_intent, build_store_snapshot, emit_outputs, verify_uploaded_state
 from .kaspi_pricelist_upload import resolve_upload_file_paths, run_kaspi_pricelist_upload
@@ -53,6 +121,140 @@ def _add_global_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("--plain", action="store_true", help="Plain text output")
     parser.add_argument("--no-input", action="store_true", help="Disable prompts")
+
+
+def _resolve_dashboard_relative_date(value: str | None) -> str:
+    text = str(value or "").strip()
+    if text.lower() in {"today", "now"}:
+        return datetime.now().strftime("%Y-%m-%d")
+    return text
+
+
+def _resolve_watch_health_window(args: argparse.Namespace) -> tuple[str, str]:
+    date_to = _resolve_dashboard_relative_date(getattr(args, "date_to", None) or "today")
+    if not date_to:
+        raise ValueError("--date-to resolved to an empty value")
+    try:
+        date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("--date-to must be YYYY-MM-DD or today") from exc
+
+    raw_date_from = getattr(args, "date_from", None)
+    if raw_date_from:
+        date_from = _resolve_dashboard_relative_date(raw_date_from)
+        try:
+            datetime.strptime(date_from, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("--date-from must be YYYY-MM-DD or today") from exc
+    else:
+        days = int(getattr(args, "date_from_days", 90) or 90)
+        if days < 1:
+            raise ValueError("--date-from-days must be >= 1")
+        date_from = (date_to_dt - timedelta(days=days)).strftime("%Y-%m-%d")
+    return date_from, date_to
+
+
+def _write_json_file(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def _offer_flow_rows(flows: list[OfferFlow]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for flow in flows:
+        rows.append(
+            [
+                flow.flow_id,
+                flow.goal,
+                flow.artifact_state,
+                ",".join(flow.stores),
+                flow.write_surface,
+                "yes" if flow.active else "no",
+            ]
+        )
+    return rows
+
+
+def _render_offer_flow_table(flows: list[OfferFlow]) -> str:
+    headers = ["flow_id", "goal", "artifact_state", "stores", "write_surface", "active"]
+    rows = _offer_flow_rows(flows)
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(cell))
+    table_rows = [
+        "  ".join(header.ljust(widths[idx]) for idx, header in enumerate(headers)),
+        "  ".join("-" * widths[idx] for idx in range(len(headers))),
+    ]
+    for row in rows:
+        table_rows.append("  ".join(cell.ljust(widths[idx]) for idx, cell in enumerate(row)))
+    return "\n".join(table_rows)
+
+
+def _render_offer_flow_plain_lines(flows: list[OfferFlow]) -> str:
+    return "\n".join(
+        "|".join(
+            [
+                flow.flow_id,
+                flow.goal,
+                flow.artifact_state,
+                ",".join(flow.stores),
+                flow.write_surface,
+                "active" if flow.active else "inactive",
+            ]
+        )
+        for flow in flows
+    )
+
+
+def _render_offer_flow_detail(flow: OfferFlow, *, selection_reasons: list[str] | None = None) -> str:
+    lines = [
+        f"flow_id: {flow.flow_id}",
+        f"title: {flow.title}",
+        f"active: {'yes' if flow.active else 'no'}",
+        f"goal: {flow.goal}",
+        f"artifact_state: {flow.artifact_state}",
+        f"stores: {', '.join(flow.stores)}",
+        f"owner_surface: {flow.owner_surface}",
+        f"write_surface: {flow.write_surface}",
+        f"primary_entrypoint: {flow.primary_entrypoint}",
+        f"dry_run_supported: {'yes' if flow.dry_run_supported else 'no'}",
+        f"confirm_required: {'yes' if flow.confirm_required else 'no'}",
+        f"verify_required: {'yes' if flow.verify_required else 'no'}",
+        f"repricer_followup: {flow.repricer_followup}",
+        f"summary: {flow.summary}",
+    ]
+    if selection_reasons:
+        lines.append("selection_reasons:")
+        lines.extend([f"  - {item}" for item in selection_reasons])
+    if flow.command_examples:
+        lines.append("command_examples:")
+        lines.extend([f"  - {item}" for item in flow.command_examples])
+    if flow.preflight_checks:
+        lines.append("preflight_checks:")
+        lines.extend([f"  - {item}" for item in flow.preflight_checks])
+    if flow.success_checks:
+        lines.append("success_checks:")
+        lines.extend([f"  - {item}" for item in flow.success_checks])
+    if flow.stoplines:
+        lines.append("stoplines:")
+        lines.extend([f"  - {item}" for item in flow.stoplines])
+    if flow.fallback_flow_ids:
+        lines.append("fallback_flow_ids:")
+        lines.extend([f"  - {item}" for item in flow.fallback_flow_ids])
+    if flow.docs_refs:
+        lines.append("docs_refs:")
+        lines.extend([f"  - {item}" for item in flow.docs_refs])
+    if flow.skill_refs:
+        lines.append("skill_refs:")
+        lines.extend([f"  - {item}" for item in flow.skill_refs])
+    if flow.artifact_roots:
+        lines.append("artifact_roots:")
+        lines.extend([f"  - {item}" for item in flow.artifact_roots])
+    if flow.notes:
+        lines.append("notes:")
+        lines.extend([f"  - {item}" for item in flow.notes])
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -223,6 +425,95 @@ def main(argv: list[str] | None = None) -> int:
     snapshot_parser.add_argument("--headless", action="store_true", help="Run headless")
     snapshot_parser.add_argument("--headed", action="store_true", help="Run headful")
 
+    pending_dispute_parser = subparsers.add_parser(
+        "kaspi-pending-dispute",
+        help="Replay Kaspi rejected-offer disputes for pending TRASH rows",
+    )
+    pending_dispute_parser.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    pending_dispute_parser.add_argument("--merchant-code", default="", help="Override merchant code")
+    pending_dispute_parser.add_argument("--run-dir", help="Run directory for artifacts")
+    pending_dispute_parser.add_argument("--comment", default=FIXED_DISPUTE_COMMENT, help="Dispute comment text")
+    pending_dispute_parser.add_argument("--page-size", type=int, default=100, help="Trash list page size")
+    pending_dispute_parser.add_argument("--verify-timeout-seconds", type=int, default=90, help="Post-submit verify timeout")
+    pending_dispute_parser.add_argument("--verify-poll-seconds", type=int, default=5, help="Post-submit verify poll interval")
+    pending_dispute_parser.add_argument("--confirm", action="store_true", help="Confirm write actions")
+    pending_dispute_parser.add_argument("--headless", action="store_true", help="Run headless")
+    pending_dispute_parser.add_argument("--headed", action="store_true", help="Run headful")
+    pending_dispute_parser.add_argument("--skip-ui-verify", action="store_true", help="Skip final UI spot checks")
+
+    offer_flow_parser = subparsers.add_parser("offer-flow", help="Inspect and select executable Kaspi offer flows")
+    offer_flow_subparsers = offer_flow_parser.add_subparsers(dest="offer_flow_command", required=True)
+
+    offer_flow_list = offer_flow_subparsers.add_parser("list", help="List configured offer flows")
+    offer_flow_list.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+    offer_flow_list.add_argument("--goal", choices=OFFER_FLOW_GOALS, help="Filter by goal")
+    offer_flow_list.add_argument("--artifact-state", choices=OFFER_FLOW_ARTIFACT_STATES, help="Filter by artifact state")
+    offer_flow_list.add_argument("--store", help="Filter by store name")
+    offer_flow_list.add_argument("--all", action="store_true", help="Include inactive flows")
+
+    offer_flow_show = offer_flow_subparsers.add_parser("show", help="Show one configured offer flow")
+    offer_flow_show.add_argument("flow_id", help="Offer flow id")
+    offer_flow_show.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+
+    offer_flow_select = offer_flow_subparsers.add_parser("select", help="Select the best flow for a goal and artifact state")
+    offer_flow_select.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+    offer_flow_select.add_argument("--goal", choices=OFFER_FLOW_GOALS, required=True, help="Desired workflow goal")
+    offer_flow_select.add_argument(
+        "--artifact-state",
+        choices=OFFER_FLOW_ARTIFACT_STATES,
+        required=True,
+        help="Current artifact state",
+    )
+    offer_flow_select.add_argument("--store", help="Store name filter")
+    offer_flow_select.add_argument("--all", action="store_true", help="Include inactive flows")
+
+    offer_flow_validate = offer_flow_subparsers.add_parser("validate", help="Validate the offer flow registry")
+    offer_flow_validate.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+
+    offer_flow_render = offer_flow_subparsers.add_parser("render-doc", help="Render a markdown doc from the offer flow registry")
+    offer_flow_render.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+    offer_flow_render.add_argument("--out", help="Markdown output path")
+
+    offer_run_parser = subparsers.add_parser("offer-run", help="Create a standardized run bundle from the offer-flow registry")
+    offer_run_parser.add_argument("--config", default=str(DEFAULT_OFFER_FLOW_CONFIG), help="Offer flow registry YAML path")
+    offer_run_parser.add_argument("--flow", dest="flow_id", help="Explicit flow id to use")
+    offer_run_parser.add_argument("--goal", choices=OFFER_FLOW_GOALS, help="Select by workflow goal")
+    offer_run_parser.add_argument("--artifact-state", choices=OFFER_FLOW_ARTIFACT_STATES, help="Select by current artifact state")
+    offer_run_parser.add_argument("--store", help="Store name")
+    offer_run_parser.add_argument("--zip-queue-path", help="Path to ordered ZIP queue descriptor or handoff-owned queue artifact")
+    offer_run_parser.add_argument("--handoff-path", help="Path to a handoff doc or packet")
+    offer_run_parser.add_argument("--workbook-path", help="Path to reviewed workbook for workbook-based flows")
+    offer_run_parser.add_argument("--active-path", help="Path to ACTIVE workbook when needed")
+    offer_run_parser.add_argument("--archive-path", help="Path to ARCHIVE workbook when needed")
+    offer_run_parser.add_argument("--session-doc-path", help="Path to session memo or closeout doc")
+    offer_run_parser.add_argument("--public-urls-path", help="Path to captured public URL truth")
+    offer_run_parser.add_argument("--run-root", default=str(DEFAULT_OFFER_RUN_ROOT), help="Offer-run bundle root directory")
+    offer_run_parser.add_argument("--note", default="", help="Operator note for the run bundle")
+    offer_run_parser.add_argument("--allow-inactive", action="store_true", help="Allow inactive template flows")
+    offer_run_parser.add_argument("--dry-run", action="store_true", help="Stage this run as a dry-run intent")
+    offer_run_parser.add_argument("--confirm", action="store_true", help="Stage this run as a confirmed-write intent")
+    offer_run_parser.add_argument("--verify", action="store_true", help="Require post-write verification in the staged run")
+    offer_run_parser.add_argument("--dispatch", action="store_true", help="Execute the first supported live lane after staging the run bundle")
+    offer_run_parser.add_argument(
+        "--intent",
+        help="Flow-specific intent; currently required for dispatched kaspi-pricelist-sync",
+    )
+    offer_run_parser.add_argument("--sku", help="Optional merchant SKU filter for supported flows")
+    offer_run_parser.add_argument("--sku-key", help="Optional sku_key filter for supported flows")
+    offer_run_parser.add_argument("--group-url", help="Optional resolved group URL filter for supported flows")
+    offer_run_parser.add_argument("--target-price", help="Optional target price for supported flows")
+    offer_run_parser.add_argument("--offers-book", default="exports/offers_book.xlsx", help="Offers book path for supported flows")
+    offer_run_parser.add_argument("--truth-xlsx", default="exports/repricer_unified_truth.xlsx", help="Unified truth workbook path for supported flows")
+    offer_run_parser.add_argument("--timeout-seconds", type=int, default=900, help="Upload or history timeout for supported flows")
+    offer_run_parser.add_argument(
+        "--processing-grace-seconds",
+        type=int,
+        default=900,
+        help="Extra merchant processing grace for supported flows",
+    )
+    offer_run_parser.add_argument("--headless", action="store_true", help="Dispatch supported flows in headless mode")
+    offer_run_parser.add_argument("--headed", action="store_true", help="Dispatch supported flows in headed mode")
+
     pricelist_parser = subparsers.add_parser("kaspi-pricelist", help="Kaspi merchant pricelist operations")
     pricelist_subparsers = pricelist_parser.add_subparsers(dest="pricelist_command", required=True)
 
@@ -254,7 +545,7 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument(
             "--intent",
             default="inspect-group-status",
-            help="Intent: inspect-group-status, turn-on-in-stock, turn-off-oos, repair-suspicious-off, repair-suspicious-on, set-upload-prices",
+            help="Intent: inspect-group-status, turn-on-in-stock, turn-off-oos, repair-suspicious-off, repair-suspicious-on, repair-active-stock-units, set-upload-prices",
         )
         sub.add_argument("--sku", help="Limit to a merchant SKU")
         sub.add_argument("--sku-key", help="Limit to an internal sku_key")
@@ -267,6 +558,264 @@ def main(argv: list[str] | None = None) -> int:
         if sub_name == "sync":
             sub.add_argument("--upload", action="store_true", help="Upload generated ARCHIVE and ACTIVE workbooks")
             sub.add_argument("--verify-after-upload", action="store_true", help="Redownload and verify the selected rows after upload")
+
+    acmewear_bundles_parser = subparsers.add_parser("acmewear-bundles", help="ACMEWEAR child-bundle launch helpers")
+    acmewear_bundles_subparsers = acmewear_bundles_parser.add_subparsers(dest="acmewear_bundles_command", required=True)
+    acmewear_activation_build = acmewear_bundles_subparsers.add_parser(
+        "activation-build",
+        help="Build a review-only ST bundle price/stock activation workbook pack",
+    )
+    acmewear_activation_build.add_argument("--active-path", required=True, help="Fresh or explicit ACMEWEAR ACTIVE workbook")
+    acmewear_activation_build.add_argument("--archive-path", required=True, help="Fresh or explicit ACMEWEAR ARCHIVE workbook")
+    acmewear_activation_build.add_argument("--run-dir", help="Run directory for review artifacts")
+    acmewear_activation_build.add_argument(
+        "--calendar-path",
+        default=str(DEFAULT_ACMEWEAR_BUNDLE_CALENDAR_PATH),
+        help="Bundle experiment calendar YAML",
+    )
+    acmewear_activation_build.add_argument(
+        "--registry-path",
+        default=str(DEFAULT_ACMEWEAR_BUNDLE_REGISTRY_PATH),
+        help="Bundle registry YAML",
+    )
+    acmewear_activation_build.add_argument(
+        "--capture-path",
+        default=str(DEFAULT_ACMEWEAR_BUNDLE_CAPTURE_PATH),
+        help="Publication capture CSV",
+    )
+    acmewear_activation_build.add_argument(
+        "--stock-warehouse",
+        default="PP1",
+        help="Warehouse column receiving launch stock caps; default PP1",
+    )
+    acmewear_activation_build.add_argument(
+        "--image-moderation-cleared",
+        action="store_true",
+        help="Mark image moderation as live-verified in the review summary",
+    )
+
+    marketing_parser = subparsers.add_parser("kaspi-marketing", help="Kaspi marketing campaign operations")
+    marketing_subparsers = marketing_parser.add_subparsers(dest="marketing_command", required=True)
+
+    marketing_fetch = marketing_subparsers.add_parser(
+        "fetch-campaigns",
+        help="Fetch targeted Kaspi marketing campaigns into local artifacts and SQLite",
+    )
+    marketing_fetch.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    marketing_fetch.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Campaign id (repeatable)")
+    marketing_fetch.add_argument("--campaign-ids", help="Comma-separated campaign ids")
+    marketing_fetch.add_argument("--date", help="Target date YYYY-MM-DD")
+    marketing_fetch.add_argument("--merchant-id", help="Override marketing merchant id")
+    marketing_fetch.add_argument("--store-code", help="Override marketing store code")
+    marketing_fetch.add_argument("--run-dir", help="Run directory for artifacts")
+    marketing_fetch.add_argument("--db-path", default="data/kaspi_marketing.sqlite", help="Local SQLite path")
+    marketing_fetch.add_argument("--headless", action="store_true", help="Run headless")
+    marketing_fetch.add_argument("--headed", action="store_true", help="Run headful")
+
+    marketing_log = marketing_subparsers.add_parser("log-change", help="Log a timestamped marketing experiment change")
+    marketing_log.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    marketing_log.add_argument("--store-code", default="ACMEWEAR", help="Order DB store_code scope")
+    marketing_log.add_argument("--product-scope", default="", help="Human product scope label")
+    marketing_log.add_argument("--sku-key", default="", help="Internal sku_key scope")
+    marketing_log.add_argument("--campaign-id", required=True, help="Campaign id")
+    marketing_log.add_argument("--campaign-name", default="", help="Campaign name")
+    marketing_log.add_argument("--category", default="", help="Category label, e.g. ST or TRM")
+    marketing_log.add_argument("--change-type", required=True, help="bid_cpc, price, budget, campaign_state, product_state")
+    marketing_log.add_argument("--metric-name", required=True, help="Metric name, e.g. bid")
+    marketing_log.add_argument("--old-value", default="", help="Previous value")
+    marketing_log.add_argument("--new-value", required=True, help="New value")
+    marketing_log.add_argument("--currency", default="KZT", help="Currency")
+    marketing_log.add_argument("--effective-at", required=True, help="Exact effective timestamp")
+    marketing_log.add_argument("--reason", required=True, help="Reason for the test/change")
+    marketing_log.add_argument("--expected-duration-hours", default="", help="Expected duration in hours")
+    marketing_log.add_argument("--operator-note", default="", help="Operator note")
+    marketing_log.add_argument("--source-url", default="", help="Kaspi Marketing or decision source URL")
+    marketing_log.add_argument("--status", default="active", help="planned, active, closed, rolled_back")
+    marketing_log.add_argument("--ledger-path", default=str(DEFAULT_CHANGE_LOG), help="Append-only CSV ledger path")
+    marketing_log.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    marketing_log.add_argument("--run-root", default=str(DEFAULT_EXPERIMENT_ROOT), help="Experiment run root")
+
+    marketing_report = marketing_subparsers.add_parser("build-experiment-report", help="Build a period report for a logged experiment")
+    marketing_report.add_argument("--event-id", required=True, help="Experiment event id")
+    marketing_report.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    marketing_report.add_argument("--ledger-path", default=str(DEFAULT_CHANGE_LOG), help="Append-only CSV ledger path")
+    marketing_report.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    marketing_report.add_argument("--run-dir", help="Override output run directory")
+    marketing_report.add_argument("--cutoff-at", help="Explicit period cutoff timestamp")
+
+    marketing_watch = marketing_subparsers.add_parser("watch", help="Fetch active experiment campaigns and write watcher heartbeat")
+    marketing_watch.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    marketing_watch.add_argument("--merchant-id", help="Override marketing merchant id")
+    marketing_watch.add_argument("--store-code", help="Override marketing store code for API credentials")
+    marketing_watch.add_argument("--date", help="Target campaign metric date YYYY-MM-DD")
+    marketing_watch.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    marketing_watch.add_argument("--ledger-path", default=str(DEFAULT_CHANGE_LOG), help="Append-only CSV ledger path")
+    marketing_watch.add_argument("--watch-root", default=str(DEFAULT_WATCH_ROOT), help="Watcher artifact root")
+    marketing_watch.add_argument("--active-only", action="store_true", help="Only watch active events")
+    marketing_watch.add_argument("--stale-minutes", type=int, default=75, help="Red heartbeat threshold in minutes")
+    marketing_watch.add_argument("--headless", action="store_true", help="Run headless")
+    marketing_watch.add_argument("--headed", action="store_true", help="Run headful")
+
+    marketing_close = marketing_subparsers.add_parser("close-experiment", help="Close an experiment and rebuild its final report")
+    marketing_close.add_argument("--event-id", required=True, help="Experiment event id")
+    marketing_close.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    marketing_close.add_argument("--ledger-path", default=str(DEFAULT_CHANGE_LOG), help="Append-only CSV ledger path")
+    marketing_close.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    marketing_close.add_argument("--close-at", help="Explicit close timestamp")
+    marketing_close.add_argument("--run-dir", help="Override output run directory")
+
+    # -- experiment-dashboard -------------------------------------------------
+    dashboard_parser = subparsers.add_parser(
+        "experiment-dashboard",
+        help="Experiment dashboard: sync, build, and serve",
+    )
+    dashboard_subparsers = dashboard_parser.add_subparsers(dest="dashboard_command", required=True)
+
+    dash_sync = dashboard_subparsers.add_parser("sync", help="Refresh data sources for the dashboard")
+    dash_sync.add_argument("--sku-key", required=True, help="Target sku_key")
+    dash_sync.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    dash_sync.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Campaign id (repeatable)")
+    dash_sync.add_argument("--date-from", required=True, help="Inclusive start date YYYY-MM-DD")
+    dash_sync.add_argument("--date-to", required=True, help="Inclusive end date YYYY-MM-DD")
+    dash_sync.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    dash_sync.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    dash_sync.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_sync.add_argument("--headless", action="store_true", help="Run headless")
+    dash_sync.add_argument("--headed", action="store_true", help="Run headful")
+    dash_sync.add_argument("--offline", action="store_true", help="Skip live fetch, rebuild from cache only")
+    dash_sync.add_argument("--dry-run", action="store_true", help="Print planned actions without writing")
+    dash_sync.add_argument("--allow-stale", action="store_true", help="Return success even if live fetch fails")
+    dash_sync.add_argument("--json", action="store_true", help="JSON output")
+    dash_sync.add_argument("--plain", action="store_true", help="Plain text output")
+
+    dash_build = dashboard_subparsers.add_parser("build", help="Build dashboard artifacts from current data")
+    dash_build.add_argument("--sku-key", required=True, help="Target sku_key")
+    dash_build.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    dash_build.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Campaign id (repeatable)")
+    dash_build.add_argument("--date-from", required=True, help="Inclusive start date YYYY-MM-DD")
+    dash_build.add_argument("--date-to", required=True, help="Inclusive end date YYYY-MM-DD")
+    dash_build.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    dash_build.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    dash_build.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_build.add_argument("--output-dir", help="Override output directory")
+    dash_build.add_argument("--daily-history-days", type=int, default=90, help="Daily demand chart history window")
+    dash_build.add_argument("--json", action="store_true", help="JSON output")
+    dash_build.add_argument("--plain", action="store_true", help="Plain text output")
+
+    dash_refresh = dashboard_subparsers.add_parser("refresh", help="Sync data, build dashboard, write heartbeat")
+    dash_refresh.add_argument("--sku-key", required=True, help="Target sku_key")
+    dash_refresh.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    dash_refresh.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Campaign id (repeatable)")
+    dash_refresh.add_argument("--date-from", required=True, help="Inclusive start date YYYY-MM-DD")
+    dash_refresh.add_argument("--date-to", required=True, help="Inclusive end date YYYY-MM-DD")
+    dash_refresh.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    dash_refresh.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    dash_refresh.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_refresh.add_argument("--headless", action="store_true", help="Run headless")
+    dash_refresh.add_argument("--headed", action="store_true", help="Run headful")
+    dash_refresh.add_argument("--offline", action="store_true", help="Skip live fetch")
+    dash_refresh.add_argument("--allow-stale", action="store_true", help="Continue even if sources are stale")
+    dash_refresh.add_argument("--daily-history-days", type=int, default=90, help="Daily demand chart history window")
+    dash_refresh.add_argument("--json", action="store_true", help="JSON output")
+
+    dash_watch_health = dashboard_subparsers.add_parser(
+        "watch-health",
+        help="Run one scheduler-safe refresh cycle and write dashboard heartbeat",
+    )
+    dash_watch_health.add_argument("--sku-key", required=True, help="Target sku_key")
+    dash_watch_health.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    dash_watch_health.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Campaign id (repeatable)")
+    dash_watch_health.add_argument("--date-from", help="Inclusive dashboard start date YYYY-MM-DD; defaults from --date-from-days")
+    dash_watch_health.add_argument("--date-from-days", type=int, default=90, help="Dashboard lookback when --date-from is omitted")
+    dash_watch_health.add_argument("--date-to", default="today", help="Inclusive dashboard end date YYYY-MM-DD or today")
+    dash_watch_health.add_argument("--sync-date", help="Marketing metric date to fetch; defaults to resolved --date-to")
+    dash_watch_health.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local SQLite path")
+    dash_watch_health.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    dash_watch_health.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_watch_health.add_argument("--headless", action="store_true", help="Run headless")
+    dash_watch_health.add_argument("--headed", action="store_true", help="Run headful")
+    dash_watch_health.add_argument("--offline", action="store_true", help="Skip live marketing fetch")
+    dash_watch_health.add_argument("--allow-stale", action="store_true", help="Return success even if sources are stale/failing")
+    dash_watch_health.add_argument("--daily-history-days", type=int, default=90, help="Daily demand chart history window")
+    dash_watch_health.add_argument(
+        "--delivery-mode",
+        choices=["skip", "manual", "public-page"],
+        default="skip",
+        help="Optional delivery-promise capture mode before dashboard rebuild",
+    )
+    dash_watch_health.add_argument("--offer-url", default="", help="Public Kaspi offer URL for delivery-promise checks")
+    dash_watch_health.add_argument("--merchant-id", default="30137883", help="Kaspi merchant id for delivery-promise checks")
+    dash_watch_health.add_argument("--city", default="Astana", help="Displayed city context")
+    dash_watch_health.add_argument("--city-id", default="710000000", help="Kaspi city id")
+    dash_watch_health.add_argument("--expected-days", type=int, default=1, help="Normal delivery promise baseline in days")
+    dash_watch_health.add_argument("--expected-date", help="Explicit baseline delivery date YYYY-MM-DD")
+    dash_watch_health.add_argument("--displayed-date", help="Displayed delivery date YYYY-MM-DD for --delivery-mode manual")
+    dash_watch_health.add_argument("--delivery-watch-root", default=str(DEFAULT_DELIVERY_PROMISE_ROOT), help="Delivery watcher artifact root")
+    dash_watch_health.add_argument("--json", action="store_true", help="JSON output")
+
+    dash_heartbeat = dashboard_subparsers.add_parser("heartbeat", help="Show sync freshness status")
+    dash_heartbeat.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_heartbeat.add_argument("--json", action="store_true", help="JSON output")
+
+    dash_backfill = dashboard_subparsers.add_parser("backfill-gaps", help="Backfill missing marketing campaign/date rows from a gap report")
+    dash_backfill.add_argument("--gap-report", required=True, help="Path to marketing_gap_report.csv or .json")
+    dash_backfill.add_argument("--store", default="ACMEWEAR", help="Kaspi Marketing credential scope")
+    dash_backfill.add_argument("--db-path", default=str(DEFAULT_MARKETING_DB), help="Local marketing SQLite cache to update")
+    dash_backfill.add_argument("--campaign-id", action="append", dest="campaign_id_list", help="Optional campaign id filter (repeatable)")
+    dash_backfill.add_argument("--date-from", help="Optional inclusive start date filter YYYY-MM-DD")
+    dash_backfill.add_argument("--date-to", help="Optional inclusive end date filter YYYY-MM-DD")
+    dash_backfill.add_argument("--price-policy", action="append", dest="price_policy_list", help="Optional price policy filter (repeatable)")
+    dash_backfill.add_argument("--limit", type=int, help="Safety cap for number of campaign/date fetches")
+    dash_backfill.add_argument("--dry-run", action="store_true", help="Print planned rows only; do not fetch")
+    dash_backfill.add_argument("--allow-stale", action="store_true", help="Return success if some fetches fail")
+    dash_backfill.add_argument("--rebuild-dashboard", action="store_true", help="Rebuild dashboard after successful fetches")
+    dash_backfill.add_argument("--sku-key", help="Required with --rebuild-dashboard")
+    dash_backfill.add_argument("--dashboard-date-from", help="Dashboard rebuild window start YYYY-MM-DD; required with --rebuild-dashboard")
+    dash_backfill.add_argument("--dashboard-date-to", help="Dashboard rebuild window end YYYY-MM-DD; required with --rebuild-dashboard")
+    dash_backfill.add_argument("--output-dir", help="Existing dashboard folder to overwrite in place (with --rebuild-dashboard)")
+    dash_backfill.add_argument("--ab-root", default=str(DEFAULT_AB_ROOT), help="Autonomous Business root, read-only")
+    dash_backfill.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_backfill.add_argument("--daily-history-days", type=int, default=90, help="Passed to dashboard build")
+    dash_backfill.add_argument("--headless", action="store_true", help="Run headless")
+    dash_backfill.add_argument("--headed", action="store_true", help="Run headful")
+    dash_backfill.add_argument("--json", action="store_true", help="JSON output")
+
+    dash_serve = dashboard_subparsers.add_parser("serve", help="Serve dashboard locally")
+    dash_serve.add_argument("--port", type=int, default=DEFAULT_DASHBOARD_PORT, help="Server port")
+    dash_serve.add_argument("--host", default="127.0.0.1", help="Server host")
+    dash_serve.add_argument("--cache-dir", default=str(DEFAULT_DASHBOARD_CACHE_DIR), help="Dashboard cache directory")
+    dash_serve.add_argument("--run-dir", help="Exact run folder to serve")
+    dash_serve.add_argument("--open", action="store_true", help="Open browser after starting")
+
+    delivery_parser = subparsers.add_parser("delivery-health", help="Track public Kaspi delivery-promise health")
+    delivery_subparsers = delivery_parser.add_subparsers(dest="delivery_command", required=True)
+    delivery_record = delivery_subparsers.add_parser("record", help="Record a manual or scraped delivery promise capture")
+    delivery_record.add_argument("--store", required=True, help="Store code/name, e.g. ACMEWEAR")
+    delivery_record.add_argument("--city", default="Astana", help="Displayed city context")
+    delivery_record.add_argument("--city-id", default="710000000", help="Kaspi city id")
+    delivery_record.add_argument("--sku-key", required=True, help="Internal sku_key")
+    delivery_record.add_argument("--offer-url", default="", help="Public Kaspi offer URL used for observation")
+    delivery_record.add_argument("--displayed-date", required=True, help="Displayed delivery date YYYY-MM-DD")
+    delivery_record.add_argument("--expected-date", required=True, help="Normal baseline delivery date YYYY-MM-DD")
+    delivery_record.add_argument("--source", default="operator_observation", help="Capture source")
+    delivery_record.add_argument("--note", default="", help="Operator note")
+    delivery_record.add_argument("--observed-at", help="Observation timestamp, defaults to now")
+    delivery_record.add_argument("--watch-root", default=str(DEFAULT_DELIVERY_PROMISE_ROOT), help="Delivery watcher artifact root")
+    delivery_record.add_argument("--json", action="store_true", help="JSON output")
+
+    delivery_watch = delivery_subparsers.add_parser("watch", help="Fetch public Kaspi delivery promise and write heartbeat")
+    delivery_watch.add_argument("--store", default="ACMEWEAR", help="Store code/name")
+    delivery_watch.add_argument("--merchant-id", default="30137883", help="Kaspi merchant id/store code to track")
+    delivery_watch.add_argument("--city", default="Astana", help="Displayed city context")
+    delivery_watch.add_argument("--city-id", default="710000000", help="Kaspi city id")
+    delivery_watch.add_argument("--sku-key", required=True, help="Internal sku_key")
+    delivery_watch.add_argument("--offer-url", required=True, help="Public Kaspi offer URL used for observation")
+    delivery_watch.add_argument("--expected-days", type=int, default=1, help="Normal delivery promise baseline in days")
+    delivery_watch.add_argument("--expected-date", help="Explicit baseline delivery date YYYY-MM-DD")
+    delivery_watch.add_argument("--source", default="kaspi_offer_view_api", help="Capture source")
+    delivery_watch.add_argument("--note", default="", help="Operator note")
+    delivery_watch.add_argument("--watch-root", default=str(DEFAULT_DELIVERY_PROMISE_ROOT), help="Delivery watcher artifact root")
+    delivery_watch.add_argument("--json", action="store_true", help="JSON output")
 
     args = parser.parse_args(argv)
 
@@ -311,6 +860,223 @@ def main(argv: list[str] | None = None) -> int:
         )
         logging.info(f"storage_state.json written to {args.out}")
         return 0
+
+    if args.command == "offer-flow":
+        try:
+            registry = load_offer_flow_registry(args.config)
+        except OfferFlowRegistryError as exc:
+            logging.error(str(exc))
+            return 2
+
+        if args.offer_flow_command == "validate":
+            payload = {
+                "status": "ok",
+                "registry_version": registry.registry_version,
+                "doc_output_path": registry.doc_output_path,
+                "flow_count": len(registry.flows),
+                "active_flow_count": len([flow for flow in registry.flows if flow.active]),
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            elif args.plain:
+                print(
+                    "|".join(
+                        [
+                            "ok",
+                            str(payload["registry_version"]),
+                            payload["doc_output_path"],
+                            str(payload["flow_count"]),
+                            str(payload["active_flow_count"]),
+                        ]
+                    )
+                )
+            else:
+                print(
+                    f"Offer flow registry OK: version={payload['registry_version']} "
+                    f"flows={payload['flow_count']} active={payload['active_flow_count']} "
+                    f"doc_output_path={payload['doc_output_path']}"
+                )
+            return 0
+
+        if args.offer_flow_command == "list":
+            flows = filter_offer_flows(
+                registry,
+                goal=args.goal,
+                artifact_state=args.artifact_state,
+                store=args.store,
+                include_inactive=args.all,
+            )
+            if args.json:
+                print(json.dumps({"flows": [flow.to_dict() for flow in flows]}, ensure_ascii=False, indent=2))
+            elif args.plain:
+                print(_render_offer_flow_plain_lines(flows))
+            else:
+                print(_render_offer_flow_table(flows))
+            return 0
+
+        if args.offer_flow_command == "show":
+            try:
+                flow = registry.get_flow(args.flow_id)
+            except OfferFlowRegistryError as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(flow.to_dict(), ensure_ascii=False, indent=2))
+            else:
+                print(_render_offer_flow_detail(flow))
+            return 0
+
+        if args.offer_flow_command == "select":
+            selection = select_offer_flow(
+                registry,
+                goal=args.goal,
+                artifact_state=args.artifact_state,
+                store=args.store,
+                include_inactive=args.all,
+            )
+            if selection is None:
+                payload = {
+                    "status": "no_match",
+                    "goal": args.goal,
+                    "artifact_state": args.artifact_state,
+                    "store": args.store,
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                elif args.plain:
+                    print(
+                        "|".join(
+                            [
+                                "no_match",
+                                args.goal,
+                                args.artifact_state,
+                                str(args.store or ""),
+                            ]
+                        )
+                    )
+                else:
+                    print(
+                        f"No offer flow matched goal={args.goal} artifact_state={args.artifact_state}"
+                        + (f" store={args.store}" if args.store else "")
+                    )
+                return 4
+            if args.json:
+                print(json.dumps(selection.to_dict(), ensure_ascii=False, indent=2))
+            elif args.plain:
+                print(
+                    "|".join(
+                        [
+                            selection.flow.flow_id,
+                            selection.flow.goal,
+                            selection.flow.artifact_state,
+                            ",".join(selection.flow.stores),
+                            str(selection.score),
+                        ]
+                    )
+                )
+            else:
+                print(_render_offer_flow_detail(selection.flow, selection_reasons=selection.reasons))
+            return 0
+
+        if args.offer_flow_command == "render-doc":
+            rendered = render_offer_flow_registry_markdown(registry)
+            output_path = Path(args.out) if args.out else Path(registry.doc_output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(rendered, encoding="utf-8")
+            payload = {
+                "status": "success",
+                "output_path": str(output_path),
+                "flow_count": len(registry.flows),
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            elif args.plain:
+                print("|".join(["success", str(output_path), str(len(registry.flows))]))
+            else:
+                print(f"Rendered offer flow doc: {output_path} ({len(registry.flows)} flows)")
+            return 0
+
+        logging.error("Unknown offer-flow command")
+        return 2
+
+    if args.command == "offer-run":
+        try:
+            registry = load_offer_flow_registry(args.config)
+            request = OfferRunRequest(
+                flow_id=args.flow_id,
+                goal=args.goal,
+                artifact_state=args.artifact_state,
+                store=args.store,
+                confirm=args.confirm,
+                dry_run=args.dry_run,
+                verify=args.verify,
+                include_inactive=args.allow_inactive,
+                zip_queue_path=args.zip_queue_path,
+                handoff_path=args.handoff_path,
+                workbook_path=args.workbook_path,
+                active_path=args.active_path,
+                archive_path=args.archive_path,
+                session_doc_path=args.session_doc_path,
+                public_urls_path=args.public_urls_path,
+                intent=args.intent or "",
+                sku=args.sku or "",
+                sku_key=args.sku_key or "",
+                group_url=args.group_url or "",
+                target_price=args.target_price or "",
+                offers_book_path=args.offers_book,
+                truth_xlsx_path=args.truth_xlsx,
+                dispatch=args.dispatch,
+                headless=args.headless,
+                headed=args.headed,
+                timeout_seconds=args.timeout_seconds,
+                processing_grace_seconds=args.processing_grace_seconds,
+                note=args.note,
+                run_root=args.run_root,
+            )
+            plan = build_offer_run_plan(registry, request)
+            summary = write_offer_run_bundle(plan)
+            payload = {
+                "status": summary["status"],
+                "flow_id": plan.flow.flow_id,
+                "mode": plan.mode,
+                "run_dir": plan.run_dir,
+                "selected_by": plan.selected_by,
+                "required_inputs": plan.required_inputs,
+                "warnings": plan.warnings,
+                "next_commands": plan.next_commands,
+            }
+            if args.dispatch:
+                dispatch_result = execute_offer_run_plan(
+                    plan,
+                    env_file=args.env_file,
+                )
+                payload["dispatch_result"] = dispatch_result
+                payload["status"] = dispatch_result.get("status", payload["status"])
+        except (OfferFlowRegistryError, OfferRunError, FileExistsError) as exc:
+            logging.error(str(exc))
+            return 2
+
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.plain:
+            print(
+                "|".join(
+                    [
+                        payload["status"],
+                        payload["flow_id"],
+                        payload["mode"],
+                        payload["run_dir"],
+                    ]
+                )
+            )
+        else:
+            verb = "executed" if args.dispatch else "planned"
+            print(f"Offer run {verb}: flow={payload['flow_id']} mode={payload['mode']} run_dir={payload['run_dir']}")
+            if payload["warnings"]:
+                print("Warnings:")
+                for item in payload["warnings"]:
+                    print(f"- {item}")
+        return 0 if payload["status"] in {"planned", "success"} else 4
 
     if args.command == "run":
         try:
@@ -530,6 +1296,869 @@ def main(argv: list[str] | None = None) -> int:
         logging.error("Unknown export task")
         return 2
 
+    if args.command == "kaspi-marketing":
+        headless = True
+        if getattr(args, "headed", False):
+            headless = False
+        if getattr(args, "headless", False):
+            headless = True
+
+        env_path = Path(args.env_file) if args.env_file else Path(".env")
+
+        if args.marketing_command == "log-change":
+            summary = log_change_event(
+                db_path=Path(args.db_path),
+                ledger_path=Path(args.ledger_path),
+                event={
+                    "effective_at": args.effective_at,
+                    "store_name": args.store,
+                    "store_code": args.store_code,
+                    "product_scope": args.product_scope,
+                    "sku_key": args.sku_key,
+                    "campaign_id": args.campaign_id,
+                    "campaign_name": args.campaign_name,
+                    "category": args.category,
+                    "change_type": args.change_type,
+                    "metric_name": args.metric_name,
+                    "old_value": args.old_value,
+                    "new_value": args.new_value,
+                    "currency": args.currency,
+                    "reason": args.reason,
+                    "expected_duration_hours": args.expected_duration_hours,
+                    "operator_note": args.operator_note,
+                    "source_url": args.source_url,
+                    "status": args.status,
+                },
+                run_root=Path(args.run_root),
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info("Logged marketing change: event_id=%s run_dir=%s", summary.get("event_id"), summary.get("run_dir"))
+            return 0 if summary.get("status") == "success" else 4
+
+        if args.marketing_command == "build-experiment-report":
+            summary = build_experiment_report(
+                event_id=args.event_id,
+                marketing_db=Path(args.db_path),
+                ledger_path=Path(args.ledger_path),
+                ab_root=Path(args.ab_root),
+                run_dir=Path(args.run_dir) if args.run_dir else None,
+                cutoff_at=args.cutoff_at,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info("Built marketing experiment report: event_id=%s run_dir=%s", args.event_id, summary.get("run_dir"))
+            return 0 if summary.get("status") in {"success", "partial"} else 4
+
+        if args.marketing_command == "close-experiment":
+            summary = close_experiment(
+                event_id=args.event_id,
+                db_path=Path(args.db_path),
+                ledger_path=Path(args.ledger_path),
+                close_at=args.close_at,
+                ab_root=Path(args.ab_root),
+                run_dir=Path(args.run_dir) if args.run_dir else None,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info("Closed marketing experiment: event_id=%s session_doc=%s", args.event_id, summary.get("session_doc"))
+            return 0 if summary.get("status") in {"success", "partial"} else 4
+
+        if args.marketing_command == "watch":
+            watched_events = active_events(
+                db_path=Path(args.db_path),
+                ledger_path=Path(args.ledger_path),
+                active_only=bool(args.active_only),
+            )
+            watched_campaign_ids = dedupe_campaign_ids(watched_events)
+            creds = None
+            if watched_campaign_ids:
+                creds = resolve_marketing_credentials(
+                    getattr(args, "store", "ACMEWEAR"),
+                    env_file=env_path if env_path.exists() else None,
+                    merchant_id=getattr(args, "merchant_id", None),
+                    store_code=getattr(args, "store_code", None),
+                )
+            summary = run_marketing_watch(
+                creds=creds,
+                db_path=Path(args.db_path),
+                ledger_path=Path(args.ledger_path),
+                watch_root=Path(args.watch_root),
+                active_only=bool(args.active_only),
+                target_date=args.date,
+                headless=headless,
+                stale_minutes=args.stale_minutes,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi marketing watch: status=%s heartbeat=%s campaigns=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("heartbeat_status"),
+                    summary.get("campaign_ids"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("status") in {"success", "no_active_events"} else 4
+
+        creds = resolve_marketing_credentials(
+            getattr(args, "store", "ACMEWEAR"),
+            env_file=env_path if env_path.exists() else None,
+            merchant_id=getattr(args, "merchant_id", None),
+            store_code=getattr(args, "store_code", None),
+        )
+
+        campaign_ids: list[str] = []
+        for item in getattr(args, "campaign_id_list", []) or []:
+            text = str(item or "").strip()
+            if text:
+                campaign_ids.append(text)
+        for item in str(getattr(args, "campaign_ids", "") or "").split(","):
+            text = str(item or "").strip()
+            if text:
+                campaign_ids.append(text)
+        deduped_campaign_ids: list[str] = []
+        for item in campaign_ids:
+            if item not in deduped_campaign_ids:
+                deduped_campaign_ids.append(item)
+        if not deduped_campaign_ids:
+            logging.error("At least one --campaign-id or --campaign-ids value is required")
+            return 2
+
+        run_dir = Path(args.run_dir) if args.run_dir else default_marketing_run_dir(creds.store_name)
+        summary = run_kaspi_marketing_fetch(
+            creds=creds,
+            campaign_ids=deduped_campaign_ids,
+            target_date=args.date,
+            run_dir=run_dir,
+            db_path=Path(args.db_path),
+            headless=headless,
+        )
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            logging.info(
+                "Kaspi marketing fetch: store=%s campaigns=%s product_rows=%s run_dir=%s",
+                summary.get("store_name"),
+                summary.get("campaign_count"),
+                summary.get("product_rows"),
+                summary.get("run_dir"),
+            )
+        return 0 if summary.get("status") == "success" else 4
+
+    if args.command == "experiment-dashboard":
+        if args.dashboard_command == "serve":
+            try:
+                serve_dashboard(
+                    cache_dir=Path(args.cache_dir),
+                    run_dir=Path(args.run_dir) if args.run_dir else None,
+                    port=args.port,
+                    host=args.host,
+                    open_browser=getattr(args, "open", False),
+                )
+            except FileNotFoundError as exc:
+                logging.error(str(exc))
+                return 4
+            return 0
+
+        campaign_ids: list[str] = []
+        for item in getattr(args, "campaign_id_list", []) or []:
+            text = str(item or "").strip()
+            if text:
+                campaign_ids.append(text)
+
+        if args.dashboard_command == "sync":
+            headless = True
+            if getattr(args, "headed", False):
+                headless = False
+            if getattr(args, "headless", False):
+                headless = True
+            env_path = Path(args.env_file) if args.env_file else Path(".env")
+            creds = None
+            credential_error = None
+            if not getattr(args, "offline", False) and not getattr(args, "dry_run", False) and campaign_ids:
+                try:
+                    creds = resolve_marketing_credentials(
+                        getattr(args, "store", "ACMEWEAR"),
+                        env_file=env_path if env_path.exists() else None,
+                    )
+                except Exception as exc:
+                    credential_error = str(exc)
+                    logging.warning("Could not resolve marketing credentials: %s", exc)
+            summary = sync_experiment_dashboard(
+                sku_key=args.sku_key,
+                store=args.store,
+                campaign_ids=campaign_ids,
+                date_from=args.date_from,
+                date_to=args.date_to,
+                marketing_db=Path(args.db_path),
+                ab_root=Path(args.ab_root),
+                cache_dir=Path(args.cache_dir),
+                headless=headless,
+                offline=getattr(args, "offline", False),
+                dry_run=getattr(args, "dry_run", False),
+                allow_stale=getattr(args, "allow_stale", False),
+                creds=creds,
+                credential_error=credential_error,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Dashboard sync: status=%s fetch=%s cache_dir=%s",
+                    summary.get("status"),
+                    summary.get("fetch_status"),
+                    summary.get("cache_dir"),
+                )
+            if summary.get("status") == "fetch_failed":
+                return 3
+            return 0
+
+        if args.dashboard_command == "build":
+            payload = build_experiment_dashboard_payload(
+                sku_key=args.sku_key,
+                store=args.store,
+                campaign_ids=campaign_ids,
+                date_from=args.date_from,
+                date_to=args.date_to,
+                marketing_db=Path(args.db_path),
+                ab_root=Path(args.ab_root),
+                cache_dir=Path(args.cache_dir),
+                daily_history_days=args.daily_history_days,
+            )
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = Path(args.output_dir) if args.output_dir else Path(args.cache_dir) / timestamp
+            artifacts = write_dashboard_artifacts(payload, output_dir)
+            build_summary = {
+                "status": "success",
+                "generated_at": payload.get("generated_at"),
+                "output_dir": str(output_dir),
+                "scenarios": len(payload.get("scenario_observations", [])),
+                "price_groups": len(payload.get("price_group_summaries", [])),
+                "anomalies": len(payload.get("anomaly_observations", [])),
+                "artifacts": artifacts,
+            }
+            if args.json:
+                print(json.dumps(build_summary, ensure_ascii=False, indent=2))
+            elif getattr(args, "plain", False):
+                for pg in payload.get("price_group_summaries", []):
+                    profit_after = pg.get("unit_profit_after_ads")
+                    profit_text = "—" if profit_after is None else str(profit_after)
+                    print(
+                        f"{pg['price_label']:16s}  units={pg['total_units']:4d}  "
+                        f"profit/u={profit_text:>8s}  "
+                        f"gate={pg['decision_gate']}"
+                    )
+            else:
+                logging.info(
+                    "Dashboard build: price_groups=%s anomalies=%s output_dir=%s",
+                    len(payload.get("price_group_summaries", [])),
+                    len(payload.get("anomaly_observations", [])),
+                    output_dir,
+                )
+            return 0
+
+        if args.dashboard_command == "refresh":
+            headless = True
+            if getattr(args, "headed", False):
+                headless = False
+            if getattr(args, "headless", False):
+                headless = True
+            env_path = Path(args.env_file) if args.env_file else Path(".env")
+            creds = None
+            credential_error = None
+            if not getattr(args, "offline", False) and campaign_ids:
+                try:
+                    creds = resolve_marketing_credentials(
+                        getattr(args, "store", "ACMEWEAR"),
+                        env_file=env_path if env_path.exists() else None,
+                    )
+                except Exception as exc:
+                    credential_error = str(exc)
+                    logging.warning("Could not resolve marketing credentials: %s", exc)
+            # 1) Sync marketing data
+            sync_result = sync_experiment_dashboard(
+                sku_key=args.sku_key,
+                store=args.store,
+                campaign_ids=campaign_ids,
+                date_from=args.date_from,
+                date_to=args.date_to,
+                marketing_db=Path(args.db_path),
+                ab_root=Path(args.ab_root),
+                cache_dir=Path(args.cache_dir),
+                headless=headless,
+                offline=getattr(args, "offline", False),
+                allow_stale=getattr(args, "allow_stale", False),
+                creds=creds,
+                credential_error=credential_error,
+            )
+            if sync_result.get("status") == "fetch_failed" and not getattr(args, "allow_stale", False):
+                if args.json:
+                    print(json.dumps(sync_result, ensure_ascii=False, indent=2))
+                return 3
+            # 2) Build dashboard
+            payload = build_experiment_dashboard_payload(
+                sku_key=args.sku_key,
+                store=args.store,
+                campaign_ids=campaign_ids,
+                date_from=args.date_from,
+                date_to=args.date_to,
+                marketing_db=Path(args.db_path),
+                ab_root=Path(args.ab_root),
+                cache_dir=Path(args.cache_dir),
+                daily_history_days=args.daily_history_days,
+            )
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = Path(args.cache_dir) / timestamp
+            payload["source_heartbeat"] = build_sync_heartbeat(
+                payload.get("source_status", []),
+                latest_dashboard_dir=str(output_dir),
+            )
+            artifacts = write_dashboard_artifacts(payload, output_dir)
+            # 3) Write heartbeat
+            hb = write_sync_heartbeat(
+                Path(args.cache_dir),
+                payload.get("source_status", []),
+                latest_dashboard_dir=str(output_dir),
+            )
+            result = {
+                "status": "success",
+                "generated_at": payload.get("generated_at"),
+                "output_dir": str(output_dir),
+                "price_groups": len(payload.get("price_group_summaries", [])),
+                "anomalies": len(payload.get("anomaly_observations", [])),
+                "heartbeat": hb,
+                "artifacts": artifacts,
+            }
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Dashboard refresh: status=%s groups=%s output=%s heartbeat=%s",
+                    result["status"],
+                    result["price_groups"],
+                    result["output_dir"],
+                    hb.get("overall_status"),
+                )
+            return 0
+
+        if args.dashboard_command == "watch-health":
+            try:
+                date_from, date_to = _resolve_watch_health_window(args)
+                sync_date = _resolve_dashboard_relative_date(getattr(args, "sync_date", None) or date_to)
+                if sync_date:
+                    datetime.strptime(sync_date, "%Y-%m-%d")
+            except ValueError as exc:
+                logging.error(str(exc))
+                return 2
+
+            headless = True
+            if getattr(args, "headed", False):
+                headless = False
+            if getattr(args, "headless", False):
+                headless = True
+
+            cache_dir = Path(args.cache_dir)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = cache_dir / timestamp
+            watch_dir = cache_dir / "watch_health" / timestamp
+            warnings: list[str] = []
+
+            delivery_result: dict[str, Any] = {"status": "skipped"}
+            delivery_mode = getattr(args, "delivery_mode", "skip")
+            delivery_root = Path(args.delivery_watch_root)
+            if delivery_mode == "manual":
+                if not getattr(args, "displayed_date", None) or not getattr(args, "expected_date", None):
+                    logging.error("--displayed-date and --expected-date are required with --delivery-mode manual")
+                    return 2
+                capture = build_delivery_capture(
+                    store=args.store,
+                    city=args.city,
+                    city_id=args.city_id,
+                    sku_key=args.sku_key,
+                    offer_url=args.offer_url,
+                    displayed_date=args.displayed_date,
+                    expected_date=args.expected_date,
+                    source="manual_watch_health",
+                )
+                delivery_result = record_delivery_capture(capture, delivery_root)
+            elif delivery_mode == "public-page":
+                if not getattr(args, "offer_url", ""):
+                    delivery_result = record_delivery_watch_failure(
+                        error="--offer-url is required with --delivery-mode public-page",
+                        root=delivery_root,
+                        store=args.store,
+                        city=args.city,
+                        city_id=args.city_id,
+                        sku_key=args.sku_key,
+                        offer_url=args.offer_url,
+                    )
+                    warnings.append("delivery_fetch_error:missing_offer_url")
+                else:
+                    try:
+                        capture = fetch_delivery_promise_capture(
+                            store=args.store,
+                            merchant_id=args.merchant_id,
+                            city=args.city,
+                            city_id=args.city_id,
+                            sku_key=args.sku_key,
+                            offer_url=args.offer_url,
+                            expected_days=args.expected_days,
+                            expected_date=args.expected_date,
+                        )
+                        delivery_result = record_delivery_capture(capture, delivery_root)
+                    except Exception as exc:
+                        delivery_result = record_delivery_watch_failure(
+                            error=str(exc),
+                            root=delivery_root,
+                            store=args.store,
+                            city=args.city,
+                            city_id=args.city_id,
+                            sku_key=args.sku_key,
+                            offer_url=args.offer_url,
+                        )
+                        warnings.append(f"delivery_fetch_error:{exc}")
+
+            env_path = Path(args.env_file) if args.env_file else Path(".env")
+            creds = None
+            credential_error = None
+            if not getattr(args, "offline", False) and campaign_ids:
+                try:
+                    creds = resolve_marketing_credentials(
+                        getattr(args, "store", "ACMEWEAR"),
+                        env_file=env_path if env_path.exists() else None,
+                    )
+                except Exception as exc:
+                    credential_error = str(exc)
+                    warnings.append(f"marketing_credentials_error:{exc}")
+                    logging.warning("Could not resolve marketing credentials: %s", exc)
+
+            sync_result = sync_experiment_dashboard(
+                sku_key=args.sku_key,
+                store=args.store,
+                campaign_ids=campaign_ids,
+                date_from=sync_date,
+                date_to=sync_date,
+                marketing_db=Path(args.db_path),
+                ab_root=Path(args.ab_root),
+                cache_dir=cache_dir,
+                headless=headless,
+                offline=getattr(args, "offline", False),
+                allow_stale=getattr(args, "allow_stale", False),
+                creds=creds,
+                credential_error=credential_error,
+            )
+            warnings.extend(sync_result.get("warnings", []) or [])
+            if sync_result.get("status") == "fetch_failed" and not getattr(args, "allow_stale", False):
+                failure_source_status = sync_result.get("source_status", []) or [
+                    {
+                        "source_name": "marketing_db",
+                        "freshness_status": "FETCH_FAILED",
+                        "required": True,
+                        "failure_step": "marketing_fetch",
+                        "failure_message": "; ".join(warnings) or "marketing fetch failed",
+                    }
+                ]
+                heartbeat = write_sync_heartbeat(cache_dir, failure_source_status, latest_dashboard_dir=None)
+                result = {
+                    "status": "fetch_failed",
+                    "generated_at": now_local_text(),
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "sync_date": sync_date,
+                    "sync": sync_result,
+                    "delivery": delivery_result,
+                    "heartbeat": heartbeat,
+                    "source_status": failure_source_status,
+                    "warnings": warnings,
+                }
+                _write_json_file(watch_dir / "watch_health_summary.json", result)
+                _write_json_file(cache_dir / "watch_health" / "latest_heartbeat.json", result)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+                return 3
+
+            try:
+                payload = build_experiment_dashboard_payload(
+                    sku_key=args.sku_key,
+                    store=args.store,
+                    campaign_ids=campaign_ids,
+                    date_from=date_from,
+                    date_to=date_to,
+                    marketing_db=Path(args.db_path),
+                    ab_root=Path(args.ab_root),
+                    cache_dir=cache_dir,
+                    daily_history_days=args.daily_history_days,
+                )
+                payload["source_heartbeat"] = build_sync_heartbeat(
+                    payload.get("source_status", []),
+                    latest_dashboard_dir=str(output_dir),
+                )
+                artifacts = write_dashboard_artifacts(payload, output_dir)
+                heartbeat = write_sync_heartbeat(
+                    cache_dir,
+                    payload.get("source_status", []),
+                    latest_dashboard_dir=str(output_dir),
+                )
+            except Exception as exc:
+                result = {
+                    "status": "build_failed",
+                    "generated_at": now_local_text(),
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "sync_date": sync_date,
+                    "sync": sync_result,
+                    "delivery": delivery_result,
+                    "error": str(exc),
+                    "warnings": warnings,
+                }
+                _write_json_file(watch_dir / "watch_health_summary.json", result)
+                _write_json_file(cache_dir / "watch_health" / "latest_heartbeat.json", result)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+                else:
+                    logging.error("Dashboard watch-health build failed: %s", exc)
+                return 4
+
+            overall = heartbeat.get("overall_status", "unknown")
+            status = "success" if overall == "green" else "stale"
+            result = {
+                "status": status,
+                "generated_at": now_local_text(),
+                "date_from": date_from,
+                "date_to": date_to,
+                "sync_date": sync_date,
+                "output_dir": str(output_dir),
+                "sync": sync_result,
+                "delivery": delivery_result,
+                "heartbeat": heartbeat,
+                "source_status": payload.get("source_status", []),
+                "artifacts": artifacts,
+                "warnings": warnings,
+            }
+            _write_json_file(watch_dir / "watch_health_summary.json", result)
+            _write_json_file(cache_dir / "watch_health" / "latest_heartbeat.json", result)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+            else:
+                logging.info(
+                    "Dashboard watch-health: status=%s heartbeat=%s output=%s",
+                    status,
+                    overall,
+                    output_dir,
+                )
+            if overall != "green" and not getattr(args, "allow_stale", False):
+                return 1
+            return 0
+
+        if args.dashboard_command == "heartbeat":
+            hb = read_sync_heartbeat(Path(args.cache_dir))
+            if hb is None:
+                if args.json:
+                    print(json.dumps({"status": "missing", "message": "No heartbeat file found"}, indent=2))
+                else:
+                    logging.warning("No heartbeat file found in %s", args.cache_dir)
+                return 2
+            if args.json:
+                print(json.dumps(hb, ensure_ascii=False, indent=2))
+            else:
+                status = hb.get("overall_status", "unknown")
+                last_sync = hb.get("last_sync_at", "unknown")
+                logging.info("Heartbeat: %s (last sync: %s)", status, last_sync)
+                for name, info in hb.get("sources", {}).items():
+                    logging.info("  %s: %s", name, info.get("status", "?"))
+            return 0 if hb.get("overall_status") == "green" else 1
+
+        if args.dashboard_command == "backfill-gaps":
+            gap_path = Path(args.gap_report)
+            if not gap_path.exists():
+                logging.error("Gap report not found: %s", gap_path)
+                return 2
+            try:
+                gap_rows = parse_gap_report(gap_path)
+            except Exception as exc:
+                logging.error("Failed to parse gap report: %s", exc)
+                return 2
+            campaign_ids = getattr(args, "campaign_id_list", None) or []
+            price_policies = getattr(args, "price_policy_list", None) or []
+            plan = plan_gap_backfill(
+                gap_rows,
+                campaign_ids=campaign_ids or None,
+                price_policies=price_policies or None,
+                date_from=getattr(args, "date_from", None),
+                date_to=getattr(args, "date_to", None),
+                limit=getattr(args, "limit", None),
+            )
+            if not plan:
+                result = {"status": "empty", "message": "No gaps match the given filters", "planned": 0}
+                if args.json:
+                    print(json.dumps(result, indent=2))
+                else:
+                    logging.info("No gaps match filters.")
+                return 0
+
+            # Group by date for batch display / fetch
+            from collections import defaultdict
+            by_date: dict[str, list[str]] = defaultdict(list)
+            for row in plan:
+                by_date[row["date"]].append(row["campaign_id"])
+
+            if getattr(args, "dry_run", False):
+                result = {
+                    "status": "dry_run",
+                    "planned_rows": len(plan),
+                    "planned_dates": len(by_date),
+                    "plan": [
+                        {"date": d, "campaign_ids": cids}
+                        for d, cids in sorted(by_date.items())
+                    ],
+                }
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False, indent=2))
+                else:
+                    logging.info("Dry-run: %d rows across %d dates", len(plan), len(by_date))
+                    for d in sorted(by_date):
+                        logging.info("  %s: campaigns %s", d, ", ".join(by_date[d]))
+                return 0
+
+            # Live fetch
+            if getattr(args, "rebuild_dashboard", False):
+                if not getattr(args, "sku_key", None):
+                    logging.error("--sku-key is required with --rebuild-dashboard")
+                    return 2
+                if not getattr(args, "dashboard_date_from", None) or not getattr(args, "dashboard_date_to", None):
+                    logging.error(
+                        "--dashboard-date-from and --dashboard-date-to are required with --rebuild-dashboard; "
+                        "--date-from/--date-to only filter which gaps to fetch"
+                    )
+                    return 2
+
+            headless = True
+            if getattr(args, "headed", False):
+                headless = False
+            if getattr(args, "headless", False):
+                headless = True
+
+            env_path = Path(args.env_file) if getattr(args, "env_file", None) else Path(".env")
+            try:
+                creds = resolve_marketing_credentials(args.store, env_file=env_path)
+            except Exception as exc:
+                logging.error("Could not resolve marketing credentials: %s", exc)
+                return 3
+
+            db_path = Path(args.db_path)
+            backfill_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backfill_dir = Path(args.cache_dir) / "gap_backfills" / backfill_ts
+            backfill_dir.mkdir(parents=True, exist_ok=True)
+
+            fetched = []
+            failed = []
+            for date_str in sorted(by_date):
+                date_campaigns = by_date[date_str]
+                run_dir = backfill_dir / f"date={date_str}"
+                try:
+                    run_kaspi_marketing_fetch(
+                        creds=creds,
+                        campaign_ids=date_campaigns,
+                        target_date=date_str,
+                        run_dir=run_dir,
+                        db_path=db_path,
+                        headless=headless,
+                    )
+                    fetched.append({"date": date_str, "campaign_ids": date_campaigns, "status": "success", "run_dir": str(run_dir)})
+                except Exception as exc:
+                    logging.warning("Fetch failed for %s: %s", date_str, exc)
+                    failed.append({"date": date_str, "campaign_ids": date_campaigns, "run_dir": str(run_dir), "error": str(exc)})
+
+            if failed and not getattr(args, "allow_stale", False):
+                result = {
+                    "status": "partial_failure",
+                    "fetched": len(fetched),
+                    "failed": len(failed),
+                    "fetched_rows": fetched,
+                    "failed_rows": failed,
+                    "backfill_dir": str(backfill_dir),
+                }
+                # Write summary even on failure
+                with open(backfill_dir / "backfill_summary.json", "w") as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("Partial failure: %d fetched, %d failed", len(fetched), len(failed))
+                return 4
+
+            # Write backfill summary
+            backfill_summary = {
+                "status": "success" if not failed else "partial_success",
+                "fetched": len(fetched),
+                "failed": len(failed),
+                "fetched_rows": fetched,
+                "failed_rows": failed,
+                "backfill_dir": str(backfill_dir),
+            }
+            with open(backfill_dir / "backfill_summary.json", "w") as f:
+                json.dump(backfill_summary, f, indent=2, ensure_ascii=False)
+
+            # Optional rebuild
+            dashboard_result = None
+            if getattr(args, "rebuild_dashboard", False):
+                rebuild_campaigns = campaign_ids or [r["campaign_id"] for r in plan]
+                rebuild_campaigns = list(dict.fromkeys(rebuild_campaigns))
+                try:
+                    payload = build_experiment_dashboard_payload(
+                        sku_key=args.sku_key,
+                        store=args.store,
+                        campaign_ids=rebuild_campaigns,
+                        date_from=args.dashboard_date_from,
+                        date_to=args.dashboard_date_to,
+                        marketing_db=db_path,
+                        ab_root=Path(args.ab_root),
+                        cache_dir=Path(args.cache_dir),
+                        daily_history_days=args.daily_history_days,
+                    )
+                    output_dir = Path(args.output_dir) if getattr(args, "output_dir", None) else backfill_dir / "dashboard"
+                    artifacts = write_dashboard_artifacts(payload, output_dir)
+                    dashboard_result = {
+                        "status": "success",
+                        "output_dir": str(output_dir),
+                        "artifacts": artifacts,
+                        "price_groups": len(payload.get("price_group_summaries", [])),
+                        "anomalies": len(payload.get("anomaly_observations", [])),
+                    }
+                except Exception as exc:
+                    logging.error("Dashboard rebuild failed: %s", exc)
+                    dashboard_result = {"status": "failed", "error": str(exc)}
+                    if not getattr(args, "allow_stale", False):
+                        backfill_summary["dashboard"] = dashboard_result
+                        if args.json:
+                            print(json.dumps(backfill_summary, ensure_ascii=False, indent=2))
+                        return 5
+
+            result = {**backfill_summary}
+            if dashboard_result:
+                result["dashboard"] = dashboard_result
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Backfill complete: %d fetched, %d failed",
+                    len(fetched), len(failed),
+                )
+                if dashboard_result:
+                    logging.info("Dashboard rebuild: %s", dashboard_result.get("status"))
+            return 0
+
+        logging.error("Unknown dashboard command")
+        return 2
+
+    if args.command == "delivery-health":
+        if args.delivery_command == "record":
+            capture = build_delivery_capture(
+                store=args.store,
+                city=args.city,
+                city_id=args.city_id,
+                sku_key=args.sku_key,
+                offer_url=args.offer_url,
+                displayed_date=args.displayed_date,
+                expected_date=args.expected_date,
+                source=args.source,
+                note=args.note,
+                observed_at=args.observed_at,
+            )
+            summary = record_delivery_capture(capture, Path(args.watch_root))
+            if args.json:
+                print(json.dumps({**summary, "capture": capture}, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Delivery health: status=%s delta_days=%s heartbeat=%s",
+                    summary.get("status"),
+                    summary.get("delta_days"),
+                    summary.get("heartbeat_path"),
+                )
+            return 0
+        if args.delivery_command == "watch":
+            try:
+                capture = fetch_delivery_promise_capture(
+                    store=args.store,
+                    merchant_id=args.merchant_id,
+                    city=args.city,
+                    city_id=args.city_id,
+                    sku_key=args.sku_key,
+                    offer_url=args.offer_url,
+                    expected_days=args.expected_days,
+                    expected_date=args.expected_date,
+                    source=args.source,
+                    note=args.note,
+                )
+                summary = record_delivery_capture(capture, Path(args.watch_root))
+                exit_code = 0
+            except Exception as exc:
+                capture = {}
+                summary = record_delivery_watch_failure(
+                    error=str(exc),
+                    root=Path(args.watch_root),
+                    store=args.store,
+                    city=args.city,
+                    city_id=args.city_id,
+                    sku_key=args.sku_key,
+                    offer_url=args.offer_url,
+                )
+                exit_code = 4
+            if args.json:
+                print(json.dumps({**summary, "capture": capture}, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Delivery watch: status=%s delta_days=%s heartbeat=%s",
+                    summary.get("status"),
+                    summary.get("delta_days"),
+                    summary.get("heartbeat_path"),
+                )
+            return exit_code
+        logging.error("Unknown delivery-health command")
+        return 2
+
+    if args.command == "kaspi-pending-dispute":
+        headless = True
+        if getattr(args, "headed", False):
+            headless = False
+        if getattr(args, "headless", False):
+            headless = True
+
+        env_path = Path(args.env_file) if args.env_file else Path("~/Docs/Autonomous_business/.env")
+        creds = resolve_store_credentials(getattr(args, "store", "ACMEWEAR"), env_path)
+        merchant_code = resolve_pending_merchant_code(creds["store_name"], args.merchant_code)
+        run_dir = Path(args.run_dir) if args.run_dir else default_pending_dispute_run_dir(creds["store_name"])
+        summary = run_kaspi_pending_trash_dispute(
+            store_name=creds["store_name"],
+            email=creds["email"],
+            password=creds["password"],
+            merchant_code=merchant_code,
+            run_dir=run_dir,
+            comment=args.comment,
+            confirm=args.confirm,
+            headless=headless,
+            page_size=args.page_size,
+            verify_timeout_seconds=args.verify_timeout_seconds,
+            verify_poll_seconds=args.verify_poll_seconds,
+            ui_verify=not args.skip_ui_verify,
+        )
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            logging.info(
+                "Kaspi pending dispute: store=%s status=%s actionable=%s skipped=%s run_dir=%s",
+                summary.get("store_name"),
+                summary.get("status"),
+                summary.get("preflight", {}).get("actionable_count"),
+                summary.get("preflight", {}).get("known_skip_count"),
+                summary.get("run_dir"),
+            )
+        return 0 if summary.get("status") in {"success", "dry_run", "nothing_to_do"} else 4
+
     if args.command == "kaspi-pricelist":
         headless = True
         if getattr(args, "headed", False):
@@ -689,6 +2318,41 @@ def main(argv: list[str] | None = None) -> int:
         logging.error("Unknown kaspi-pricelist command")
         return 2
 
+    if args.command == "acmewear-bundles":
+        if args.acmewear_bundles_command == "activation-build":
+            run_dir = Path(args.run_dir) if args.run_dir else Path("runs/acmewear_bundle_activation_build") / datetime.now().strftime("%Y%m%d_%H%M%S")
+            try:
+                summary = build_acmewear_bundle_activation_pack(
+                    active_path=Path(args.active_path),
+                    archive_path=Path(args.archive_path),
+                    calendar_path=Path(args.calendar_path),
+                    registry_path=Path(args.registry_path),
+                    capture_path=Path(args.capture_path),
+                    output_dir=run_dir,
+                    image_moderation_cleared=bool(args.image_moderation_cleared),
+                    stock_warehouse=str(args.stock_warehouse or "PP1"),
+                )
+            except BundleActivationError as exc:
+                payload = {"status": "blocked", "error": str(exc), "run_dir": str(run_dir)}
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR bundle activation build blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR bundle activation build: status=%s rows_to_activate=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("rows_to_activate"),
+                    run_dir,
+                )
+            return 0
+
+        logging.error("Unknown acmewear-bundles command")
+        return 2
+
     if args.command == "snapshot":
         try:
             snapshot_cfg = load_kaspi_snapshot_config(args.config)
@@ -794,3 +2458,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,517 @@
+schema_version: 1
+generated_at_local: "2026-05-02T22:01:26+05:00"
+timezone: "Asia/Almaty"
+store: "ACMEWEAR"
+product_family: "LINE51"
+status: "owner_approved_schedule_artifacts_only"
+launch_status: "owner approved in chat for exact external plan; no live external actions performed by Agent 1"
+
+approval:
+  approval_id: "owner_approved_in_chat_2026-05-02"
+  approval_recorded_by: "agent_1_schedule_artifacts"
+  approval_scope: "exact external plan actions, timestamps, caps, campaign state changes, enablings, and disablings only"
+  approval_boundary:
+    agent_1_authority: "artifact_implementation_only"
+    live_external_writes_performed_by_agent_1: false
+    live_action_status: "none_performed_by_agent_1"
+    no_early_execution: true
+    no_campaign_substitution: true
+    no_merged_lane_decision: true
+    no_uncapped_spend: true
+    no_unscheduled_price_change: true
+    autonomous_business_write_allowed: false
+    repricer_write_allowed: false
+
+half_open_window:
+  start_at_local: "2026-05-03 00:00:00 +05"
+  end_at_local: "2026-05-17 00:00:00 +05"
+  window_semantics: "half_open_start_inclusive_end_exclusive"
+
+provenance:
+  second_take_pack_folder: "~/Docs/Oracle/Web_automation/2026-05-02/150215_LINE51_second_take_ad_economics_external_expert_FLAT20_UPLOAD"
+  strategy_memo: "~/Docs/Oracle/Web_automation/2026-05-02/150215_LINE51_second_take_ad_economics_external_expert_FLAT20_UPLOAD/Answer/External_exprt_ebli51_strategy_memo_2026-05-02_21_30_00.md"
+  decision_grade_plan: "~/Docs/Oracle/Web_automation/2026-05-02/150215_LINE51_second_take_ad_economics_external_expert_FLAT20_UPLOAD/Answer/External_expert_line51_Executive_Decision_Grade_Plan_2026-05-02_21_46_00.md"
+  live_experiment_handoff: "~/Docs/Web_automation/Docs/agent_handoffs/line51_14_day_owner_approved_live_experiment_handoff_2026-05-02.md"
+  agent_1_starter: "~/Docs/Web_automation/Docs/agent_handoffs/LINE51_14_DAY_OWNER_APPROVED_LIVE_EXPERIMENT_STARTERS/01_AGENT_1__OWNER_APPROVAL_SCHEDULE_ARTIFACTS__PARALLEL_START.md"
+
+lane_mapping:
+  - owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    current_price_kzt: 16990
+    immediate_posture: "hard_cap_then_low_bid_controlled_test"
+    max_ads_per_unit_kzt: 3005
+  - owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    current_price_kzt: 15990
+    immediate_posture: "pause_spend_then_near_organic_or_low_bid_restart"
+    max_ads_per_unit_kzt: 2165
+  - owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    current_price_kzt: 15990
+    immediate_posture: "pause_spend_then_tiny_near_organic_visibility"
+    max_ads_per_unit_kzt: 2165
+
+campaign_ids_required:
+  - "2380614"
+  - "2626530"
+  - "2690256"
+
+row_ids_required:
+  - "line51_sched_001"
+  - "line51_sched_002"
+  - "line51_sched_003"
+  - "line51_sched_004"
+  - "line51_sched_005"
+  - "line51_sched_006"
+  - "line51_sched_007"
+  - "line51_sched_008"
+  - "line51_sched_009"
+  - "line51_sched_010"
+  - "line51_sched_011"
+  - "line51_sched_012"
+  - "line51_sched_013"
+  - "line51_sched_014"
+  - "line51_sched_015"
+
+global_rules:
+  lanes_remain_independent: true
+  bid_is_not_cost_truth: true
+  price_change_allowed_during_window: false
+  daily_logging_time_local: "00:00:00 +05"
+  primary_controls:
+    - "daily_spend_kzt"
+    - "ads_per_unit_kzt"
+    - "zero_order_spend_kzt"
+  live_execution_preconditions:
+    - "due timestamp reached"
+    - "campaign id verified"
+    - "lane id verified"
+    - "visible price verified"
+    - "active rows verified"
+    - "current campaign state verified"
+    - "safe live-control method verified"
+
+schedule_rows:
+  - calendar_row_id: "line51_sched_001"
+    phase: "preflight"
+    owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    start_at_local: "2026-05-03 00:00:00 +05"
+    end_at_local: "2026-05-04 00:00:00 +05"
+    duration_days: 1
+    current_price_kzt: 16990
+    planned_price_kzt: 16990
+    price_action: "hold"
+    ad_action: "hard_cap"
+    bid_posture: "verify current BID; if owner approves edit, use BID 120 KZT or lowest accepted; spend cap controls, not BID"
+    max_daily_spend_kzt: 6000
+    max_ads_per_unit_kzt: 3005
+    max_zero_order_spend_kzt: 1500
+    minimum_exposure: "verify active rows, visible price, campaign state, BID, budget, spend logging"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "preflight complete if current price, active rows, campaign state, spend logging, and owner approval status are recorded"
+    hold_condition: "hold if campaign data cannot be fetched but no live change is approved"
+    cut_or_pause_condition: "if previous-day spend is already above 6000 or zero-order spend above 1500, prepare pause/cap request"
+    price_change_condition: "none during preflight"
+    data_required: "active rows, visible price, campaign state, BID, budget, spend source, owner approval status"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Preflight plus emergency cap preparation; no live edit performed by Agent 1."
+  - calendar_row_id: "line51_sched_002"
+    phase: "preflight"
+    owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    start_at_local: "2026-05-03 00:00:00 +05"
+    end_at_local: "2026-05-04 00:00:00 +05"
+    duration_days: 1
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "pause_spend"
+    bid_posture: "pause if owner approval exists; otherwise verify current BID and prepare pause request"
+    max_daily_spend_kzt: 0
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 500
+    minimum_exposure: "verify active rows, visible price, campaign state, BID, budget, spend logging"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "preflight complete if lane can be separately monitored and pause status is owner-approved or queued"
+    hold_condition: "hold only if owner approval is absent and no spend data can be verified"
+    cut_or_pause_condition: "if any spend occurs with zero orders during preflight, pause request remains top priority"
+    price_change_condition: "none during preflight"
+    data_required: "active rows, visible price, campaign state, BID, budget, spend source, owner approval status"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Leakage risk is high; pause is scheduled at first available timestamp if approved."
+  - calendar_row_id: "line51_sched_003"
+    phase: "preflight"
+    owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    start_at_local: "2026-05-03 00:00:00 +05"
+    end_at_local: "2026-05-04 00:00:00 +05"
+    duration_days: 1
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "pause_spend"
+    bid_posture: "pause if owner approval exists; otherwise verify current BID and prepare pause request"
+    max_daily_spend_kzt: 0
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 300
+    minimum_exposure: "verify active rows, visible price, campaign state, BID, budget, spend logging"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "preflight complete if lane can be separately monitored and pause status is owner-approved or queued"
+    hold_condition: "hold only if owner approval is absent and no spend data can be verified"
+    cut_or_pause_condition: "if any spend occurs with zero orders during preflight, pause request remains top priority"
+    price_change_condition: "none during preflight"
+    data_required: "active rows, visible price, campaign state, BID, budget, spend source, owner approval status"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Thin demand plus leakage risk; do not push paid spend."
+  - calendar_row_id: "line51_sched_004"
+    phase: "leakage_control"
+    owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    start_at_local: "2026-05-04 00:00:00 +05"
+    end_at_local: "2026-05-06 00:00:00 +05"
+    duration_days: 2
+    current_price_kzt: 16990
+    planned_price_kzt: 16990
+    price_action: "hold"
+    ad_action: "hard_cap"
+    bid_posture: "BID 120 KZT or lowest accepted if edit approved; if BID unchanged, enforce spend cap"
+    max_daily_spend_kzt: 6000
+    max_ads_per_unit_kzt: 3005
+    max_zero_order_spend_kzt: 1500
+    minimum_exposure: "500 views or 50 clicks across phase"
+    minimum_orders: 3
+    daily_monitoring_required: true
+    success_condition: "advance if orders >=3 and ads/u <=3005 with no zero-order spend day above 1500"
+    hold_condition: "hold if exposure <500 views and spend stays <=6000/day"
+    cut_or_pause_condition: "pause next day if any day spend >6000, zero-order spend >1500, or ads/u >3005 after 3 orders"
+    price_change_condition: "none"
+    data_required: "daily spend, views, clicks, CPC, orders, cancellations, price, campaign state"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Group 1 remains active but controlled."
+  - calendar_row_id: "line51_sched_005"
+    phase: "leakage_control"
+    owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    start_at_local: "2026-05-04 00:00:00 +05"
+    end_at_local: "2026-05-06 00:00:00 +05"
+    duration_days: 2
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "pause_spend"
+    bid_posture: "paused; BID inactive; if pause not technically possible, set BID 120 KZT and max spend 500"
+    max_daily_spend_kzt: 0
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 500
+    minimum_exposure: "passive listing exposure only"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "advance if paid spend is zero and listing remains active"
+    hold_condition: "hold if live pause cannot be confirmed but spend is zero"
+    cut_or_pause_condition: "pause/cut request repeats if any paid spend occurs without orders"
+    price_change_condition: "none"
+    data_required: "campaign state, spend=0 confirmation, listing active rows"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Stop leakage before any test."
+  - calendar_row_id: "line51_sched_006"
+    phase: "leakage_control"
+    owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    start_at_local: "2026-05-04 00:00:00 +05"
+    end_at_local: "2026-05-06 00:00:00 +05"
+    duration_days: 2
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "pause_spend"
+    bid_posture: "paused; BID inactive; if pause not technically possible, set BID 120 KZT and max spend 300"
+    max_daily_spend_kzt: 0
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 300
+    minimum_exposure: "passive listing exposure only"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "advance if paid spend is zero and listing remains active"
+    hold_condition: "hold if live pause cannot be confirmed but spend is zero"
+    cut_or_pause_condition: "pause/cut request repeats if any paid spend occurs without orders"
+    price_change_condition: "none"
+    data_required: "campaign state, spend=0 confirmation, listing active rows"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Group 3 is not ready for paid push."
+  - calendar_row_id: "line51_sched_007"
+    phase: "baseline_observation"
+    owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    start_at_local: "2026-05-06 00:00:00 +05"
+    end_at_local: "2026-05-09 00:00:00 +05"
+    duration_days: 3
+    current_price_kzt: 16990
+    planned_price_kzt: 16990
+    price_action: "hold"
+    ad_action: "near_organic"
+    bid_posture: "BID 120 KZT or lowest accepted; spend cap controls"
+    max_daily_spend_kzt: 2500
+    max_ads_per_unit_kzt: 3005
+    max_zero_order_spend_kzt: 1000
+    minimum_exposure: "750 views or 75 clicks across phase"
+    minimum_orders: 4
+    daily_monitoring_required: true
+    success_condition: "advance if orders >=4, ads/u <=3005, and after-ads profit/u >=4205"
+    hold_condition: "hold if exposure <750 views and spend <=2500/day"
+    cut_or_pause_condition: "pause if zero-order spend >1000 on any day or ads/u >3005 after 4 orders"
+    price_change_condition: "none"
+    data_required: "daily campaign metrics and order attribution"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Tests low-spend demand without price movement."
+  - calendar_row_id: "line51_sched_008"
+    phase: "baseline_observation"
+    owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    start_at_local: "2026-05-06 00:00:00 +05"
+    end_at_local: "2026-05-09 00:00:00 +05"
+    duration_days: 3
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "near_organic"
+    bid_posture: "BID 120 KZT or lowest accepted; spend cap controls"
+    max_daily_spend_kzt: 500
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 500
+    minimum_exposure: "300 views or 30 clicks across phase"
+    minimum_orders: 2
+    daily_monitoring_required: true
+    success_condition: "advance if orders >=2, ads/u <=2165, and no zero-order spend day above 500"
+    hold_condition: "hold if exposure <300 views and spend <=500/day"
+    cut_or_pause_condition: "pause if zero-order spend >500 on any day or ads/u >2165 after 2 orders"
+    price_change_condition: "none"
+    data_required: "daily campaign metrics and order attribution"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Reintroduces visibility only at tiny spend."
+  - calendar_row_id: "line51_sched_009"
+    phase: "baseline_observation"
+    owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    start_at_local: "2026-05-06 00:00:00 +05"
+    end_at_local: "2026-05-09 00:00:00 +05"
+    duration_days: 3
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "near_organic"
+    bid_posture: "BID 120 KZT or lowest accepted; spend cap controls"
+    max_daily_spend_kzt: 300
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 300
+    minimum_exposure: "200 views or 20 clicks across phase"
+    minimum_orders: 1
+    daily_monitoring_required: true
+    success_condition: "advance if orders >=1, ads/u <=2165, and no zero-order spend day above 300"
+    hold_condition: "hold if exposure <200 views and spend <=300/day"
+    cut_or_pause_condition: "pause if zero-order spend >300 on any day or ads/u >2165 after 1 order"
+    price_change_condition: "none"
+    data_required: "daily campaign metrics and order attribution"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Thermal lane is visibility learning only."
+  - calendar_row_id: "line51_sched_010"
+    phase: "low_bid_test"
+    owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    start_at_local: "2026-05-09 00:00:00 +05"
+    end_at_local: "2026-05-13 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 16990
+    planned_price_kzt: 16990
+    price_action: "hold"
+    ad_action: "minimal_capped_bid"
+    bid_posture: "BID 120 KZT or lowest accepted; do not treat BID as cost truth"
+    max_daily_spend_kzt: 6000
+    max_ads_per_unit_kzt: 3005
+    max_zero_order_spend_kzt: 1500
+    minimum_exposure: "1000 views or 100 clicks across phase"
+    minimum_orders: 8
+    daily_monitoring_required: true
+    success_condition: "winner if orders >=8, ads/u <=3005, after-ads profit/u >=4205, and zero-order spend day count <=1"
+    hold_condition: "hold_more_data if exposure <1000 views and spend caps not breached"
+    cut_or_pause_condition: "pause/cap if any day spend >6000, ads/u >3005 after 4 orders, or two zero-order spend days above 1000"
+    price_change_condition: "if success, schedule 17990 same-bid price test from 2026-05-17 00:00:00 +05 to 2026-05-22 00:00:00 +05"
+    data_required: "daily metrics, raw orders, attribution, cancellations, stock movement"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Best lane; controlled paid discovery at same price."
+  - calendar_row_id: "line51_sched_011"
+    phase: "low_bid_test"
+    owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    start_at_local: "2026-05-09 00:00:00 +05"
+    end_at_local: "2026-05-13 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "minimal_capped_bid"
+    bid_posture: "BID 120 KZT or lowest accepted; do not treat BID as cost truth"
+    max_daily_spend_kzt: 3000
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 1000
+    minimum_exposure: "800 views or 80 clicks across phase"
+    minimum_orders: 6
+    daily_monitoring_required: true
+    success_condition: "advance if orders >=6, ads/u <=2165, after-ads profit/u >=4205, and zero-order spend day count <=1"
+    hold_condition: "hold_more_data if exposure <800 views and spend caps not breached"
+    cut_or_pause_condition: "pause if ads/u >2165 after 3 orders, zero-order spend >1000 on any day, or two zero-order spend days occur"
+    price_change_condition: "if success, schedule 16990 same-bid price test from 2026-05-17 00:00:00 +05 to 2026-05-22 00:00:00 +05"
+    data_required: "daily metrics, raw orders, attribution, cancellations, stock movement"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "This is the main CAC discovery lane."
+  - calendar_row_id: "line51_sched_012"
+    phase: "low_bid_test"
+    owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    start_at_local: "2026-05-09 00:00:00 +05"
+    end_at_local: "2026-05-13 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "minimal_capped_bid"
+    bid_posture: "BID 120 KZT or lowest accepted; do not treat BID as cost truth"
+    max_daily_spend_kzt: 700
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 350
+    minimum_exposure: "400 views or 40 clicks across phase"
+    minimum_orders: 2
+    daily_monitoring_required: true
+    success_condition: "continue if orders >=2, ads/u <=2165, and no repeated zero-order leakage"
+    hold_condition: "hold_more_data if exposure <400 views and spend caps not breached"
+    cut_or_pause_condition: "pause if zero-order spend >350 on any day, two zero-order days occur, or ads/u >2165 after 2 orders"
+    price_change_condition: "if success, schedule 15990 extended near-organic test from 2026-05-17 00:00:00 +05 to 2026-05-22 00:00:00 +05"
+    data_required: "daily metrics, raw orders, attribution, cancellations, stock movement"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Do not price-test thermal until visibility/demand exists."
+  - calendar_row_id: "line51_sched_013"
+    phase: "decision_gate"
+    owner_group: "group_1"
+    campaign_id: "2380614"
+    lane_id: "line51_original_sport_suit"
+    start_at_local: "2026-05-13 00:00:00 +05"
+    end_at_local: "2026-05-17 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 16990
+    planned_price_kzt: 16990
+    price_action: "hold"
+    ad_action: "hold_current"
+    bid_posture: "no BID change during decision gate; monitor actual cost only"
+    max_daily_spend_kzt: 3000
+    max_ads_per_unit_kzt: 3005
+    max_zero_order_spend_kzt: 1000
+    minimum_exposure: "cumulative 14-day lane report completed"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "classify as winner_scale_cautiously if row 010 success condition holds"
+    hold_condition: "hold if attribution or observed spend is incomplete"
+    cut_or_pause_condition: "pause/cap if spend exceeds cap or zero-order leakage repeats during gate"
+    price_change_condition: "if winner, next price test is 17990 from 2026-05-17 00:00:00 +05 to 2026-05-22 00:00:00 +05"
+    data_required: "complete lane closeout: spend, views, clicks, orders, ads/u, profit, ROIC proxy"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Decision gate; no new variable."
+  - calendar_row_id: "line51_sched_014"
+    phase: "decision_gate"
+    owner_group: "group_2"
+    campaign_id: "2626530"
+    lane_id: "line51_ko_sport_suit"
+    start_at_local: "2026-05-13 00:00:00 +05"
+    end_at_local: "2026-05-17 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "hold_current"
+    bid_posture: "no BID change during decision gate; monitor actual cost only"
+    max_daily_spend_kzt: 1000
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 500
+    minimum_exposure: "cumulative 14-day lane report completed"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "classify as raise_price_same_bid if row 011 success condition holds"
+    hold_condition: "hold if attribution or observed spend is incomplete"
+    cut_or_pause_condition: "pause if zero-order spend >500 on any day or ads/u >2165"
+    price_change_condition: "if winner, next price test is 16990 from 2026-05-17 00:00:00 +05 to 2026-05-22 00:00:00 +05"
+    data_required: "complete lane closeout: spend, views, clicks, orders, ads/u, profit, ROIC proxy"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Keep lane separate from group 1."
+  - calendar_row_id: "line51_sched_015"
+    phase: "decision_gate"
+    owner_group: "group_3"
+    campaign_id: "2690256"
+    lane_id: "line51_ko_thermal_set"
+    start_at_local: "2026-05-13 00:00:00 +05"
+    end_at_local: "2026-05-17 00:00:00 +05"
+    duration_days: 4
+    current_price_kzt: 15990
+    planned_price_kzt: 15990
+    price_action: "hold"
+    ad_action: "near_organic"
+    bid_posture: "BID 120 KZT or lowest accepted only if needed; otherwise passive listing"
+    max_daily_spend_kzt: 300
+    max_ads_per_unit_kzt: 2165
+    max_zero_order_spend_kzt: 300
+    minimum_exposure: "cumulative 14-day lane report completed"
+    minimum_orders: 0
+    daily_monitoring_required: true
+    success_condition: "classify as hold_more_data if any clean low-CAC orders exist"
+    hold_condition: "hold if exposure is too low and spend caps are respected"
+    cut_or_pause_condition: "pause if zero-order spend >300 on any day or attribution remains unresolved"
+    price_change_condition: "no price change before 2026-05-22 00:00:00 +05 unless owner manually overrides"
+    data_required: "complete lane closeout: spend, views, clicks, orders, ads/u, profit, ROIC proxy"
+    owner_approval_required: true
+    owner_approval_state: "owner_approved_in_chat_2026-05-02"
+    execution_status: "not_executed_by_agent_1"
+    notes: "Thermal remains learning-only."

@@ -104,7 +104,7 @@ Inputs:
 - Warehouse snapshot:
   - `exports/stock_snapshots/...`
 - Profit floor truth:
-  - `Docs/inventory/Dim sku light v6.md`
+  - `Docs/inventory/Dim_sku_light_v7.md` as fallback SKU anchors
   - `exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v6.csv`
 
 Flow:

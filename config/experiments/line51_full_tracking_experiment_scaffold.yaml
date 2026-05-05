@@ -1,0 +1,77 @@
+schema_version: 1
+generated_at_local: "2026-05-02 11:55:00 +05"
+status: "scaffold_planned_only"
+store: "ACMEWEAR"
+product_family: "LINE51"
+raw_parent_sku_key: "CL_OC_MEN_LINE51_WHITE "
+normalized_parent_sku_key: "CL_OC_MEN_LINE51_WHITE"
+launch_status: "LINE51 scaffold planned only; no live upload or ad changes authorized"
+
+owner_rules:
+  independent_offer_groups: true
+  offer_group_count_seed: 3
+  collapse_requires_fresh_evidence: true
+  size_exclusions_seed: []
+  all_sizes_owner_stated_in_stock: true
+  stock_source_rule: "Use latest Line61-equivalent stock snapshot source, then verify LINE51 rows before readiness claims."
+
+offer_groups:
+  - owner_group: "group_1"
+    surface_seed: "suits/category-like"
+    public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true"
+    marketing_campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2380614?startDate=2026-05-01&endDate=2026-05-01"
+    campaign_id: "2380614"
+    current_price_kzt: "verification_required"
+    merchant_articles: "verification_required"
+    offer_row_count: "verification_required"
+  - owner_group: "group_2"
+    surface_seed: "suits/category-like"
+    public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true"
+    marketing_campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2626530?startDate=2026-05-01&endDate=2026-05-01"
+    campaign_id: "2626530"
+    current_price_kzt: "verification_required"
+    merchant_articles: "verification_required"
+    offer_row_count: "verification_required"
+  - owner_group: "group_3"
+    surface_seed: "thermal/category-like"
+    public_offer_url: "https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true"
+    marketing_campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2690256?startDate=2026-05-01&endDate=2026-05-01"
+    campaign_id: "2690256"
+    current_price_kzt: "verification_required"
+    merchant_articles: "verification_required"
+    offer_row_count: "verification_required"
+
+execution_agents:
+  - agent_id: 1
+    role: "offer_registry_discovery"
+    can_start_initially: true
+    owns:
+      - "config/experiments/line51_offer_tracking_registry.yaml"
+      - "Docs/experiments/line51/line51_offer_tracking_registry.md"
+      - "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/"
+  - agent_id: 2
+    role: "stock_size_order_truth"
+    can_start_initially: true
+    owns:
+      - "runs/line51_full_tracking_experiment/20260502_agent_execution/agent2_stock_order_truth/"
+    does_not_own:
+      - "config/experiments/line51_offer_tracking_registry.yaml"
+      - "Docs/experiments/line51/line51_offer_tracking_registry.md"
+  - agent_id: 3
+    role: "marketing_scheduler_dashboard_mirror"
+    can_start_initially: false
+    waits_for_agents: [1]
+  - agent_id: 4
+    role: "price_ladder_baseline_report_qa"
+    can_start_initially: false
+    waits_for_agents: [1, 2, 3]
+
+forbidden_actions:
+  - "live_kaspi_price_upload"
+  - "kaspi_stock_upload"
+  - "kaspi_image_upload"
+  - "campaign_edit"
+  - "bid_edit"
+  - "ads_change"
+  - "repricer_write"
+  - "autonomous_business_write"

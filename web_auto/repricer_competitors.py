@@ -426,6 +426,14 @@ def _close_login_modal(page) -> None:
         pass
 
 
+def _goto_token_page(page, *, base_url: str, token: str, timeout_ms: int) -> None:
+    page.goto(
+        f"{base_url}?token={token}",
+        wait_until="domcontentloaded",
+        timeout=int(timeout_ms),
+    )
+
+
 def _wait_table_ready(page, timeout_ms: int) -> None:
     page.wait_for_selector("#incoming_data_table_processing", state="hidden", timeout=timeout_ms)
     page.wait_for_function(
@@ -859,7 +867,7 @@ def run_repricer_competitors(
                 })
 
                 try:
-                    page.goto(f"{base_url}?token={token}", wait_until="domcontentloaded")
+                    _goto_token_page(page, base_url=base_url, token=token, timeout_ms=effective_timeout_ms)
                     _close_login_modal(page)
                     page.wait_for_selector("#mid_header", timeout=effective_timeout_ms)
                     page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
@@ -1122,6 +1130,7 @@ def run_repricer_competitors_api(
         "api_sets_succeeded": 0,
         "delivery_lookup_requests": 0,
         "delivery_days_ignored": 0,
+        "stale_ignore_deselections": 0,
         "errors": 0,
         "per_store": {},
         "remaining_targets": {},
@@ -1194,12 +1203,13 @@ def run_repricer_competitors_api(
                         "api_sets_succeeded": 0,
                         "delivery_lookup_requests": 0,
                         "delivery_days_ignored": 0,
+                        "stale_ignore_deselections": 0,
                         "errors": 0,
                     },
                 )
 
                 try:
-                    page.goto(f"{base_url}?token={token}", wait_until="domcontentloaded", timeout=effective_timeout_ms)
+                    _goto_token_page(page, base_url=base_url, token=token, timeout_ms=effective_timeout_ms)
                     referer = page.url
                     _close_login_modal(page)
                     page.wait_for_selector("#mid_header", timeout=effective_timeout_ms)
@@ -1363,6 +1373,9 @@ def run_repricer_competitors_api(
                                 if reason == "competition_scope_long_delivery_10plus_days":
                                     summary["delivery_days_ignored"] += 1
                                     store_summary["delivery_days_ignored"] += 1
+                                if action == "set_false" and reason == "stale_ignore_valid_competitor":
+                                    summary["stale_ignore_deselections"] += 1
+                                    store_summary["stale_ignore_deselections"] += 1
 
                                 remaining_targets += 1
                                 if effective_dry_run:

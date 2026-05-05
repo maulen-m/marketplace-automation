@@ -1,0 +1,140 @@
+schema_version: 1
+generated_at_local: "2026-04-24 17:11:38 +05"
+last_updated_local: "2026-05-02 11:13:33 +05"
+owner_decision_source: "Docs/agent_handoffs/2026-04-24_external_expert_line61_price_ads_scenarios_efficiency_plan.md"
+store: "ACMEWEAR"
+sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
+product_name: "ACMEWEAR Line61 black"
+
+campaigns:
+  st:
+    category_code: "ST"
+    category_label: "men_suits"
+    campaign_id: "2545773"
+    campaign_name: "ACMEWEAR_LINE61"
+    offer_surface_id: "line61_st_156399498_group"
+    sample_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-cl-new-clo2-men-suit-61-black-m-chernyi-m-156408683/"
+  trm:
+    category_code: "TRM"
+    category_label: "thermal"
+    campaign_id: "2629982"
+    campaign_name: "Line61_K-O_TRM_2.3.26_15_34_00"
+    offer_surface_id: "line61_trm_156517312_group"
+    sample_url: "https://kaspi.kz/shop/p/komplekt-acmewear-of-suit-61-blk-s-chernyi-s-156517312/"
+
+bid_interpretation_guardrail:
+  rule: "Evaluate bid-to-cost efficiency only inside the same campaign and product offer surface."
+  rationale: "Kaspi does not disclose its ad allocation algorithm; ST and TRM bids can behave differently, and even same-product offer surfaces can respond differently."
+  parent_scenario_summary_allowed: true
+  child_campaign_rows_required: true
+
+stock_starvation_protocol:
+  affected_internal_size: "4XL"
+  status: "out_of_stock"
+  first_verified_oos_at_local: "2026-04-11 21:03:55 +05"
+  exact_transition_status: "unknown_between_last_public_4xl_order_and_first_archive_download"
+  last_completed_4xl_sale_date_in_canonical_truth: "2026-04-06"
+  last_public_4xl_fact_order_at: "2026-04-07 12:14:57 +05"
+  first_archive_download_evidence: "runs/kaspi_pricelist_ops/20260411_210355_acmewear/downloads/acmewear_ARCHIVE.xlsx"
+  warehouse_signature: "PP1=no|PP2=no|PP3=no|PP4=no|PP5=no"
+  reorder_policy_status: "do_not_order_30_60_days_due_shr_supplier_repayment"
+  interpretation_note: "Historical 14990/15990 demand may not compare apples-to-apples with current tests if 4XL availability differed."
+
+ladder:
+  - step_id: "step_0_closeout"
+    status: "closed_contaminated_baseline"
+    price_kzt: 11990
+    st_bid: 120
+    trm_bid: 100
+    actual_started_at_local: "order-observed 2026-04-19 12:47:44 +05"
+    actual_ended_at_local: "2026-04-24 18:44:00 +05"
+    period_rule: "Observed Apr 19 12:47 through Apr 24 18:44; includes prior same-price higher-bid subwindow."
+    minimum_units_before_interpretation: 35
+    expected_duration_days: 5
+    experiment_type: "baseline_closeout"
+    contamination_flags:
+      - "delivery_promise_plus_one_day"
+      - "partial_same_day_truth"
+      - "4xl_stock_starvation"
+  - step_id: "step_1"
+    status: "closed_live_verified"
+    price_kzt: 12990
+    st_bid: 120
+    trm_bid: 100
+    actual_started_at_local: "2026-04-24 18:44:00 +05"
+    actual_ended_at_local: "2026-05-02 10:54:00 +05"
+    price_upload_history_id: "69eb73ce85ee2b605ddb1268"
+    price_upload_history_at_local: "2026-04-24 18:44:00 +05"
+    price_upload_verify_at_local: "2026-04-24 19:13:14 +05"
+    bid_verified_at_local: "2026-04-24 19:13:35 +05"
+    bid_action: "retained_verified_ST120_TRM100_no_write_needed"
+    evidence:
+      upload_workbook: "runs/kaspi_pricelist_ops/20260424_184132_acmewear/outputs_line61_12990/acmewear_line61_12990_ACTIVE.xlsx"
+      upload_detail_snapshot: "runs/kaspi_pricelist_ops/20260424_184132_acmewear/upload_line61_12990/history_detail_processing_snapshot.json"
+      verification_summary: "runs/kaspi_pricelist_ops/20260424_184132_acmewear/verify_after_line61_12990/acmewear_line61_12990_verify_summary.json"
+      marketing_fetch: "runs/kaspi_marketing/20260424_191335_acmewear/campaign_product_daily_current.csv"
+    period_rule: "Run 5 full clean days or at least 35 units after platform-effective timestamp."
+    minimum_units_before_interpretation: 35
+    expected_duration_days: 5
+    experiment_type: "learning_profit_test"
+    success_criteria: "Demand >= 5.5/day, ads/u <= 1600 KZT, no delivery-promise penalty, mature shipped truth."
+    stop_conditions: "Ads/u > 1800 after 20 units, demand < 4.5/day after clean 5 days, or delivery promise stays delayed."
+  - step_id: "step_2"
+    status: "active_live_verified"
+    price_kzt: 13990
+    st_bid: 120
+    trm_bid: 100
+    actual_started_at_local: "2026-05-02 10:54:00 +05"
+    price_upload_history_id: "69f59180e91eaf1ddaffd8bd"
+    price_upload_history_at_local: "2026-05-02 10:54:00 +05"
+    price_upload_verify_at_local: "2026-05-02 11:11:39 +05"
+    bid_action: "retained_ST120_TRM100_no_write_not_reverified_in_upload_flow"
+    evidence:
+      upload_workbook: "runs/kaspi_pricelist_ops/20260502_102457_acmewear/outputs_line61_13990/acmewear_line61_13990_ACTIVE.xlsx"
+      upload_detail_snapshot: "runs/kaspi_pricelist_ops/20260502_102457_acmewear/upload_line61_13990/history_watch_summary.json"
+      verification_summary: "runs/kaspi_pricelist_ops/20260502_102457_acmewear/verify_after_line61_13990/acmewear_line61_13990_verify_summary.json"
+      closeout: "runs/line61_13990_owner_upload_live/20260502_105135/LIVE_UPLOAD_VERIFY_CLOSEOUT.md"
+    period_rule: "Run 6-7 full clean days or at least 30 units."
+    minimum_units_before_interpretation: 30
+    expected_duration_days: 7
+    experiment_type: "profit_roic_balance_test"
+    success_criteria: "Demand >= 4/day, ads/u <= 2200 KZT, monthly profit >= 350000 KZT."
+    stop_conditions: "Demand < 3/day, ads/u > 2500 KZT, or TRM waste dominates spend."
+  - step_id: "step_3"
+    status: "conditional_planned"
+    price_kzt: 13990
+    st_bid: 160
+    trm_bid: 130
+    period_rule: "Run only if 13990 low-bid is ROIC-positive but volume is slightly too low."
+    minimum_units_before_interpretation: 25
+    expected_duration_days: 5
+    experiment_type: "bid_elasticity_test"
+    success_criteria: "Demand lift >= 15% vs 120/100 while ads/u rises by <= 600 KZT."
+    stop_conditions: "Ads/u > 2900 KZT, ROIC < 25%, or TRM inefficient spend share."
+  - step_id: "step_4"
+    status: "planned"
+    price_kzt: 14990
+    st_bid: 120
+    trm_bid: 100
+    period_rule: "Run 8-10 full clean days or at least 30 units."
+    minimum_units_before_interpretation: 30
+    expected_duration_days: 10
+    experiment_type: "capital_efficiency_challenger"
+    success_criteria: "Demand >= 3.2/day, ads/u <= 2300 KZT, conservative ROIC >= 40%."
+    stop_conditions: "Demand < 2.5/day, ads/u > 2600 KZT, or monthly profit < 250000 KZT."
+  - step_id: "step_5"
+    status: "conditional_planned"
+    price_kzt: 14990
+    st_bid: 160
+    trm_bid: 130
+    period_rule: "Run only if 14990 low-bid needs controlled volume lift."
+    minimum_units_before_interpretation: 25
+    expected_duration_days: 5
+    experiment_type: "profit_test"
+    success_criteria: "Demand lift >= 15% vs 120/100 and ads/u <= 2800 KZT."
+    stop_conditions: "Ads/u > 3000 KZT or ROIC below the 14990 low-bid result."
+
+not_recommended_without_owner_override:
+  - "11990 at higher bids: likely cashflow/liquidation only, weak capital efficiency."
+  - "14990 at ST:190/TRM:160: likely buys ads-heavy demand before low-bid proof."
+  - "Any price jump/down-jump loop that creates customer-visible whiplash."

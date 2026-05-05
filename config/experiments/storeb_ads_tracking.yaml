@@ -1,0 +1,262 @@
+version: 1
+created_at_local: "2026-05-05T11:12:30+05:00"
+workflow: "storeb_ads_tracking_and_bid_optimization"
+phase: "option_a_phase_1_tracking_scaffold"
+
+identity:
+  business_store_code: "STOREB"
+  access_store_code: "UNIVERSAL_SWITCHER_FOR_STOREB"
+  selected_store_label: "ИП STORE-B"
+  api_merchant_id: "1065684"
+  expected_source_uid: "30000002"
+  expected_source_uid_visibility: "preserved_known_uid_not_freshly_visible_in_marketing_payload"
+
+campaign:
+  campaign_id: "2609342"
+  campaign_name: "Line52_storeb_26.2.2026"
+  campaign_state_from_bid_snapshot: "Активная"
+
+performance_window:
+  start: "2026-04-06"
+  end: "2026-05-05"
+  semantics: "performance metrics only; current_bid_cpc_kzt is the UI-configured bid captured at bid_captured_at_browser_iso"
+
+source_artifacts:
+  current_bid_snapshot_csv: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/current_bid_snapshot_live_chrome.csv"
+  current_bid_summary_json: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/current_bid_snapshot_summary.json"
+  raw_current_bid_json: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/raw/live_chrome_current_bid_capture/current_bid_capture_20260505T103901+0500.json"
+  source_snapshot_txt: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/current_bid_capture_all10_snapshot.txt"
+  source_sqlite_db: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/kaspi_marketing.sqlite"
+  bid_reevaluation_handoff: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/STOREB_ADS_BID_REEVALUATION_HANDOFF.md"
+  read_only_capture_closeout: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/WA2_STOREB_CLOSEOUT.md"
+  orchestrator_review: "runs/ab_ads_source_refresh_data_gathering/20260505_storeb_universal_switcher_readonly/ORCHESTRATOR_REVIEW.md"
+  scaffold_notes: "Docs/experiments/storeb_ads/storeb_ads_tracking_notes.md"
+  bid_run_ledger_csv: "Docs/experiments/storeb_ads/storeb_ads_bid_run_ledger.csv"
+  action_log_csv: "Docs/experiments/storeb_ads/storeb_ads_action_log.csv"
+
+capture_semantics:
+  configured_bid_field: "current_bid_cpc_kzt"
+  configured_bid_source_label_ru: "Ставка за клик"
+  configured_bid_capture_kind: "current_ui_config_bid_snapshot"
+  configured_bid_is_historical_metric: false
+  performance_metric_window: "2026-04-06..2026-05-05"
+  active_product_status_value: "Активный"
+  paused_product_status_value: "Приостановлен"
+  paused_product_policy: "track configured bid and status, but treat as no-action baseline unless separately owner-gated"
+  materialization_caveat: "Kaspi Marketing report CSV lacks main advertised-row merchant article / merchant SKU; do not use fuzzy product name alone for SKU materialization."
+
+tracking_metrics:
+  configured_control_fields:
+    - "current_bid_cpc_kzt"
+    - "product_status"
+    - "campaign_state"
+  performance_fields:
+    - "avg_cpc_kzt"
+    - "views"
+    - "clicks"
+    - "ctr_percent"
+    - "favorites"
+    - "carts"
+    - "orders_total"
+    - "gmv_total_kzt"
+    - "orders_direct"
+    - "gmv_direct_kzt"
+    - "orders_assisted"
+    - "gmv_assisted_kzt"
+    - "conversion_order_percent"
+    - "ad_cost_kzt"
+    - "ad_cost_share_percent"
+  guardrail_fields:
+    - "risk_bucket_readonly"
+    - "risk_reason_readonly"
+    - "write_ready"
+    - "live_write_gate"
+    - "baseline_action"
+
+required_source_columns:
+  - "business_store_code"
+  - "access_store_code"
+  - "selected_store_label"
+  - "source_store_uid_expected"
+  - "api_merchant_id"
+  - "campaign_id"
+  - "campaign_name"
+  - "campaign_state"
+  - "bid_capture_kind"
+  - "bid_captured_at_browser_iso"
+  - "bid_captured_at_local_iso"
+  - "performance_window_start"
+  - "performance_window_end"
+  - "page_url"
+  - "raw_payload_path"
+  - "source_snapshot_path"
+  - "normalized_csv_path"
+  - "sqlite_db_path"
+  - "kaspi_product_code"
+  - "product_name"
+  - "kaspi_product_url"
+  - "product_status"
+  - "current_product_price_kzt"
+  - "ad_score"
+  - "current_bid_cpc_kzt"
+  - "avg_cpc_kzt"
+  - "views"
+  - "clicks"
+  - "ctr_percent"
+  - "favorites"
+  - "carts"
+  - "orders_total"
+  - "gmv_total_kzt"
+  - "orders_direct"
+  - "gmv_direct_kzt"
+  - "orders_assisted"
+  - "gmv_assisted_kzt"
+  - "conversion_order_percent"
+  - "ad_cost_kzt"
+  - "ad_cost_share_percent"
+  - "risk_bucket_readonly"
+  - "risk_reason_readonly"
+
+baseline_counts:
+  product_rows: 10
+  active_rows: 6
+  paused_rows: 4
+  visible_spend_kzt: 169845
+  visible_orders_total: 199
+  observed_bid_values_kzt:
+    - 20
+    - 30
+    - 35
+    - 40
+    - 45
+    - 50
+
+live_write_gate:
+  status: "owner_approval_required"
+  live_actions_authorized: false
+  row_write_ready_allowed: false
+  row_launch_ready_allowed: false
+  forbidden_mutations:
+    - "kaspi_marketing_bid"
+    - "kaspi_marketing_budget"
+    - "kaspi_marketing_product_state"
+    - "kaspi_marketing_campaign_state"
+    - "kaspi_marketing_targeting"
+    - "kaspi_marketing_merchant_setting"
+    - "repricer"
+    - "meta_facebook"
+    - "pricelist"
+    - "stock"
+    - "autonomous_business"
+
+baseline_products:
+  - kaspi_product_code: "11391205b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 45
+    avg_cpc_kzt: 39
+    ad_cost_kzt: 46338
+    orders_total: 63
+    ad_cost_share_percent: 9
+    risk_bucket_readonly: "watch_high_bid_high_spend"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11122298b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 35
+    avg_cpc_kzt: 29
+    ad_cost_kzt: 11683
+    orders_total: 7
+    ad_cost_share_percent: 17
+    risk_bucket_readonly: "urgent_review_high_ad_cost_share"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11956144b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 20
+    avg_cpc_kzt: 16
+    ad_cost_kzt: 6440
+    orders_total: 9
+    ad_cost_share_percent: 8
+    risk_bucket_readonly: "likely_keep_or_scale_carefully"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11942309b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 50
+    avg_cpc_kzt: 38
+    ad_cost_kzt: 61485
+    orders_total: 67
+    ad_cost_share_percent: 10.3
+    risk_bucket_readonly: "watch_high_bid_high_spend"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11120372b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 40
+    avg_cpc_kzt: 31
+    ad_cost_kzt: 34368
+    orders_total: 33
+    ad_cost_share_percent: 11.9
+    risk_bucket_readonly: "review"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11869884b"
+    product_status: "Приостановлен"
+    current_bid_cpc_kzt: 35
+    avg_cpc_kzt: 0
+    ad_cost_kzt: 0
+    orders_total: 0
+    ad_cost_share_percent: null
+    risk_bucket_readonly: "paused_bid_present"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "12236047b"
+    product_status: "Приостановлен"
+    current_bid_cpc_kzt: 35
+    avg_cpc_kzt: 0
+    ad_cost_kzt: 0
+    orders_total: 0
+    ad_cost_share_percent: null
+    risk_bucket_readonly: "paused_bid_present"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11391711b"
+    product_status: "Активный"
+    current_bid_cpc_kzt: 30
+    avg_cpc_kzt: 24
+    ad_cost_kzt: 9531
+    orders_total: 20
+    ad_cost_share_percent: 5.4
+    risk_bucket_readonly: "likely_keep_or_scale_carefully"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "12071269b"
+    product_status: "Приостановлен"
+    current_bid_cpc_kzt: 35
+    avg_cpc_kzt: 0
+    ad_cost_kzt: 0
+    orders_total: 0
+    ad_cost_share_percent: null
+    risk_bucket_readonly: "paused_bid_present"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"
+  - kaspi_product_code: "11391140b"
+    product_status: "Приостановлен"
+    current_bid_cpc_kzt: 30
+    avg_cpc_kzt: 0
+    ad_cost_kzt: 0
+    orders_total: 0
+    ad_cost_share_percent: null
+    risk_bucket_readonly: "paused_bid_present"
+    write_ready: false
+    launch_ready: false
+    baseline_action: "baseline_no_action"

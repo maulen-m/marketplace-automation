@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.dashboard_sync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__REPO_ROOT__/.venv/bin/python</string>
+    <string>-m</string>
+    <string>web_auto</string>
+    <string>--env-file</string>
+    <string>__ENV_FILE__</string>
+    <string>--json</string>
+    <string>experiment-dashboard</string>
+    <string>watch-health</string>
+    <string>--sku-key</string>
+    <string>CL_NEW-CLO2_MEN_SUIT-61_BLACK</string>
+    <string>--store</string>
+    <string>ACMEWEAR</string>
+    <string>--campaign-id</string>
+    <string>2545773</string>
+    <string>--campaign-id</string>
+    <string>2629982</string>
+    <string>--date-from-days</string>
+    <string>90</string>
+    <string>--date-to</string>
+    <string>today</string>
+    <string>--headless</string>
+    <string>--allow-stale</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/experiment_dashboard/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/experiment_dashboard/logs/stderr.log</string>
+</dict>
+</plist>

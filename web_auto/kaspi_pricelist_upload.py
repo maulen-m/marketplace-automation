@@ -220,6 +220,14 @@ def _upload_one_file(
             "status": "blocked",
             "block_reason": block_reason,
         }
+    try:
+        close_button = page.get_by_text("Закрыть", exact=True)
+        if close_button.count():
+            close_button.first.click(timeout=5000)
+            page.wait_for_timeout(1000)
+            page.screenshot(path=str(run_dir / f"after_close_success_modal_{file_path.name}.png"), full_page=True)
+    except PlaywrightTimeoutError:
+        pass
 
     deadline = time.time() + max(timeout_seconds, 30)
     found: HistoryRow | None = None

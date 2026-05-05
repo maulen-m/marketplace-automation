@@ -18,6 +18,7 @@ TEMPLATE_COLUMNS = ["SKU", "model", "brand", "price", "PP1", "PP2", "PP3", "PP4"
 WAREHOUSE_COLUMNS = ["PP1", "PP2", "PP3", "PP4", "PP5"]
 DEFAULT_OFFERS_BOOK = Path("exports/offers_book.xlsx")
 DEFAULT_TRUTH_XLSX = Path("exports/repricer_unified_truth.xlsx")
+DEFAULT_REPAIR_STOCK_UNITS = 500
 
 
 def parse_int(value: object) -> int:
@@ -28,6 +29,10 @@ def parse_int(value: object) -> int:
         return int(float(text))
     except Exception:
         return 0
+
+
+def is_no_like(value: object) -> bool:
+    return str(value or "").strip().lower() in {"", "no"}
 
 
 def normalize_url(value: object) -> str:
@@ -57,8 +62,54 @@ def merchant_sku_candidates(merchant_sku: object) -> list[str]:
     return candidates
 
 
+def row_active_warehouse_pattern(row: dict[str, Any] | pd.Series) -> tuple[str, ...]:
+    return tuple(col for col in WAREHOUSE_COLUMNS if not is_no_like(row.get(col, "")))
+
+
 def row_has_positive_stock(row: dict[str, Any] | pd.Series) -> bool:
     return any(parse_int(row.get(col, "")) > 0 for col in WAREHOUSE_COLUMNS)
+
+
+def detect_active_stock_units(row: dict[str, Any] | pd.Series) -> dict[str, Any]:
+    pattern = row_active_warehouse_pattern(row)
+    if not pattern:
+        return {
+            "pattern": tuple(),
+            "status": "no_active_warehouse_pattern",
+            "issue": True,
+            "issue_columns": [],
+        }
+    issue_columns: list[str] = []
+    issue_kinds: set[str] = set()
+    for col in pattern:
+        raw_value = row.get(col, "")
+        numeric = coerce_whole_number(raw_value)
+        if numeric is None:
+            issue_columns.append(col)
+            issue_kinds.add("non_numeric")
+            continue
+        if numeric <= 0:
+            issue_columns.append(col)
+            issue_kinds.add("non_positive")
+    if not issue_columns:
+        return {
+            "pattern": pattern,
+            "status": "ok",
+            "issue": False,
+            "issue_columns": [],
+        }
+    if issue_kinds == {"non_numeric"}:
+        status = "non_numeric_active_units"
+    elif issue_kinds == {"non_positive"}:
+        status = "non_positive_active_units"
+    else:
+        status = "mixed_invalid_active_units"
+    return {
+        "pattern": pattern,
+        "status": status,
+        "issue": True,
+        "issue_columns": issue_columns,
+    }
 
 
 def _load_template_sheet(path: Path, sheet_name: str) -> pd.DataFrame:
@@ -230,6 +281,16 @@ def build_store_snapshot(
         record["live_link"] = truth_match.get("link", "")
         record["live_title"] = truth_match.get("merchant_title", "")
         record["live_dumping"] = truth_match.get("dumping", "")
+        active_stock_units = detect_active_stock_units(record) if record["source_state"] == "ACTIVE" else {
+            "pattern": row_active_warehouse_pattern(record),
+            "status": "out_of_scope",
+            "issue": False,
+            "issue_columns": [],
+        }
+        record["current_active_pattern"] = ",".join(active_stock_units["pattern"])
+        record["active_stock_unit_status"] = active_stock_units["status"]
+        record["active_stock_unit_issue"] = "yes" if active_stock_units["issue"] else "no"
+        record["active_stock_unit_issue_columns"] = ",".join(active_stock_units["issue_columns"])
         record["stock_positive_current"] = "yes" if row_has_positive_stock(record) else "no"
         price_num = parse_int(record.get("price", ""))
         live_price_num = parse_int(record.get("live_price", ""))
@@ -271,13 +332,37 @@ def apply_intent(
         selection &= out["resolved_sku_key"].astype(str).str.strip().eq(str(sku_key).strip())
     if group_url_norm:
         selection &= out["resolved_url"].astype(str).str.lower().str.rstrip("/").eq(group_url_norm)
+    if intent == "repair-active-stock-units":
+        selection &= out["source_state"].astype(str).str.strip().eq("ACTIVE")
     out["selected_for_intent"] = selection.map(lambda v: "yes" if v else "no")
+    out["intent_name"] = intent
+    out["intent_review_reason"] = ""
+    out["intended_active_pattern"] = out.get("current_active_pattern", pd.Series([""] * len(out), index=out.index))
+    out["intended_stock_value"] = ""
 
     for idx, row in out.iterrows():
         if out.at[idx, "selected_for_intent"] != "yes":
             continue
         if intent in {"inspect-group-status", "inspect"}:
             out.at[idx, "intent_action"] = "inspect"
+            continue
+        if intent == "repair-active-stock-units":
+            active_stock_units = detect_active_stock_units(row)
+            out.at[idx, "current_active_pattern"] = ",".join(active_stock_units["pattern"])
+            out.at[idx, "active_stock_unit_status"] = active_stock_units["status"]
+            out.at[idx, "active_stock_unit_issue"] = "yes" if active_stock_units["issue"] else "no"
+            out.at[idx, "active_stock_unit_issue_columns"] = ",".join(active_stock_units["issue_columns"])
+            out.at[idx, "intended_state"] = "ACTIVE"
+            out.at[idx, "intended_active_pattern"] = ",".join(active_stock_units["pattern"])
+            if active_stock_units["status"] == "no_active_warehouse_pattern":
+                out.at[idx, "intent_action"] = "blocked_no_active_warehouse_pattern"
+                out.at[idx, "intent_review_reason"] = "no_active_warehouse_pattern"
+                continue
+            if active_stock_units["issue"]:
+                out.at[idx, "intent_action"] = "repair_active_stock_units"
+                out.at[idx, "intended_stock_value"] = str(DEFAULT_REPAIR_STOCK_UNITS)
+                continue
+            out.at[idx, "intent_action"] = "active_stock_units_already_numeric"
             continue
         if intent in {"turn-on-in-stock", "repair-suspicious-off"}:
             if row["source_state"] == "ARCHIVE" and row["stock_positive_current"] == "yes":
@@ -304,6 +389,11 @@ def apply_intent(
 
 
 def _review_bucket(row: pd.Series) -> str:
+    intent_name = str(row.get("intent_name", "") or "").strip()
+    if str(row.get("intent_review_reason", "") or "").strip():
+        return str(row.get("intent_review_reason", "") or "").strip()
+    if intent_name == "repair-active-stock-units":
+        return ""
     if row.get("match_confidence", "") == "ambiguous":
         return "ambiguous_offer_match"
     if row.get("match_confidence", "") == "missing":
@@ -325,10 +415,18 @@ def _normalize_output_df(df: pd.DataFrame) -> pd.DataFrame:
     return out[TEMPLATE_COLUMNS].fillna("")
 
 
-def _apply_row_write_rules(row: pd.Series) -> dict[str, str]:
-    out = {col: str(row.get(col, "") or "") for col in TEMPLATE_COLUMNS}
+def _apply_row_write_rules(row: pd.Series) -> dict[str, Any]:
+    out: dict[str, Any] = {col: str(row.get(col, "") or "") for col in TEMPLATE_COLUMNS}
     if str(row.get("intended_price", "") or "").strip():
         out["price"] = str(row.get("intended_price", "") or "").strip()
+    if str(row.get("intent_action", "") or "").strip() == "repair_active_stock_units":
+        active_pattern = tuple(
+            part.strip() for part in str(row.get("intended_active_pattern", "") or "").split(",") if part.strip()
+        )
+        stock_value = coerce_whole_number(row.get("intended_stock_value", ""))
+        if active_pattern and stock_value is not None and stock_value > 0:
+            for col in WAREHOUSE_COLUMNS:
+                out[col] = int(stock_value) if col in active_pattern else "no"
     if str(row.get("intended_state", "") or "") == "ARCHIVE":
         for col in WAREHOUSE_COLUMNS:
             out[col] = "no"
@@ -382,11 +480,9 @@ def emit_outputs(
     prefix_value = prefix or snapshot.store_name.replace("-", "").lower()
     active_rows = mutated_df[mutated_df["intended_state"] == "ACTIVE"].copy()
     archive_rows = mutated_df[mutated_df["intended_state"] == "ARCHIVE"].copy()
-    review_rows = mutated_df[
-        (mutated_df["match_confidence"] != "unique")
-        | (mutated_df.apply(_review_bucket, axis=1) != "")
-    ].copy()
-    review_rows["review_bucket"] = review_rows.apply(_review_bucket, axis=1)
+    review_bucket_series = mutated_df.apply(_review_bucket, axis=1)
+    review_rows = mutated_df[review_bucket_series != ""].copy()
+    review_rows["review_bucket"] = review_bucket_series.loc[review_rows.index]
 
     final_active = _normalize_output_df(pd.DataFrame([_apply_row_write_rules(row) for _, row in active_rows.iterrows()]))
     final_archive = _normalize_output_df(pd.DataFrame([_apply_row_write_rules(row) for _, row in archive_rows.iterrows()]))
@@ -411,12 +507,17 @@ def emit_outputs(
         mutated_df.to_excel(writer, sheet_name="snapshot", index=False)
 
     summary = {
+        "status": "ready" if len(review_rows) == 0 else "blocked",
         "store_name": snapshot.store_name,
         "snapshot_rows": int(len(mutated_df)),
+        "selected_rows": int((mutated_df["selected_for_intent"] == "yes").sum()) if "selected_for_intent" in mutated_df.columns else 0,
         "active_rows": int(len(final_active)),
         "archive_rows": int(len(final_archive)),
         "review_rows": int(len(review_rows)),
         "action_counts": mutated_df["intent_action"].value_counts().to_dict(),
+        "repair_rows": int((mutated_df["intent_action"] == "repair_active_stock_units").sum()),
+        "already_numeric_rows": int((mutated_df["intent_action"] == "active_stock_units_already_numeric").sum()),
+        "blocked_rows": int((mutated_df["intent_action"] == "blocked_no_active_warehouse_pattern").sum()),
         "active_output": str(active_out),
         "archive_output": str(archive_out),
         "review_output": str(review_out),

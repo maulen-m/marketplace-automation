@@ -907,15 +907,28 @@ def _step_fill_price_js(price: Any, pp1: Any, pp2: Any, barcode: str) -> str:
   }};
 
   const pick = (regexes) => inputs.find(el => regexes.some(rx => rx.test(ctx(el))));
-  let priceInput = pick([/цена/, /price/, /₸/i]) || inputs[0];
-  const used = new Set([priceInput]);
+  const stockInputsByTestId = inputs.filter(
+    el => norm(el.getAttribute && el.getAttribute('data-testid')) === 'edit-stock-input'
+  );
+  const stockInputs = stockInputsByTestId.length ? stockInputsByTestId : [];
+  let priceInput = inputs.find(el => !stockInputs.includes(el)) || null;
   let barcodeInput = null;
-  const barcodeCandidate = pick([/штрих|barcode|bar code/i]);
-  if (barcodeCandidate && !used.has(barcodeCandidate)) {{
-    barcodeInput = barcodeCandidate;
-    used.add(barcodeInput);
+  if (priceInput) {{
+    const barcodeCandidate = inputs.find(
+      el => el !== priceInput && !stockInputs.includes(el) && /штрих|barcode|bar code/i.test(ctx(el))
+    );
+    if (barcodeCandidate) barcodeInput = barcodeCandidate;
+  }} else {{
+    priceInput = pick([/цена/, /price/, /₸/i]) || inputs[0];
+    const used = new Set([priceInput]);
+    const barcodeCandidate = pick([/штрих|barcode|bar code/i]);
+    if (barcodeCandidate && !used.has(barcodeCandidate)) {{
+      barcodeInput = barcodeCandidate;
+      used.add(barcodeInput);
+    }}
+    stockInputs.push(...inputs.filter(el => !used.has(el)));
   }}
-  const stockInputs = inputs.filter(el => !used.has(el));
+  if (!priceInput) priceInput = inputs[0] || null;
   if (stockInputs.length < 1) return JSON.stringify({{ok:false, reason:'stock_inputs_not_found'}});
 
   const setVal = (el, val) => {{

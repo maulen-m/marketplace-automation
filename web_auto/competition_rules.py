@@ -7,6 +7,7 @@ from inventory.size_text_extraction import extract_size_from_offer_text, extract
 
 COMPETITION_SCOPE_DELIVERY_DAYS_THRESHOLD = 10
 LINE52_PROBABLE_3XL_FLOOR_KZT = 8845
+LINE52_PUBLIC_SIZE_FLOOR_OVERRIDES_KZT: dict[str, int] = {}
 
 COMPETITION_SCOPE_FLOOR_SKU_KEYS: dict[str, str] = {
     "LINE52": "CL_OC_MEN_LINE52_BLACK",
@@ -18,10 +19,12 @@ COMPETITION_SCOPE_FLOOR_SKU_KEYS: dict[str, str] = {
 
 LINE52_PARTNER_COMPETITIVE_MIDS = {
     "12456074",  # ИП Бектасова А А
+    "30431580",  # The One Million DLL
 }
 
 LINE52_PARTNER_COMPETITIVE_NAME_TOKENS = (
     "ип бектасова а а",
+    "the one million dll",
 )
 
 _TOKEN_SPLIT_RE = re.compile(r"[^A-Z0-9]+")
@@ -35,10 +38,11 @@ _LINE52_MANUAL_4XL_EXCEPTION_SKUS = {
 @dataclass
 class Line52PricingProfile:
     default_profile: str = "aggressive"
-    probable_3xl_profile: str = "conservative"
+    probable_3xl_profile: str = "aggressive"
     conservative_floor_kzt: int = LINE52_PROBABLE_3XL_FLOOR_KZT
     profile_by_sku_key: dict[str, str] = field(default_factory=dict)
     profile_by_url: dict[str, str] = field(default_factory=dict)
+    floor_by_public_size: dict[str, int] = field(default_factory=dict)
 
 
 DEFAULT_LINE52_PRICING_PROFILE = Line52PricingProfile()
@@ -52,14 +56,16 @@ def set_line52_pricing_profile(profile: Line52PricingProfile | Any | None) -> No
             default_profile=DEFAULT_LINE52_PRICING_PROFILE.default_profile,
             probable_3xl_profile=DEFAULT_LINE52_PRICING_PROFILE.probable_3xl_profile,
             conservative_floor_kzt=DEFAULT_LINE52_PRICING_PROFILE.conservative_floor_kzt,
+            floor_by_public_size=dict(DEFAULT_LINE52_PRICING_PROFILE.floor_by_public_size),
         )
         return
 
     default_profile = str(getattr(profile, "default_profile", "aggressive")).strip().lower()
-    probable_3xl_profile = str(getattr(profile, "probable_3xl_profile", "conservative")).strip().lower()
+    probable_3xl_profile = str(getattr(profile, "probable_3xl_profile", "aggressive")).strip().lower()
     conservative_floor_kzt = int(getattr(profile, "conservative_floor_kzt", LINE52_PROBABLE_3XL_FLOOR_KZT))
     profile_by_sku_key_raw = getattr(profile, "profile_by_sku_key", {}) or {}
     profile_by_url_raw = getattr(profile, "profile_by_url", {}) or {}
+    floor_by_public_size_raw = getattr(profile, "floor_by_public_size", {}) or {}
 
     if default_profile not in {"aggressive", "conservative"}:
         raise ValueError("line52 default_profile must be aggressive or conservative")
@@ -71,6 +77,8 @@ def set_line52_pricing_profile(profile: Line52PricingProfile | Any | None) -> No
         raise ValueError("line52 profile_by_sku_key must be a mapping")
     if not isinstance(profile_by_url_raw, dict):
         raise ValueError("line52 profile_by_url must be a mapping")
+    if not isinstance(floor_by_public_size_raw, dict):
+        raise ValueError("line52 floor_by_public_size must be a mapping")
 
     valid_profiles = {"aggressive", "conservative"}
     profile_by_sku_key: dict[str, str] = {}
@@ -93,12 +101,26 @@ def set_line52_pricing_profile(profile: Line52PricingProfile | Any | None) -> No
             raise ValueError("line52 profile_by_url values must be aggressive or conservative")
         profile_by_url[normalized_key] = normalized_profile
 
+    floor_by_public_size: dict[str, int] = {}
+    for key, value in floor_by_public_size_raw.items():
+        normalized_key = _normalize_public_size_key(key)
+        if not normalized_key:
+            raise ValueError("line52 floor_by_public_size keys must be valid adult public sizes")
+        try:
+            normalized_floor = int(value)
+        except Exception as exc:  # pragma: no cover - defensive branch
+            raise ValueError("line52 floor_by_public_size values must be positive integers") from exc
+        if normalized_floor <= 0:
+            raise ValueError("line52 floor_by_public_size values must be positive integers")
+        floor_by_public_size[normalized_key] = normalized_floor
+
     _ACTIVE_LINE52_PRICING_PROFILE = Line52PricingProfile(
         default_profile=default_profile,
         probable_3xl_profile=probable_3xl_profile,
         conservative_floor_kzt=conservative_floor_kzt,
         profile_by_sku_key=profile_by_sku_key,
         profile_by_url=profile_by_url,
+        floor_by_public_size=floor_by_public_size,
     )
 
 
@@ -113,6 +135,7 @@ def get_line52_pricing_profile() -> Line52PricingProfile:
         conservative_floor_kzt=_ACTIVE_LINE52_PRICING_PROFILE.conservative_floor_kzt,
         profile_by_sku_key=dict(_ACTIVE_LINE52_PRICING_PROFILE.profile_by_sku_key),
         profile_by_url=dict(_ACTIVE_LINE52_PRICING_PROFILE.profile_by_url),
+        floor_by_public_size=dict(_ACTIVE_LINE52_PRICING_PROFILE.floor_by_public_size),
     )
 
 
@@ -197,6 +220,20 @@ def _normalize_offer_url_key(value: Any) -> str:
     return text
 
 
+def _normalize_public_size_key(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    text = text.replace("Х", "X")
+    if text == "XXL":
+        text = "2XL"
+    elif text == "XXXL":
+        text = "3XL"
+    elif text == "XXXXL":
+        text = "4XL"
+    return text if text in {"XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"} else ""
+
+
 def line52_public_size_hint(row: dict[str, Any] | None, row_text: str | None = "") -> str:
     if not isinstance(row, dict):
         return ""
@@ -213,21 +250,21 @@ def line52_public_size_hint(row: dict[str, Any] | None, row_text: str | None = "
 
     candidates: set[str] = set()
     for key in ("size_from_url", "size_from_offer_name", "effective_final_size", "final_attached_size", "Human_edit_size"):
-        val = str(row.get(key) or "").strip().upper()
-        if val in {"3XL", "4XL"}:
+        val = _normalize_public_size_key(row.get(key))
+        if val:
             candidates.add(val)
 
     if raw_url:
         size_url, domain_url = extract_size_from_url(raw_url)
         if domain_url == "adult":
-            val = str(size_url or "").strip().upper()
-            if val in {"3XL", "4XL"}:
+            val = _normalize_public_size_key(size_url)
+            if val:
                 candidates.add(val)
     if raw_name:
         size_name, domain_name = extract_size_from_offer_text(raw_name)
         if domain_name == "adult":
-            val = str(size_name or "").strip().upper()
-            if val in {"3XL", "4XL"}:
+            val = _normalize_public_size_key(size_name)
+            if val:
                 candidates.add(val)
 
     return next(iter(candidates)) if len(candidates) == 1 else ""
@@ -257,6 +294,22 @@ def resolve_line52_pricing_profile(row: dict[str, Any] | None, row_text: str | N
     return profile.default_profile
 
 
+def resolve_line52_floor_override_kzt(row: dict[str, Any] | None, row_text: str | None = "") -> int | None:
+    if classify_competition_scope(row, row_text) != "LINE52":
+        return None
+    public_size = line52_public_size_hint(row, row_text)
+    if not public_size:
+        return None
+    raw = get_line52_pricing_profile().floor_by_public_size.get(public_size)
+    if raw is None:
+        return None
+    try:
+        floor = int(raw)
+    except Exception:
+        return None
+    return floor if floor > 0 else None
+
+
 def effective_competition_floor_kzt(
     row: dict[str, Any] | None,
     floor_by_sku_key: dict[str, int] | None,
@@ -266,6 +319,9 @@ def effective_competition_floor_kzt(
     base_floor = competition_floor_kzt(scope, floor_by_sku_key)
     if scope != "LINE52":
         return base_floor
+    size_floor_override = resolve_line52_floor_override_kzt(row, row_text)
+    if size_floor_override is not None:
+        return int(size_floor_override)
     profile_name = resolve_line52_pricing_profile(row, row_text)
     if profile_name != "conservative":
         return base_floor
