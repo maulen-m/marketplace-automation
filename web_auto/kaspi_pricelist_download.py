@@ -95,11 +95,22 @@ def _select_sale_state(page: Page, sale_state: str, sale_state_select=None) -> s
 def _open_pricelist_dropdown(page: Page):
     button = page.locator("button").filter(has_text=re.compile(r"Прайс-лист")).first
     button.click()
-    # Kaspi sometimes renders the Excel export item before the download handler
-    # is ready; clicking during that brief loading state produces no download.
-    page.wait_for_timeout(5000)
     dropdown_item = page.locator("a.dropdown-item").filter(has_text="Скачать в Excel").first
     dropdown_item.wait_for(timeout=15000, state="visible")
+    # Kaspi can render the Excel export item while it is still disabled/loading.
+    # Clicking during that state silently produces no download, especially on
+    # larger STORE-B active lists, so wait for the real enabled export control.
+    page.wait_for_function(
+        """(el) => {
+            const cls = String(el.className || "");
+            const ariaDisabled = el.getAttribute("aria-disabled");
+            return !cls.includes("is-disabled")
+                && !cls.includes("loading")
+                && ariaDisabled !== "true";
+        }""",
+        arg=dropdown_item.element_handle(timeout=15000),
+        timeout=60000,
+    )
     return dropdown_item
 
 
