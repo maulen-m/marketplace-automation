@@ -393,44 +393,17 @@ def execute_offer_run_plan(
         result["block_reason"] = "build_summary_blocked"
 
     if plan.mode == "confirm" and result["status"] == "success":
-        upload_summary = deps["run_kaspi_pricelist_upload"](
-            store_name=creds["store_name"],
-            email=creds["email"],
-            password=creds["password"],
-            file_paths=[Path(build_summary["archive_output"]), Path(build_summary["active_output"])],
-            run_dir=effective_run_dir / "upload",
-            headless=headless,
-            timeout_seconds=int(plan.request.timeout_seconds),
-            processing_grace_seconds=int(plan.request.processing_grace_seconds),
-        )
-        result["upload"] = upload_summary
-        if upload_summary.get("status") != "success":
-            result["status"] = "failed"
-        elif plan.request.verify:
-            verify_download = deps["run_kaspi_pricelist_download"](
-                store_name=creds["store_name"],
-                email=creds["email"],
-                password=creds["password"],
-                run_dir=effective_run_dir / "verify",
-                headless=headless,
-            )
-            result["verify_download"] = verify_download
-            if verify_download.get("status") != "success":
-                result["status"] = "failed"
-            else:
-                after_paths = {row["sale_state"]: Path(row["saved_path"]) for row in verify_download.get("downloads", [])}
-                after_snapshot = deps["build_store_snapshot"](
-                    active_path=after_paths["ACTIVE"],
-                    archive_path=after_paths["ARCHIVE"],
-                    store_name=creds["store_name"],
-                    offers_book_path=Path(plan.request.offers_book_path),
-                    truth_xlsx_path=Path(plan.request.truth_xlsx_path),
-                )
-                verify_summary = deps["verify_uploaded_state"](before_df=mutated_df, after_snapshot=after_snapshot)
-                result["verify"] = verify_summary
-                if int(verify_summary.get("mismatch_count", 0)) != 0:
-                    result["status"] = "failed"
-    elif plan.mode == "confirm":
+        result["status"] = "blocked"
+        result["block_reason"] = "legacy_archive_active_pricelist_upload_disabled_use_safe_active_patch"
+        result["upload"] = {
+            "status": "skipped",
+            "reason": "offer-run legacy dispatch would upload ARCHIVE plus ACTIVE; use kaspi-pricelist safe-active-patch for guarded live changes",
+        }
+        _json_dump(run_dir / "dispatch_result.json", result)
+        _update_offer_run_summary(run_dir, {"status": "blocked", "dispatch_status": "blocked", "dispatch_result": result})
+        return result
+
+    if plan.mode == "confirm":
         result["upload"] = {"status": "skipped", "reason": "build_summary_blocked"}
 
     _json_dump(run_dir / "dispatch_result.json", result)

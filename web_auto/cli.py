@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,30 @@ from .kaspi_hourly_snapshot import (
     run_hourly_snapshot,
 )
 from .kaspi_marketing import default_marketing_run_dir, resolve_marketing_credentials, run_kaspi_marketing_fetch
+from .kaspi_marketing_directapi_controls import (
+    DEFAULT_RUN_ROOT as DEFAULT_DIRECTAPI_CONTROL_RUN_ROOT,
+    DirectAPIControlPlanError,
+    run_directapi_control,
+)
+from .kaspi_marketing_directapi_pipeline import (
+    DEFAULT_MONITORING_RUN_ROOT as DEFAULT_MARKETING_MONITORING_RUN_ROOT,
+    DEFAULT_PIPELINE_RUN_ROOT as DEFAULT_DIRECTAPI_PIPELINE_RUN_ROOT,
+    KaspiMarketingPipelineError,
+    run_campaign_mapper,
+    run_monitoring_packet,
+)
+from .kaspi_marketing_line31 import (
+    DEFAULT_ANALYSIS_RUN_ROOT as DEFAULT_LINE31_ANALYSIS_RUN_ROOT,
+    DEFAULT_FETCH_RUN_ROOT as DEFAULT_LINE31_FETCH_RUN_ROOT,
+    DEFAULT_RECOMMEND_RUN_ROOT as DEFAULT_LINE31_RECOMMEND_RUN_ROOT,
+    DEFAULT_SCOPE_CONFIG as DEFAULT_LINE31_SCOPE_CONFIG,
+    DEFAULT_SCOPE_RUN_ROOT as DEFAULT_LINE31_SCOPE_RUN_ROOT,
+    LINE31MarketingError,
+    analyze_line31_snapshots,
+    resolve_line31_scope,
+    run_line31_fetch,
+    run_line31_recommend,
+)
 from .marketing_experiments import (
     DEFAULT_AB_ROOT,
     DEFAULT_CHANGE_LOG,
@@ -60,6 +85,16 @@ from .acmewear_bundle_activation import (
     BundleActivationError,
     build_acmewear_bundle_activation_pack,
 )
+from .scheduled_checkpoints import (
+    DEFAULT_CONFIG_PATH as DEFAULT_SCHEDULED_CHECKPOINT_CONFIG_PATH,
+    DEFAULT_RUN_ROOT as DEFAULT_SCHEDULED_CHECKPOINT_RUN_ROOT,
+    ScheduledCheckpointError,
+    due_jobs,
+    get_job,
+    load_schedule_config,
+    run_due_jobs,
+    run_job,
+)
 from .experiment_dashboard import (
     DEFAULT_DASHBOARD_CACHE_DIR,
     DEFAULT_DASHBOARD_PORT,
@@ -89,6 +124,12 @@ from .kaspi_pending_trash_dispute import (
 )
 from .kaspi_pricelist_download import default_run_dir, run_kaspi_pricelist_download
 from .kaspi_pricelist_ops import apply_intent, build_store_snapshot, emit_outputs, verify_uploaded_state
+from .kaspi_pricelist_safe_patch import (
+    SAFE_ACTIVE_CONFIRM_PHRASE,
+    SafeActivePatchError,
+    build_safe_active_patch,
+    verify_safe_active_upload,
+)
 from .kaspi_pricelist_upload import resolve_upload_file_paths, run_kaspi_pricelist_upload
 from .kaspi_snapshot_config import SnapshotConfigError, load_kaspi_snapshot_config
 from .kaspi_variant_refresh import run_daily_variant_refresh
@@ -531,8 +572,33 @@ def main(argv: list[str] | None = None) -> int:
     upload_parser.add_argument("--file", action="append", dest="files", help="Upload one or more workbook paths in explicit order")
     upload_parser.add_argument("--timeout-seconds", type=int, default=900, help="History poll timeout per file")
     upload_parser.add_argument("--processing-grace-seconds", type=int, default=900, help="Extra history poll grace after merchant processing starts")
+    upload_parser.add_argument(
+        "--confirm-raw-pricelist-upload",
+        action="store_true",
+        help="Required for legacy raw workbook upload; prefer safe-active-patch for price/stock changes",
+    )
     upload_parser.add_argument("--headless", action="store_true", help="Run headless")
     upload_parser.add_argument("--headed", action="store_true", help="Run headful")
+
+    safe_patch_parser = pricelist_subparsers.add_parser(
+        "safe-active-patch",
+        help="Build a full ACTIVE-state pricelist patch with full-sale-surface preservation guards",
+    )
+    safe_patch_parser.add_argument("--store", default="STORE-B", help="Target store name")
+    safe_patch_parser.add_argument("--run-dir", help="Run directory for artifacts")
+    safe_patch_parser.add_argument("--active-path", help="Existing ACTIVE workbook path; downloads fresh if omitted with archive-path")
+    safe_patch_parser.add_argument("--archive-path", help="Existing ARCHIVE workbook path; downloads fresh if omitted with active-path")
+    safe_patch_parser.add_argument("--updates-csv", required=True, help="CSV with SKU and authorized price/PP/preorder values")
+    safe_patch_parser.add_argument("--expected-active-before", type=int, help="Fail unless source ACTIVE row count matches")
+    safe_patch_parser.add_argument("--expected-active-after", type=int, help="Fail unless output ACTIVE row count matches")
+    safe_patch_parser.add_argument("--allow-activate-from-archive", action="store_true", help="Allow target rows to be appended from ARCHIVE into full ACTIVE output")
+    safe_patch_parser.add_argument("--apply", action="store_true", help="Upload the generated full ACTIVE workbook after all guards pass")
+    safe_patch_parser.add_argument("--confirm", help=f"Required phrase for --apply: {SAFE_ACTIVE_CONFIRM_PHRASE}")
+    safe_patch_parser.add_argument("--verify-after-upload", action="store_true", help="Redownload ACTIVE/ARCHIVE and verify the full ACTIVE state after upload")
+    safe_patch_parser.add_argument("--timeout-seconds", type=int, default=900, help="History poll timeout per file")
+    safe_patch_parser.add_argument("--processing-grace-seconds", type=int, default=900, help="Extra history poll grace after merchant processing starts")
+    safe_patch_parser.add_argument("--headless", action="store_true", help="Run headless")
+    safe_patch_parser.add_argument("--headed", action="store_true", help="Run headful")
 
     for sub_name in ("inspect", "build", "sync"):
         sub = pricelist_subparsers.add_parser(sub_name, help=f"{sub_name.capitalize()} merchant pricelists")
@@ -558,6 +624,11 @@ def main(argv: list[str] | None = None) -> int:
         if sub_name == "sync":
             sub.add_argument("--upload", action="store_true", help="Upload generated ARCHIVE and ACTIVE workbooks")
             sub.add_argument("--verify-after-upload", action="store_true", help="Redownload and verify the selected rows after upload")
+            sub.add_argument(
+                "--confirm-legacy-archive-active-upload",
+                action="store_true",
+                help="Required for legacy archive-plus-active upload; safe-active-patch is the preferred live lane",
+            )
 
     acmewear_bundles_parser = subparsers.add_parser("acmewear-bundles", help="ACMEWEAR child-bundle launch helpers")
     acmewear_bundles_subparsers = acmewear_bundles_parser.add_subparsers(dest="acmewear_bundles_command", required=True)
@@ -611,6 +682,138 @@ def main(argv: list[str] | None = None) -> int:
     marketing_fetch.add_argument("--db-path", default="data/kaspi_marketing.sqlite", help="Local SQLite path")
     marketing_fetch.add_argument("--headless", action="store_true", help="Run headless")
     marketing_fetch.add_argument("--headed", action="store_true", help="Run headful")
+
+    marketing_line31_scope = marketing_subparsers.add_parser(
+        "line31-scope",
+        help="Resolve the dynamic read-only LINE31 campaign and seller-bonus promo scope",
+    )
+    marketing_line31_scope.add_argument("--scope-config", default=str(DEFAULT_LINE31_SCOPE_CONFIG), help="LINE31 scope seed config")
+    marketing_line31_scope.add_argument("--campaign-csv", help="Optional campaign CSV evidence for dynamic discovery")
+    marketing_line31_scope.add_argument("--product-csv", help="Optional product-row CSV evidence for dynamic discovery")
+    marketing_line31_scope.add_argument("--out", help="Optional resolved scope YAML output path")
+    marketing_line31_scope.add_argument("--run-root", default=str(DEFAULT_LINE31_SCOPE_RUN_ROOT), help="Run root for scope artifacts")
+    marketing_line31_scope.add_argument("--timestamp", help="Override artifact timestamp")
+
+    marketing_line31_fetch = marketing_subparsers.add_parser(
+        "line31-fetch",
+        help="Fetch all scoped LINE31 campaign data and seller-bonus promo evidence read-only",
+    )
+    marketing_line31_fetch.add_argument("--scope", default=str(DEFAULT_LINE31_SCOPE_CONFIG), help="Resolved or seed LINE31 scope YAML")
+    marketing_line31_fetch.add_argument("--date", help="Target same-day campaign metric date")
+    marketing_line31_fetch.add_argument("--closed-day", help="Latest closed-day context date")
+    marketing_line31_fetch.add_argument("--include-promos", action="store_true", help="Write seller-bonus promo snapshot rows")
+    marketing_line31_fetch.add_argument("--plan-only", action="store_true", help="Build fetch plan without browser/network fetch")
+    marketing_line31_fetch.add_argument("--run-root", default=str(DEFAULT_LINE31_FETCH_RUN_ROOT), help="Run root for LINE31 fetch artifacts")
+    marketing_line31_fetch.add_argument("--db-path", default="data/kaspi_marketing.sqlite", help="Local SQLite path")
+    marketing_line31_fetch.add_argument("--headless", action="store_true", help="Run headless")
+    marketing_line31_fetch.add_argument("--headed", action="store_true", help="Run headful")
+    marketing_line31_fetch.add_argument("--timestamp", help="Override artifact timestamp")
+
+    marketing_line31_analyze = marketing_subparsers.add_parser(
+        "line31-analyze",
+        help="Analyze LINE31 BID, score, spend, views, and seller-bonus economics",
+    )
+    marketing_line31_analyze.add_argument("--campaign-csv", help="Campaign CSV evidence")
+    marketing_line31_analyze.add_argument("--product-csv", help="Product-row CSV evidence")
+    marketing_line31_analyze.add_argument("--seller-bonus-csv", help="Seller-bonus promo snapshot CSV")
+    marketing_line31_analyze.add_argument("--fetch-summary", help="LINE31_FETCH_SUMMARY.json to resolve CSV inputs from latest fetch")
+    marketing_line31_analyze.add_argument("--since", help="Optional analysis window start label")
+    marketing_line31_analyze.add_argument("--until", help="Optional analysis window end label")
+    marketing_line31_analyze.add_argument("--score-bands", action="store_true", help="Include score-band output")
+    marketing_line31_analyze.add_argument("--emit-report", help="Markdown report output path")
+    marketing_line31_analyze.add_argument("--plan-only", action="store_true", help="Validate command shape without reading inputs")
+    marketing_line31_analyze.add_argument("--run-root", default=str(DEFAULT_LINE31_ANALYSIS_RUN_ROOT), help="Run root for LINE31 analysis artifacts")
+    marketing_line31_analyze.add_argument("--timestamp", help="Override artifact timestamp")
+
+    marketing_line31_recommend = marketing_subparsers.add_parser(
+        "line31-recommend",
+        help="Build owner-reviewable LINE31 recommendations without live writes",
+    )
+    marketing_line31_recommend.add_argument("--analysis-json", required=True, help="LINE31 analysis summary JSON")
+    marketing_line31_recommend.add_argument("--min-snapshots", type=int, default=4, help="Minimum snapshots before action recommendations")
+    marketing_line31_recommend.add_argument("--observed-snapshot-count", type=int, default=0, help="Observed LINE31 snapshot count")
+    marketing_line31_recommend.add_argument("--no-writes", action="store_true", help="Declare recommendation-only mode")
+    marketing_line31_recommend.add_argument("--plan-only", action="store_true", help="Validate command shape without reading inputs")
+    marketing_line31_recommend.add_argument("--run-root", default=str(DEFAULT_LINE31_RECOMMEND_RUN_ROOT), help="Run root for LINE31 recommendation artifacts")
+    marketing_line31_recommend.add_argument("--timestamp", help="Override artifact timestamp")
+
+    marketing_directapi = marketing_subparsers.add_parser(
+        "directapi-control",
+        help="Resolve a dry-run-first DirectAPI BID/budget control plan",
+    )
+    marketing_directapi.add_argument("--plan-file", required=True, help="YAML/JSON control plan path")
+    marketing_directapi.add_argument("--dry-run", action="store_true", help="Resolve and write artifacts without live writes")
+    marketing_directapi.add_argument("--confirm", action="store_true", help="Future live apply mode; currently blocked unless implemented")
+    marketing_directapi.add_argument(
+        "--run-root",
+        default=str(DEFAULT_DIRECTAPI_CONTROL_RUN_ROOT),
+        help="Run root for timestamped DirectAPI control artifacts",
+    )
+    marketing_directapi.add_argument("--timestamp", help="Override artifact timestamp for deterministic reruns")
+
+    marketing_mapper = marketing_subparsers.add_parser(
+        "directapi-map",
+        help="Build a read-only campaign mapper and inert DirectAPI action-plan draft from CSV evidence",
+    )
+    marketing_mapper.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    marketing_mapper.add_argument("--merchant-id", required=True, help="Expected Kaspi Marketing merchant id")
+    marketing_mapper.add_argument("--store-code", required=True, help="Expected seller store code")
+    marketing_mapper.add_argument("--date", required=True, help="Target evidence date YYYY-MM-DD")
+    marketing_mapper.add_argument("--campaign-csv", required=True, help="Read-only campaign CSV evidence")
+    marketing_mapper.add_argument("--product-csv", required=True, help="Read-only campaign product CSV evidence")
+    marketing_mapper.add_argument("--campaign-id", action="append", dest="mapper_campaign_ids", help="Target campaign id")
+    marketing_mapper.add_argument("--campaign-ids", help="Comma-separated target campaign ids")
+    marketing_mapper.add_argument("--target-contains", action="append", default=[], help="Case-insensitive target text filter")
+    marketing_mapper.add_argument("--product-sku", action="append", default=[], help="Target product SKU")
+    marketing_mapper.add_argument("--merchant-sku", action="append", default=[], help="Target merchant SKU")
+    marketing_mapper.add_argument(
+        "--operation",
+        action="append",
+        dest="mapper_operations",
+        default=[],
+        choices=["product_bid", "campaign_budget", "product_status", "campaign_resume"],
+        help="Optional inert action draft operation; repeat for multi-step plans",
+    )
+    marketing_mapper.add_argument(
+        "--operations",
+        help="Comma-separated inert action draft operations, in execution order",
+    )
+    marketing_mapper.add_argument("--expected-current-bid", help="Old-value gate for product_bid")
+    marketing_mapper.add_argument("--new-bid", help="Target bid for product_bid")
+    marketing_mapper.add_argument("--expected-current-budget", help="Old-value gate for campaign_budget")
+    marketing_mapper.add_argument("--new-daily-budget", help="Target daily budget for campaign_budget")
+    marketing_mapper.add_argument("--expected-current-product-status", help="Old-value gate for product_status")
+    marketing_mapper.add_argument("--target-product-status", help="Target product status for product_status")
+    marketing_mapper.add_argument("--expected-current-campaign-state", help="Old-value gate for campaign_resume")
+    marketing_mapper.add_argument("--owner-approval-text", default="", help="Optional owner phrase capture; does not authorize live writes")
+    marketing_mapper.add_argument(
+        "--run-root",
+        default=str(DEFAULT_DIRECTAPI_PIPELINE_RUN_ROOT),
+        help="Run root for timestamped mapper artifacts",
+    )
+    marketing_mapper.add_argument("--timestamp", help="Override artifact timestamp for deterministic reruns")
+
+    marketing_monitor = marketing_subparsers.add_parser(
+        "monitor-recommendation",
+        help="Build a read-only post-change monitoring and recommendation packet",
+    )
+    marketing_monitor.add_argument("--store", default="ACMEWEAR", help="Target store name")
+    marketing_monitor.add_argument("--merchant-id", required=True, help="Expected Kaspi Marketing merchant id")
+    marketing_monitor.add_argument("--store-code", required=True, help="Expected seller store code")
+    marketing_monitor.add_argument("--campaign-id", action="append", dest="monitor_campaign_ids", help="Campaign id")
+    marketing_monitor.add_argument("--campaign-ids", help="Comma-separated campaign ids")
+    marketing_monitor.add_argument("--change-timestamp", required=True, help="Change timestamp/date anchor")
+    marketing_monitor.add_argument("--campaign-csv", required=True, help="Read-only campaign CSV evidence")
+    marketing_monitor.add_argument("--product-csv", required=True, help="Read-only campaign product CSV evidence")
+    marketing_monitor.add_argument("--window", action="append", default=[], help="Monitoring window/date label; repeatable")
+    marketing_monitor.add_argument("--baseline-campaign-csv", help="Optional baseline campaign CSV")
+    marketing_monitor.add_argument("--baseline-product-csv", help="Optional baseline product CSV")
+    marketing_monitor.add_argument(
+        "--run-root",
+        default=str(DEFAULT_MARKETING_MONITORING_RUN_ROOT),
+        help="Run root for timestamped monitoring artifacts",
+    )
+    marketing_monitor.add_argument("--timestamp", help="Override artifact timestamp for deterministic reruns")
 
     marketing_log = marketing_subparsers.add_parser("log-change", help="Log a timestamped marketing experiment change")
     marketing_log.add_argument("--store", default="ACMEWEAR", help="Target store name")
@@ -817,6 +1020,58 @@ def main(argv: list[str] | None = None) -> int:
     delivery_watch.add_argument("--watch-root", default=str(DEFAULT_DELIVERY_PROMISE_ROOT), help="Delivery watcher artifact root")
     delivery_watch.add_argument("--json", action="store_true", help="JSON output")
 
+    scheduled_parser = subparsers.add_parser(
+        "scheduled-checkpoint",
+        help="Run repo-local scheduled checkpoint jobs with no production writes",
+    )
+    scheduled_subparsers = scheduled_parser.add_subparsers(dest="scheduled_command", required=True)
+
+    scheduled_validate = scheduled_subparsers.add_parser("validate", help="Validate a scheduled checkpoint config")
+    scheduled_validate.add_argument(
+        "--config",
+        default=str(DEFAULT_SCHEDULED_CHECKPOINT_CONFIG_PATH),
+        help="Scheduled checkpoint YAML path",
+    )
+
+    scheduled_list = scheduled_subparsers.add_parser("list", help="List configured checkpoint jobs")
+    scheduled_list.add_argument(
+        "--config",
+        default=str(DEFAULT_SCHEDULED_CHECKPOINT_CONFIG_PATH),
+        help="Scheduled checkpoint YAML path",
+    )
+    scheduled_list.add_argument("--due", action="store_true", help="Only show jobs due at --now")
+    scheduled_list.add_argument("--now", help="Override current local time for due checks")
+    scheduled_list.add_argument(
+        "--run-root",
+        default=str(DEFAULT_SCHEDULED_CHECKPOINT_RUN_ROOT),
+        help="Run root for due-job state",
+    )
+
+    scheduled_run = scheduled_subparsers.add_parser("run", help="Run one checkpoint job or all currently due jobs")
+    scheduled_run.add_argument(
+        "--config",
+        default=str(DEFAULT_SCHEDULED_CHECKPOINT_CONFIG_PATH),
+        help="Scheduled checkpoint YAML path",
+    )
+    scheduled_run.add_argument("--job", help="Exact job_id to run")
+    scheduled_run.add_argument("--due", action="store_true", help="Run due jobs instead of one explicit --job")
+    scheduled_run.add_argument(
+        "--mode",
+        choices=["plan", "dry-live", "live-readonly"],
+        default="plan",
+        help="plan writes only manifests; dry-live executes dry_live_argv; live-readonly executes read-only argv",
+    )
+    scheduled_run.add_argument("--force", action="store_true", help="Ignore completed-job state for due jobs")
+    scheduled_run.add_argument("--allow-stale", action="store_true", help="Allow stale/failing source steps to close YELLOW")
+    scheduled_run.add_argument("--now", help="Override current local time for due checks")
+    scheduled_run.add_argument(
+        "--run-root",
+        default=str(DEFAULT_SCHEDULED_CHECKPOINT_RUN_ROOT),
+        help="Run root for artifacts and due-job state",
+    )
+    scheduled_run.add_argument("--timestamp", help="Override artifact timestamp for explicit --job runs")
+    scheduled_run.add_argument("--max-jobs", type=int, help="Maximum due jobs to run")
+
     args = parser.parse_args(argv)
 
     if args.env_file:
@@ -827,6 +1082,112 @@ def main(argv: list[str] | None = None) -> int:
             load_dotenv(default_env)
 
     _setup_logging(args.verbose, args.quiet)
+
+    if args.command == "scheduled-checkpoint":
+        try:
+            schedule_config = load_schedule_config(args.config)
+            timezone_name = str(schedule_config.get("timezone") or "Asia/Almaty")
+            now_dt = None
+            if getattr(args, "now", None):
+                now_text = str(args.now).replace("T", " ")
+                now_dt = datetime.fromisoformat(now_text)
+                if now_dt.tzinfo is None:
+                    now_dt = now_dt.replace(tzinfo=ZoneInfo(timezone_name))
+        except (ScheduledCheckpointError, ValueError) as exc:
+            logging.error(str(exc))
+            return 2
+
+        if args.scheduled_command == "validate":
+            payload = {
+                "status": "ok",
+                "schema_version": schedule_config.get("schema_version"),
+                "timezone": schedule_config.get("timezone"),
+                "job_count": len(schedule_config.get("jobs") or []),
+                "production_write_action_authorized": False,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Scheduled checkpoint config OK: jobs=%s timezone=%s",
+                    payload["job_count"],
+                    payload["timezone"],
+                )
+            return 0
+
+        if args.scheduled_command == "list":
+            selected_jobs = due_jobs(
+                schedule_config,
+                now=now_dt,
+                run_root=Path(args.run_root),
+            ) if args.due else list(schedule_config.get("jobs") or [])
+            payload = {
+                "status": "success",
+                "due_only": bool(args.due),
+                "job_count": len(selected_jobs),
+                "jobs": [
+                    {
+                        "job_id": job.get("job_id"),
+                        "title": job.get("title"),
+                        "scheduled_at": job.get("scheduled_at"),
+                        "command_count": len(job.get("commands") or []),
+                        "owner_approval_required_for_live_writes": job.get(
+                            "owner_approval_required_for_live_writes",
+                            True,
+                        ),
+                    }
+                    for job in selected_jobs
+                ],
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                for job in payload["jobs"]:
+                    print(
+                        f"{job['job_id']}  {job['scheduled_at']}  "
+                        f"commands={job['command_count']}  {job['title']}"
+                    )
+            return 0
+
+        if args.scheduled_command == "run":
+            try:
+                if bool(args.job) == bool(args.due):
+                    raise ScheduledCheckpointError("choose exactly one of --job or --due")
+                if args.job:
+                    job = get_job(schedule_config, args.job)
+                    summary = run_job(
+                        schedule_config,
+                        job,
+                        mode=args.mode,
+                        run_root=Path(args.run_root),
+                        timestamp=args.timestamp,
+                        allow_stale=bool(args.allow_stale),
+                        mark_done=not bool(args.force),
+                    )
+                else:
+                    summary = run_due_jobs(
+                        schedule_config,
+                        mode=args.mode,
+                        run_root=Path(args.run_root),
+                        now=now_dt,
+                        force=bool(args.force),
+                        allow_stale=bool(args.allow_stale),
+                        max_jobs=args.max_jobs,
+                    )
+            except (ScheduledCheckpointError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
+            else:
+                logging.info(
+                    "Scheduled checkpoint: status=%s gate=%s jobs=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    summary.get("jobs_run", 1),
+                    summary.get("run_dir", ""),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
 
     if args.command == "validate-config":
         try:
@@ -1304,6 +1665,278 @@ def main(argv: list[str] | None = None) -> int:
             headless = True
 
         env_path = Path(args.env_file) if args.env_file else Path(".env")
+
+        if args.marketing_command == "line31-scope":
+            try:
+                summary = resolve_line31_scope(
+                    scope_config_path=Path(args.scope_config),
+                    campaign_csv=Path(args.campaign_csv) if args.campaign_csv else None,
+                    product_csv=Path(args.product_csv) if args.product_csv else None,
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                    out=Path(args.out) if args.out else None,
+                )
+            except (LINE31MarketingError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "LINE31 scope: status=%s gate=%s campaigns=%s promos=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    summary.get("campaign_count"),
+                    summary.get("promo_count"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "line31-fetch":
+            try:
+                summary = run_line31_fetch(
+                    scope_path=Path(args.scope),
+                    target_date=args.date,
+                    closed_day=args.closed_day,
+                    include_promos=bool(args.include_promos),
+                    plan_only=bool(args.plan_only),
+                    run_root=Path(args.run_root),
+                    db_path=Path(args.db_path),
+                    env_file=env_path,
+                    headless=headless,
+                    timestamp=args.timestamp,
+                )
+            except (LINE31MarketingError, ValueError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "LINE31 fetch: status=%s gate=%s campaigns=%s promos=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    len(summary.get("campaign_ids") or []),
+                    len(summary.get("promo_ids") or []),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "line31-analyze":
+            if args.plan_only:
+                summary = {
+                    "schema_version": "web_auto.kaspi_marketing_line31.v1",
+                    "status": "planned",
+                    "gate": "GREEN",
+                    "live_writes_executed": False,
+                    "command": "line31-analyze",
+                }
+                if args.json:
+                    print(json.dumps(summary, ensure_ascii=False, indent=2))
+                else:
+                    logging.info("LINE31 analyze plan only")
+                return 0
+            campaign_csv = Path(args.campaign_csv) if args.campaign_csv else None
+            product_csv = Path(args.product_csv) if args.product_csv else None
+            seller_bonus_csv = Path(args.seller_bonus_csv) if args.seller_bonus_csv else None
+            if args.fetch_summary:
+                try:
+                    fetch_summary = json.loads(Path(args.fetch_summary).read_text(encoding="utf-8"))
+                except Exception as exc:
+                    logging.error("could not read fetch summary: %s", exc)
+                    return 2
+                if campaign_csv is None and str(fetch_summary.get("campaign_csv") or "").strip():
+                    campaign_csv = Path(str(fetch_summary.get("campaign_csv")))
+                if product_csv is None and str(fetch_summary.get("product_csv") or "").strip():
+                    product_csv = Path(str(fetch_summary.get("product_csv")))
+                if seller_bonus_csv is None and str(fetch_summary.get("seller_bonus_csv") or "").strip():
+                    seller_bonus_csv = Path(str(fetch_summary.get("seller_bonus_csv")))
+            if campaign_csv is None or product_csv is None:
+                logging.error("line31-analyze requires --campaign-csv and --product-csv or --fetch-summary")
+                return 2
+            try:
+                summary = analyze_line31_snapshots(
+                    campaign_csv=campaign_csv,
+                    product_csv=product_csv,
+                    seller_bonus_csv=seller_bonus_csv,
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                    emit_report=Path(args.emit_report) if args.emit_report else None,
+                )
+            except (LINE31MarketingError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "LINE31 analysis: status=%s gate=%s rows=%s report=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    summary.get("analysis_row_count"),
+                    summary.get("report_path"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "line31-recommend":
+            if args.plan_only:
+                summary = {
+                    "schema_version": "web_auto.kaspi_marketing_line31.v1",
+                    "status": "planned",
+                    "gate": "GREEN",
+                    "live_writes_executed": False,
+                    "command": "line31-recommend",
+                }
+                if args.json:
+                    print(json.dumps(summary, ensure_ascii=False, indent=2))
+                else:
+                    logging.info("LINE31 recommend plan only")
+                return 0
+            try:
+                summary = run_line31_recommend(
+                    analysis_json=Path(args.analysis_json),
+                    min_snapshots=args.min_snapshots,
+                    observed_snapshot_count=args.observed_snapshot_count,
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                )
+            except (LINE31MarketingError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "LINE31 recommendations: status=%s gate=%s recommendations=%s packet=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    len(summary.get("recommendations") or []),
+                    summary.get("packet_path"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "directapi-control":
+            try:
+                summary = run_directapi_control(
+                    plan_file=Path(args.plan_file),
+                    dry_run=bool(args.dry_run),
+                    confirm=bool(args.confirm),
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                    env=os.environ,
+                )
+            except (DirectAPIControlPlanError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi Marketing DirectAPI control: status=%s gate=%s actions=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    summary.get("action_count"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "directapi-map":
+            campaign_ids: list[str] = []
+            for item in getattr(args, "mapper_campaign_ids", []) or []:
+                text = str(item or "").strip()
+                if text:
+                    campaign_ids.append(text)
+            for item in str(getattr(args, "campaign_ids", "") or "").split(","):
+                text = str(item or "").strip()
+                if text:
+                    campaign_ids.append(text)
+            operations: list[str] = []
+            for item in getattr(args, "mapper_operations", []) or []:
+                text = str(item or "").strip()
+                if text:
+                    operations.append(text)
+            for item in str(getattr(args, "operations", "") or "").split(","):
+                text = str(item or "").strip()
+                if text:
+                    operations.append(text)
+            try:
+                summary = run_campaign_mapper(
+                    store=args.store,
+                    merchant_id=args.merchant_id,
+                    store_code=args.store_code,
+                    target_date=args.date,
+                    campaign_csv=Path(args.campaign_csv),
+                    product_csv=Path(args.product_csv),
+                    campaign_ids=campaign_ids,
+                    target_contains=args.target_contains or [],
+                    product_skus=args.product_sku or [],
+                    merchant_skus=args.merchant_sku or [],
+                    operations=operations,
+                    expected_current_bid=args.expected_current_bid,
+                    new_bid=args.new_bid,
+                    expected_current_budget=args.expected_current_budget,
+                    new_daily_budget=args.new_daily_budget,
+                    expected_current_product_status=args.expected_current_product_status,
+                    target_product_status=args.target_product_status,
+                    expected_current_campaign_state=args.expected_current_campaign_state,
+                    owner_approval_text=args.owner_approval_text,
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                )
+            except (KaspiMarketingPipelineError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi Marketing mapper: status=%s gate=%s candidates=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    summary.get("candidate_rows"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
+
+        if args.marketing_command == "monitor-recommendation":
+            campaign_ids: list[str] = []
+            for item in getattr(args, "monitor_campaign_ids", []) or []:
+                text = str(item or "").strip()
+                if text:
+                    campaign_ids.append(text)
+            for item in str(getattr(args, "campaign_ids", "") or "").split(","):
+                text = str(item or "").strip()
+                if text:
+                    campaign_ids.append(text)
+            try:
+                summary = run_monitoring_packet(
+                    store=args.store,
+                    merchant_id=args.merchant_id,
+                    store_code=args.store_code,
+                    campaign_ids=campaign_ids,
+                    change_timestamp=args.change_timestamp,
+                    campaign_csv=Path(args.campaign_csv),
+                    product_csv=Path(args.product_csv),
+                    windows=args.window or [],
+                    baseline_campaign_csv=Path(args.baseline_campaign_csv) if args.baseline_campaign_csv else None,
+                    baseline_product_csv=Path(args.baseline_product_csv) if args.baseline_product_csv else None,
+                    run_root=Path(args.run_root),
+                    timestamp=args.timestamp,
+                )
+            except (KaspiMarketingPipelineError, FileExistsError) as exc:
+                logging.error(str(exc))
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi Marketing monitoring: status=%s gate=%s campaigns=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("gate"),
+                    ",".join(summary.get("campaign_ids", [])),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("gate") in {"GREEN", "YELLOW"} else 4
 
         if args.marketing_command == "log-change":
             summary = log_change_event(
@@ -2191,6 +2824,18 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.pricelist_command == "upload":
             run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            if not args.confirm_raw_pricelist_upload:
+                payload = {
+                    "status": "blocked",
+                    "error": "raw_pricelist_upload_requires_--confirm-raw-pricelist-upload",
+                    "preferred_command": "kaspi-pricelist safe-active-patch",
+                    "reason": "Kaspi pricelist upload is a full sale-surface state operation, not a row patch.",
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
             try:
                 file_paths = resolve_upload_file_paths(archive=args.archive, active=args.active, files=args.files)
             except ValueError as exc:
@@ -2220,8 +2865,130 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0 if summary.get("status") == "success" else 4
 
+        if args.pricelist_command == "safe-active-patch":
+            run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            if args.active_path and args.archive_path:
+                active_path = Path(args.active_path)
+                archive_path = Path(args.archive_path)
+                download_summary: dict[str, Any] = {"status": "skipped", "reason": "using_explicit_source_paths"}
+            else:
+                download_summary = run_kaspi_pricelist_download(
+                    store_name=creds["store_name"],
+                    email=creds["email"],
+                    password=creds["password"],
+                    run_dir=run_dir / "download",
+                    headless=headless,
+                )
+                if download_summary.get("status") != "success":
+                    if args.json:
+                        print(json.dumps(download_summary, ensure_ascii=False, indent=2))
+                    else:
+                        logging.error("Kaspi pricelist download failed: %s", download_summary.get("error", "unknown_error"))
+                    return 4
+                downloads_by_state = {row["sale_state"]: Path(row["saved_path"]) for row in download_summary.get("downloads", [])}
+                active_path = downloads_by_state["ACTIVE"]
+                archive_path = downloads_by_state["ARCHIVE"]
+
+            try:
+                build_summary = build_safe_active_patch(
+                    active_path=active_path,
+                    archive_path=archive_path,
+                    updates_path=Path(args.updates_csv),
+                    output_dir=run_dir / "safe_active_patch",
+                    store_name=creds["store_name"],
+                    expected_active_before=args.expected_active_before,
+                    expected_active_after=args.expected_active_after,
+                    allow_activate_from_archive=args.allow_activate_from_archive,
+                )
+            except SafeActivePatchError as exc:
+                payload = {"status": "blocked", "error": str(exc), "run_dir": str(run_dir)}
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(str(exc))
+                return 4
+            summary: dict[str, Any] = {
+                "store_name": creds["store_name"],
+                "run_dir": str(run_dir),
+                "download": download_summary,
+                "build": build_summary,
+                "status": build_summary.get("status"),
+            }
+            if args.apply:
+                if args.confirm != SAFE_ACTIVE_CONFIRM_PHRASE:
+                    summary["status"] = "blocked"
+                    summary["apply"] = {
+                        "status": "skipped",
+                        "reason": f"--confirm must equal {SAFE_ACTIVE_CONFIRM_PHRASE}",
+                    }
+                elif build_summary.get("status") != "ready":
+                    summary["status"] = "blocked"
+                    summary["apply"] = {"status": "skipped", "reason": "safe_patch_build_not_ready"}
+                else:
+                    upload_summary = run_kaspi_pricelist_upload(
+                        store_name=creds["store_name"],
+                        email=creds["email"],
+                        password=creds["password"],
+                        file_paths=[Path(build_summary["active_output"])],
+                        run_dir=run_dir / "upload",
+                        headless=headless,
+                        timeout_seconds=args.timeout_seconds,
+                        processing_grace_seconds=args.processing_grace_seconds,
+                    )
+                    summary["apply"] = upload_summary
+                    summary["status"] = "success" if upload_summary.get("status") == "success" else "failed"
+                    if upload_summary.get("status") == "success" and args.verify_after_upload:
+                        verify_download = run_kaspi_pricelist_download(
+                            store_name=creds["store_name"],
+                            email=creds["email"],
+                            password=creds["password"],
+                            run_dir=run_dir / "verify",
+                            headless=headless,
+                        )
+                        summary["verify_download"] = verify_download
+                        if verify_download.get("status") == "success":
+                            after_paths = {row["sale_state"]: Path(row["saved_path"]) for row in verify_download.get("downloads", [])}
+                            verify_summary = verify_safe_active_upload(
+                                intended_active_path=Path(build_summary["active_output"]),
+                                redownloaded_active_path=after_paths["ACTIVE"],
+                                updates_path=Path(args.updates_csv),
+                            )
+                            summary["verify"] = verify_summary
+                            if verify_summary.get("status") != "ok":
+                                summary["status"] = "failed"
+                        else:
+                            summary["status"] = "failed"
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi safe-active-patch: store=%s status=%s active_before=%s active_after=%s run_dir=%s",
+                    creds["store_name"],
+                    summary.get("status"),
+                    build_summary.get("active_before_count"),
+                    build_summary.get("active_after_count"),
+                    run_dir,
+                )
+            return 0 if summary.get("status") in {"ready", "success"} else 4
+
         if args.pricelist_command in {"inspect", "build", "sync"}:
             run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
+            if args.pricelist_command == "sync" and args.upload and not args.confirm_legacy_archive_active_upload:
+                payload = {
+                    "status": "blocked",
+                    "store_name": creds["store_name"],
+                    "run_dir": str(run_dir),
+                    "upload": {
+                        "status": "skipped",
+                        "reason": "legacy_archive_active_upload_requires_--confirm-legacy-archive-active-upload",
+                        "preferred_command": "kaspi-pricelist safe-active-patch",
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["upload"]["reason"])
+                return 2
             if args.active_path and args.archive_path:
                 active_path = Path(args.active_path)
                 archive_path = Path(args.archive_path)
@@ -2267,6 +3034,17 @@ def main(argv: list[str] | None = None) -> int:
                 "build": build_summary,
             }
             if args.pricelist_command == "sync" and args.upload:
+                if not args.confirm_legacy_archive_active_upload:
+                    summary["upload"] = {
+                        "status": "skipped",
+                        "reason": "legacy_archive_active_upload_requires_--confirm-legacy-archive-active-upload",
+                        "preferred_command": "kaspi-pricelist safe-active-patch",
+                    }
+                    if args.json:
+                        print(json.dumps(summary, ensure_ascii=False, indent=2))
+                    else:
+                        logging.error(summary["upload"]["reason"])
+                    return 2
                 upload_summary = run_kaspi_pricelist_upload(
                     store_name=creds["store_name"],
                     email=creds["email"],

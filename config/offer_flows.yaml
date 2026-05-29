@@ -133,7 +133,7 @@ flows:
       - runs/kaspi_offer_ui_upload
 
   - flow_id: kaspi-pricelist-sync
-    title: Kaspi Pricelist Stock and Price Sync
+    title: Kaspi Pricelist Safe Active-State Patch
     active: true
     goal: existing-offer-maintenance
     artifact_state: existing-merchant-rows
@@ -142,12 +142,13 @@ flows:
     write_surface: merchant-pricelist-ui
     priority: 40
     summary: >
-      Use this flow when merchant rows already exist and only ACTIVE or ARCHIVE sellability,
-      warehouse stock, or upload price must change through downloaded and rebuilt pricelists.
-    primary_entrypoint: web-auto kaspi-pricelist sync
+      Use this flow when merchant rows already exist and only active sellability,
+      warehouse stock, or upload price must change through a full ACTIVE-state
+      replacement workbook. Legacy archive-plus-active sync is exception-only.
+    primary_entrypoint: web-auto kaspi-pricelist safe-active-patch
     command_examples:
-      - python3 -m web_auto.cli kaspi-pricelist sync --store <STORE> --intent <INTENT> --headless
-      - python3 -m web_auto.cli kaspi-pricelist sync --store <STORE> --intent <INTENT> --upload --verify-after-upload --headless
+      - python3 -m web_auto.cli --json kaspi-pricelist safe-active-patch --store <STORE> --updates-csv <updates.csv> --expected-active-before <N> --expected-active-after <N>
+      - python3 -m web_auto.cli --json kaspi-pricelist safe-active-patch --store <STORE> --updates-csv <updates.csv> --expected-active-before <N> --expected-active-after <N> --apply --confirm FULL_ACTIVE_STATE --verify-after-upload --headless
     dry_run_supported: true
     confirm_required: true
     verify_required: true
@@ -155,19 +156,23 @@ flows:
     required_inputs: [store]
     preflight_checks:
       - Fresh ACTIVE and ARCHIVE downloads exist for the target store
-      - Local workbook build has zero stopline review rows for the intended mutation
-      - Backup and edit log rules are satisfied before upload
+      - Full ACTIVE upload workbook preserves all baseline ACTIVE SKUs unless deactivation is explicitly approved
+      - Expected ACTIVE before and after row counts match the owner-approved run scope
+      - Restore baseline ACTIVE workbook exists before any apply
     success_checks:
       - Merchant upload history is green
-      - Post-upload re-download verifies the expected merchant row state
+      - Post-upload re-download verifies the full ACTIVE state and expected target fields
     stoplines:
       - Download failed or stale source files are being reused without approval
+      - Output ACTIVE workbook omits any baseline ACTIVE SKU without explicit owner-approved deactivation
+      - Activation tries to upload ARCHIVE instead of appending approved rows to full ACTIVE
       - Upload result marks truly new rows as unrecognized
       - Post-upload verification shows mismatches
     fallback_flow_ids: []
     docs_refs:
       - Docs/offer_ops/OFFER_STATE_MACHINE.md
       - Docs/offer_ops/RECOVERY_PLAYBOOK.md
+      - Docs/offer_ops/PRICELIST_SAFE_ACTIVE_PATCH_CONTRACT.md
     skill_refs:
       - kaspi-pricelist-download-modify-upload
       - kaspi-offer-ops-control-plane
