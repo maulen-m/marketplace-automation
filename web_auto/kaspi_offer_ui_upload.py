@@ -40,6 +40,19 @@ _STORE_ALIASES = {
     "store-d": "11KZ",
 }
 
+FORBIDDEN_UPLOAD_PRODUCT_CODES = {
+    # Owner decision 2026-06-21: these cards are Nike black long sleeves, not sellable Nike T-shirts.
+    "110261375",
+    "120980444",
+    "120980449",
+    "132848895",
+    "152381039",
+    "157715221",
+}
+FORBIDDEN_UPLOAD_URL_FRAGMENTS = {
+    "sportivnyi-kostjum-18107200-643074",
+}
+
 _COLOR_ALIASES = {
     "black": {"black", "chernyi", "черный", "чёрный"},
     "white": {"white", "belyi", "белый"},
@@ -90,6 +103,21 @@ def _extract_offer_code_from_variant_url(variant_url: Any) -> str:
         return ""
     m = re.search(r"-(\d{6,})(?:[/?#]|$)", text)
     return m.group(1) if m else ""
+
+
+def _forbidden_upload_product_reason(row: dict[str, Any]) -> str:
+    product_code = re.sub(r"\D", "", _norm_text(row.get("product_code")))
+    url_offer_code = _extract_offer_code_from_variant_url(row.get("variant_url"))
+    candidate_codes = {code for code in (product_code, url_offer_code) if code}
+    blocked_codes = sorted(candidate_codes & FORBIDDEN_UPLOAD_PRODUCT_CODES)
+    if blocked_codes:
+        return "forbidden Nike long sleeve product_code=" + ",".join(blocked_codes)
+
+    variant_url = _norm_text(row.get("variant_url")).lower()
+    for fragment in sorted(FORBIDDEN_UPLOAD_URL_FRAGMENTS):
+        if fragment in variant_url:
+            return f"forbidden Nike long sleeve URL fragment={fragment}"
+    return ""
 
 
 def _infer_color_token(*values: Any) -> str:
@@ -257,6 +285,9 @@ def validate_upload_rows(
                 _to_int(row.get(field))
             except Exception:
                 errors.append(f"row {row_no}: invalid numeric {field}={row.get(field)!r}")
+        forbidden_reason = _forbidden_upload_product_reason(row)
+        if forbidden_reason:
+            errors.append(f"row {row_no}: {forbidden_reason}")
         resolved_sku_key = row.get("resolved_sku_key")
         resolved_sku_id = row.get("resolved_sku_id")
         if (_norm_text(resolved_sku_key) or _norm_text(resolved_sku_id)) and not _has_semantic_partner_article(
