@@ -46,7 +46,7 @@ KASPI_DEFAULT_USER_AGENT = (
 )
 KASPI_ACCEPT = "application/json, text/plain, */*"
 KASPI_ACCEPT_LANGUAGE = "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
-DEFAULT_FLOOR_MAP_PATH = Path(__file__).resolve().parents[1] / "exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v6.csv"
+DEFAULT_FLOOR_MAP_PATH = Path(__file__).resolve().parents[1] / "exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v7.csv"
 DELIVERY_DAYS_CACHE_TTL_HOURS = 24
 
 
