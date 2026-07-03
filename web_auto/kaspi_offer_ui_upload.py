@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import subprocess
+import tempfile
 import time
 from collections import Counter
 from datetime import datetime
@@ -15,7 +17,7 @@ from zoneinfo import ZoneInfo
 from openpyxl import load_workbook
 
 ASTANA_TZ = ZoneInfo("Asia/Almaty")
-DEFAULT_ENTRY_URL = "https://kaspi.kz/mc/#/add-product/v2/link-catalog"
+DEFAULT_ENTRY_URL = "https://kaspi.kz/mc/#/add-product/v2"
 
 REQUIRED_COLUMNS = [
     "upload_enabled",
@@ -31,15 +33,36 @@ REQUIRED_COLUMNS = [
     "stock_pp2",
 ]
 
+OPTIONAL_COLUMNS = [
+    "barcode",
+    "product_code",
+    "resolved_sku_key",
+    "resolved_sku_id",
+    "final_attached_size",
+    "ui_entry_url",
+    "ingest_method",
+    "notes",
+]
+
 _STORE_ALIASES = {
     "universal": "UNIVERSAL",
     "storeb": "STOREB",
     "store-b": "STOREB",
     "acmewear": "ACMEWEAR",
+    "only-fit": "ACMEWEAR",
+    "onlyfeed": "ACMEWEAR",
+    "only-feed": "ACMEWEAR",
     "store-c": "MELVIS",
     "store-d": "11KZ",
 }
 
+ALLOWED_UPLOAD_STORE_CODES = {"UNIVERSAL", "STOREB"}
+ALLOWED_UPLOAD_MERCHANT_IDS_BY_STORE = {
+    "UNIVERSAL": "30000001",
+    "STOREB": "30000002",
+}
+FORBIDDEN_UPLOAD_STORE_CODES = {"ACMEWEAR"}
+FORBIDDEN_UPLOAD_MERCHANT_IDS = {"30137883"}
 FORBIDDEN_UPLOAD_PRODUCT_CODES = {
     # Owner decision 2026-06-21: these cards are Nike black long sleeves, not sellable Nike T-shirts.
     "110261375",
@@ -77,6 +100,13 @@ def _to_int(value: Any) -> int:
     return int(float(text))
 
 
+def _merchant_id_text(value: Any) -> str:
+    try:
+        return str(_to_int(value))
+    except Exception:
+        return re.sub(r"\D", "", _norm_text(value))
+
+
 def _normalize_barcode(value: Any) -> str:
     text = _norm_text(value)
     if not text:
@@ -103,6 +133,18 @@ def _extract_offer_code_from_variant_url(variant_url: Any) -> str:
         return ""
     m = re.search(r"-(\d{6,})(?:[/?#]|$)", text)
     return m.group(1) if m else ""
+
+
+def _product_code_for_search(row: dict[str, Any]) -> str:
+    product_code = re.sub(r"\D", "", _norm_text(row.get("product_code")))
+    if product_code:
+        return product_code
+    return _extract_offer_code_from_variant_url(row.get("variant_url"))
+
+
+def _is_unsafe_link_catalog_entry_url(value: Any) -> bool:
+    text = _norm_text(value).lower()
+    return "link-catalog" in text and "code=" not in text
 
 
 def _forbidden_upload_product_reason(row: dict[str, Any]) -> str:
@@ -227,6 +269,10 @@ def load_offer_upload_rows(
             row.get("merchant_offer_name"),
             row.get("expected_kaspi_heading"),
         )
+        for name in OPTIONAL_COLUMNS:
+            if name in {"ui_entry_url", "ingest_method"}:
+                continue
+            row[name] = ws.cell(r, idx.get(name, 0)).value if idx.get(name) else ""
         row["ui_entry_url"] = ws.cell(r, idx.get("ui_entry_url", 0)).value if idx.get("ui_entry_url") else DEFAULT_ENTRY_URL
         row["ingest_method"] = ws.cell(r, idx.get("ingest_method", 0)).value if idx.get("ingest_method") else ""
 
@@ -243,6 +289,13 @@ def validate_upload_rows(
     errors: list[str] = []
     warnings: list[str] = []
     required = [normalize_store_code(s) for s in required_store_codes if normalize_store_code(s)]
+
+    for store in required:
+        if store not in ALLOWED_UPLOAD_STORE_CODES:
+            errors.append(
+                f"store {store} is not allowed for offer upload; allowed stores: "
+                f"{','.join(sorted(ALLOWED_UPLOAD_STORE_CODES))}"
+            )
 
     if not rows:
         errors.append("no active rows to upload")
@@ -277,6 +330,22 @@ def validate_upload_rows(
     ]
     for row in rows:
         row_no = row.get("row_number", "?")
+        store_code = normalize_store_code(row.get("store_code"))
+        merchant_id = _merchant_id_text(row.get("merchant_id"))
+        if store_code not in ALLOWED_UPLOAD_STORE_CODES:
+            errors.append(
+                f"row {row_no}: store {store_code or '<empty>'} is not allowed for offer upload; "
+                f"allowed stores: {','.join(sorted(ALLOWED_UPLOAD_STORE_CODES))}"
+            )
+        if store_code in FORBIDDEN_UPLOAD_STORE_CODES or merchant_id in FORBIDDEN_UPLOAD_MERCHANT_IDS:
+            errors.append(
+                f"row {row_no}: forbidden upload surface store={store_code or '<empty>'} merchant_id={merchant_id or '<empty>'}"
+            )
+        expected_mid_for_store = ALLOWED_UPLOAD_MERCHANT_IDS_BY_STORE.get(store_code)
+        if expected_mid_for_store and merchant_id and merchant_id != expected_mid_for_store:
+            errors.append(
+                f"row {row_no}: merchant_id {merchant_id} does not match store {store_code} expected {expected_mid_for_store}"
+            )
         for field in required_fields:
             if _norm_text(row.get(field)) == "":
                 errors.append(f"row {row_no}: missing {field}")
@@ -285,9 +354,19 @@ def validate_upload_rows(
                 _to_int(row.get(field))
             except Exception:
                 errors.append(f"row {row_no}: invalid numeric {field}={row.get(field)!r}")
+        product_code = re.sub(r"\D", "", _norm_text(row.get("product_code")))
+        url_offer_code = _extract_offer_code_from_variant_url(row.get("variant_url"))
+        if product_code and url_offer_code and product_code != url_offer_code:
+            errors.append(
+                f"row {row_no}: product_code {product_code} does not match variant_url code {url_offer_code}"
+            )
         forbidden_reason = _forbidden_upload_product_reason(row)
         if forbidden_reason:
             errors.append(f"row {row_no}: {forbidden_reason}")
+        if _is_unsafe_link_catalog_entry_url(row.get("ui_entry_url")):
+            errors.append(
+                f"row {row_no}: unsafe ui_entry_url link-catalog without code=; use {DEFAULT_ENTRY_URL} for URL search"
+            )
         resolved_sku_key = row.get("resolved_sku_key")
         resolved_sku_id = row.get("resolved_sku_id")
         if (_norm_text(resolved_sku_key) or _norm_text(resolved_sku_id)) and not _has_semantic_partner_article(
@@ -298,8 +377,8 @@ def validate_upload_rows(
             errors.append(
                 f"row {row_no}: merchant_sku_article must start with resolved_sku_key/resolved_sku_id semantics"
             )
-        if _norm_text(row.get("barcode")) and not _normalize_barcode(row.get("barcode")):
-            warnings.append(f"row {row_no}: barcode ignored (invalid length)")
+        if _norm_text(row.get("barcode")):
+            warnings.append(f"row {row_no}: barcode ignored; Kaspi barcode field is intentionally left empty")
 
     seen: set[tuple[str, str, str]] = set()
     for row in rows:
@@ -391,12 +470,133 @@ end tell
     return parts[0], parts[1], parts[2], parts[3]
 
 
+def _focus_chrome_window(window_index: int) -> int:
+    script = f'''
+tell application "Google Chrome"
+  activate
+  set index of window {int(window_index)} to 1
+end tell
+return "1"
+'''.strip()
+    proc = subprocess.run(["osascript"], input=script, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return 1
+    return int(window_index)
+
+
+def _jxa_focus_and_normalize_window(window_index: int) -> dict[str, Any]:
+    script = f"""
+const Chrome = Application('Google Chrome');
+Chrome.activate();
+const wins = Chrome.windows();
+const w = wins[{int(window_index) - 1}];
+if (!w) throw new Error('chrome_window_not_found');
+w.index = 1;
+w.bounds = {{x: 20, y: 25, width: 1280, height: 1100}};
+const b = w.bounds();
+JSON.stringify({{
+  title: String(w.activeTab().title() || ''),
+  url: String(w.activeTab().url() || ''),
+  bounds: {{x: Number(b.x), y: Number(b.y), width: Number(b.width), height: Number(b.height)}}
+}});
+""".strip()
+    raw = _run_osascript_jxa(script)
+    data = json.loads(raw or "{}")
+    return data if isinstance(data, dict) else {}
+
+
+def _coregraphics_chrome_window_id(title: str, bounds: dict[str, Any]) -> str:
+    swift = r'''
+import Foundation
+import CoreGraphics
+
+let env = ProcessInfo.processInfo.environment
+let targetTitle = env["KASPI_CAPTURE_TITLE"] ?? ""
+let targetX = Double(env["KASPI_CAPTURE_X"] ?? "") ?? 0
+let targetY = Double(env["KASPI_CAPTURE_Y"] ?? "") ?? 0
+let targetW = Double(env["KASPI_CAPTURE_W"] ?? "") ?? 0
+let targetH = Double(env["KASPI_CAPTURE_H"] ?? "") ?? 0
+
+guard let list = CGWindowListCopyWindowInfo(CGWindowListOption(arrayLiteral: .optionAll), kCGNullWindowID) as? [[String: Any]] else {
+    exit(1)
+}
+
+var bestID = ""
+var bestScore = -Double.greatestFiniteMagnitude
+
+for w in list {
+    let owner = w[kCGWindowOwnerName as String] as? String ?? ""
+    if owner != "Google Chrome" { continue }
+    let layer = w[kCGWindowLayer as String] as? Int ?? 0
+    if layer != 0 { continue }
+    guard let windowNumber = w[kCGWindowNumber as String] else { continue }
+    guard let b = w[kCGWindowBounds as String] as? [String: Any] else { continue }
+    let name = w[kCGWindowName as String] as? String ?? ""
+    let x = Double("\(b["X"] ?? "0")") ?? 0
+    let y = Double("\(b["Y"] ?? "0")") ?? 0
+    let width = Double("\(b["Width"] ?? "0")") ?? 0
+    let height = Double("\(b["Height"] ?? "0")") ?? 0
+    if width < 500 || height < 500 { continue }
+
+    var score = 0.0
+    if name == targetTitle { score += 10000 }
+    if targetTitle != "" && name.contains(targetTitle) { score += 2500 }
+    if w[kCGWindowIsOnscreen as String] != nil { score += 1000 }
+    score -= abs(x - targetX)
+    score -= abs(y - targetY)
+    score -= abs(width - targetW) / 2
+    score -= abs(height - targetH) / 2
+
+    if score > bestScore {
+        bestScore = score
+        bestID = "\(windowNumber)"
+    }
+}
+
+if bestID != "" {
+    print(bestID)
+}
+'''.strip()
+    env = os.environ.copy()
+    env["KASPI_CAPTURE_TITLE"] = str(title or "")
+    env["KASPI_CAPTURE_X"] = str(bounds.get("x", ""))
+    env["KASPI_CAPTURE_Y"] = str(bounds.get("y", ""))
+    env["KASPI_CAPTURE_W"] = str(bounds.get("width", ""))
+    env["KASPI_CAPTURE_H"] = str(bounds.get("height", ""))
+    with tempfile.NamedTemporaryFile("w", suffix=".swift", delete=True) as fh:
+        fh.write(swift)
+        fh.flush()
+        proc = subprocess.run(["swift", fh.name], capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        return ""
+    return (proc.stdout or "").strip().splitlines()[-1].strip() if (proc.stdout or "").strip() else ""
+
+
 def _capture_window_screenshot(window_index: int, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        left, top, right, bottom = _window_bounds(window_index)
-        width = max(1, right - left)
-        height = max(1, bottom - top)
+        meta = _jxa_focus_and_normalize_window(window_index)
+        bounds = meta.get("bounds") if isinstance(meta.get("bounds"), dict) else {}
+        time.sleep(0.2)
+        cg_window_id = _coregraphics_chrome_window_id(str(meta.get("title") or ""), bounds)
+        if cg_window_id:
+            proc = subprocess.run(
+                ["screencapture", "-x", "-l", cg_window_id, str(out_path)],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0:
+                return
+        if bounds:
+            left = int(float(bounds.get("x", 0)))
+            top = int(float(bounds.get("y", 0)))
+            width = max(1, int(float(bounds.get("width", 1))))
+            height = max(1, int(float(bounds.get("height", 1))))
+        else:
+            screenshot_window_index = _focus_chrome_window(window_index)
+            left, top, right, bottom = _window_bounds(screenshot_window_index)
+            width = max(1, right - left)
+            height = max(1, bottom - top)
         rect = f"{left},{top},{width},{height}"
         proc = subprocess.run(
             ["screencapture", "-x", "-R", rect, str(out_path)],
@@ -408,6 +608,194 @@ def _capture_window_screenshot(window_index: int, out_path: Path) -> None:
     except Exception:
         # Screenshot failures should not block upload run.
         return
+
+
+def _step_page_state_js() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const st = window.getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+  };
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  const contextText = (el) => {
+    const parts = [el.placeholder, el.name, el.id, el.getAttribute && el.getAttribute('aria-label')];
+    let p = el.parentElement;
+    for (let i = 0; i < 3 && p; i++) {
+      parts.push(p.innerText || '');
+      p = p.parentElement;
+    }
+    return String(parts.join(' ') || '').trim();
+  };
+  const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
+    .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly)
+    .map((el, i) => ({
+      index: i,
+      type: String(el.type || ''),
+      value: String(el.value || ''),
+      placeholder: String(el.placeholder || ''),
+      label_context: contextText(el).slice(0, 300),
+    }));
+  const buttons = Array.from(document.querySelectorAll('button')).filter(visible)
+    .map((el, i) => ({ index: i, text: String(el.innerText || '').trim().slice(0, 120) }));
+	  const bodyText = String(document.body?.innerText || '');
+	  const bodyNorm = norm(bodyText);
+	  const href = String(location.href || '');
+	  const isAddProductPage = href.toLowerCase().includes('#/add-product/v2');
+	  const isOrdersPage = /#\/orders-new/i.test(href);
+	  const successModalPresent = /ваш товар успешно добавлен/i.test(bodyText);
+	  const articleInput = inputs.find(inp => /(^|\s|[\n\r])артикул($|\s|[\n\r])/i.test(inp.label_context));
+	  const nameInput = inputs.find(inp => /наименование товара|название товара/i.test(inp.label_context));
+	  const marketplaceUrlInArticle = !!(articleInput && /https?:\/\/kaspi\.kz\/shop\/p\//i.test(articleInput.value));
+	  const sellerIdentityForm = bodyNorm.includes('информация о товаре') && !!articleInput && !!nameInput;
+  const searchContextPresent = /присоединиться|существующей карточк|ссылк|url|поиск/i.test(bodyText);
+  const sizeOptions = Array.from(document.querySelectorAll('.matrix__values, .matrix__values *'))
+    .filter(el => visible(el) && String(el.innerText || '').trim())
+    .map(el => String(el.innerText || '').trim())
+    .slice(0, 40);
+  return JSON.stringify({
+	    ok: true,
+	    url: location.href,
+	    title: document.title,
+	    page_kind: isOrdersPage ? 'orders'
+	      : sellerIdentityForm && !searchContextPresent ? 'seller_identity_form'
+	      : isAddProductPage ? 'add_product_or_search'
+	      : 'unknown_or_search',
+	    inputs,
+	    buttons,
+	    size_options: sizeOptions,
+	    hazards: {
+	      marketplace_url_in_article_field: marketplaceUrlInArticle,
+	      seller_identity_form_without_search_context: sellerIdentityForm && !searchContextPresent,
+	      success_modal_present: successModalPresent,
+	      not_add_product_page: !isAddProductPage,
+	      orders_page: isOrdersPage,
+	    },
+	    body_excerpt: bodyText.slice(0, 1200),
+	  });
+	})();
+	""".strip()
+
+
+def _step_assert_not_unsafe_identity_form_js() -> str:
+    return r"""
+(() => {
+  const raw = (() => {
+    const visible = (el) => {
+      if (!el) return false;
+      const st = window.getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+    };
+    const norm = (v) => String(v || '').trim().toLowerCase();
+    const contextText = (el) => {
+      const parts = [el.placeholder, el.name, el.id, el.getAttribute && el.getAttribute('aria-label')];
+      let p = el.parentElement;
+      for (let i = 0; i < 3 && p; i++) {
+        parts.push(p.innerText || '');
+        p = p.parentElement;
+      }
+      return String(parts.join(' ') || '').trim();
+    };
+    const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
+      .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly);
+    const bodyText = String(document.body?.innerText || '');
+    const articleInput = inputs.find(el => /(^|\s|[\n\r])артикул($|\s|[\n\r])/i.test(contextText(el)));
+    const nameInput = inputs.find(el => /наименование товара|название товара/i.test(contextText(el)));
+    const searchContextPresent = /присоединиться|существующей карточк|ссылк|url|поиск/i.test(bodyText);
+    return {
+      articleInput,
+      nameInput,
+      bodyText,
+      bodyNorm: norm(bodyText),
+      searchContextPresent,
+      articleValue: articleInput ? String(articleInput.value || '') : '',
+    };
+  })();
+  const sellerIdentityForm = raw.bodyNorm.includes('информация о товаре') && !!raw.articleInput && !!raw.nameInput;
+  if (sellerIdentityForm && !raw.searchContextPresent) {
+    return JSON.stringify({
+      ok: false,
+      reason: 'unsafe_seller_identity_form_not_search',
+      article_value: raw.articleValue,
+      marketplace_url_in_article_field: /https?:\/\/kaspi\.kz\/shop\/p\//i.test(raw.articleValue),
+    });
+  }
+  if (/https?:\/\/kaspi\.kz\/shop\/p\//i.test(raw.articleValue)) {
+    return JSON.stringify({
+      ok: false,
+      reason: 'marketplace_url_in_article_field',
+      article_value: raw.articleValue,
+    });
+  }
+  return JSON.stringify({ok:true});
+})();
+""".strip()
+
+
+def _step_close_stale_success_modal_js() -> str:
+    return r"""
+(() => {
+  const visible = (el) => {
+    if (!el) return false;
+    const st = window.getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+  };
+  const norm = (v) => String(v || '').trim().toLowerCase();
+  const all = Array.from(document.querySelectorAll('[role="dialog"], .modal, .modal-content, .v-dialog, .dialog, div'))
+    .filter(visible);
+  const dialog = all
+    .filter(el => /ваш товар успешно добавлен/i.test(String(el.innerText || '')))
+    .map(el => ({el, r: el.getBoundingClientRect()}))
+    .filter(x => x.r.width >= 250 && x.r.width <= 900 && x.r.height >= 100 && x.r.height <= 500)
+    .sort((a, b) => {
+      return (a.r.width * a.r.height) - (b.r.width * b.r.height);
+    })[0] || null;
+  if (!dialog) return JSON.stringify({ok:true, closed:false, reason:'success_modal_not_present'});
+
+  const clickable = Array.from(dialog.el.querySelectorAll('button, [role="button"], a, svg, path, span, div, i'))
+    .filter(visible)
+    .filter(el => !/перейти|управление товарами/i.test(norm(el.innerText)));
+  const closeControl = clickable.find(el => /закрыть|close|×|x/i.test(norm(el.innerText) || norm(el.getAttribute && el.getAttribute('aria-label'))))
+    || clickable.find(el => /close|modal-header__close-button/i.test(String(el.className || '')))
+    || clickable
+      .map(el => ({el, r: el.getBoundingClientRect()}))
+      .filter(x => x.r.width <= 80 && x.r.height <= 80)
+      .sort((a, b) => (b.r.right - b.r.top) - (a.r.right - a.r.top))[0]?.el
+    || null;
+  if (closeControl) {
+    closeControl.click();
+    return JSON.stringify({ok:true, closed:true, method:'close_control'});
+  }
+
+  // Some Kaspi dialogs render the X as a textless icon with no button role.
+  // Click a safe point in the dialog's top-right close icon area; this is far
+  // away from the "Перейти в управление товарами" action button.
+  const x = dialog.r.right - 32;
+  const y = dialog.r.top + 58;
+  const target = document.elementFromPoint(x, y);
+  if (target && !/перейти|управление товарами/i.test(norm(target.innerText))) {
+    const ev = {bubbles:true, cancelable:true, view:window, clientX:x, clientY:y};
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      try { target.dispatchEvent(new MouseEvent(type, ev)); } catch (e) {}
+    }
+    return JSON.stringify({
+      ok:true,
+      closed:true,
+      method:'top_right_coordinate',
+      target_tag:String(target.tagName || ''),
+      target_class:String(target.className || ''),
+    });
+  }
+
+  document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', code:'Escape', bubbles:true}));
+  window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', code:'Escape', bubbles:true}));
+  return JSON.stringify({ok:true, closed:true, method:'escape'});
+})();
+""".strip()
 
 
 def _merchant_id_js() -> str:
@@ -520,10 +908,10 @@ def _choose_window_index(mapped_index: int, expected_merchant_id: str, candidate
     return int(mapped_index)
 
 
-def _step_search_js(variant_url: str) -> str:
+def _step_search_js(search_query: str) -> str:
     return f"""
 (() => {{
-  const needle = {json.dumps(str(variant_url), ensure_ascii=False)};
+  const needle = {json.dumps(str(search_query), ensure_ascii=False)};
   const visible = (el) => {{
     if (!el) return false;
     const st = window.getComputedStyle(el);
@@ -540,10 +928,31 @@ def _step_search_js(variant_url: str) -> str:
     }}
     return norm(parts.join(' '));
   }};
-  const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
-    .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly);
-  const target = inputs.find(el => /ссылк|url|link|вариант|названию|артикул|поиск/i.test(ctx(el)));
+	  const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
+	    .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly);
+	  const bodyText = String(document.body?.innerText || '');
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  const articleInput = inputs.find(el => /(^|\\s|[\\n\\r])артикул($|\\s|[\\n\\r])/i.test(ctx(el)));
+	  const nameInput = inputs.find(el => /наименование товара|название товара/i.test(ctx(el)));
+	  const searchContextPresent = /присоединиться|существующей карточк|ссылк|url|поиск/i.test(bodyText);
+  if (bodyText.toLowerCase().includes('информация о товаре') && articleInput && nameInput && !searchContextPresent) {{
+    return JSON.stringify({{ok:false, reason:'unsafe_seller_identity_form_not_search'}});
+  }}
+  if (articleInput && /https?:\\/\\/kaspi\\.kz\\/shop\\/p\\//i.test(String(articleInput.value || ''))) {{
+    return JSON.stringify({{ok:false, reason:'marketplace_url_in_article_field'}});
+  }}
+  const target = inputs.find(el => {{
+    const text = ctx(el);
+    if (/(^|\\s|[\\n\\r])артикул($|\\s|[\\n\\r])/i.test(text) && !/ссылк|url|link|поиск/i.test(text)) return false;
+    return /ссылк|url|link|вариант|названию|поиск/i.test(text);
+  }});
   if (!target) return JSON.stringify({{ok:false, reason:'search_input_not_found'}});
+  if (target === articleInput) {{
+    return JSON.stringify({{ok:false, reason:'refusing_article_field_as_search'}});
+  }}
   target.focus();
   target.select && target.select();
   target.value = needle;
@@ -576,10 +985,28 @@ def _step_probe_search_input_js() -> str:
     }
     return norm(parts.join(' '));
   };
-  const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
-    .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly);
-  const target = inputs.find(el => /ссылк|url|link|вариант|названию|артикул|поиск/i.test(ctx(el)));
-  return JSON.stringify({ok:true, ready: !!target});
+	  const inputs = Array.from(document.querySelectorAll('input')).filter(visible)
+	    .filter(el => el.type !== 'hidden' && !el.disabled && !el.readOnly);
+	  const bodyText = String(document.body?.innerText || '');
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {
+	    return JSON.stringify({ok:false, ready:false, reason:'not_add_product_page', url: href});
+	  }
+	  const articleInput = inputs.find(el => /(^|\s|[\n\r])артикул($|\s|[\n\r])/i.test(ctx(el)));
+	  const nameInput = inputs.find(el => /наименование товара|название товара/i.test(ctx(el)));
+	  const searchContextPresent = /присоединиться|существующей карточк|ссылк|url|поиск/i.test(bodyText);
+  if (bodyText.toLowerCase().includes('информация о товаре') && articleInput && nameInput && !searchContextPresent) {
+    return JSON.stringify({ok:false, ready:false, reason:'unsafe_seller_identity_form_not_search'});
+  }
+  if (articleInput && /https?:\/\/kaspi\.kz\/shop\/p\//i.test(String(articleInput.value || ''))) {
+    return JSON.stringify({ok:false, ready:false, reason:'marketplace_url_in_article_field'});
+  }
+  const target = inputs.find(el => {
+    const text = ctx(el);
+    if (/(^|\s|[\n\r])артикул($|\s|[\n\r])/i.test(text) && !/ссылк|url|link|поиск/i.test(text)) return false;
+    return /ссылк|url|link|вариант|названию|поиск/i.test(text);
+  });
+  return JSON.stringify({ok:true, ready: !!target, reason: target ? '' : 'search_input_not_found'});
 })();
 """.strip()
 
@@ -587,12 +1014,20 @@ def _step_probe_search_input_js() -> str:
 def _step_verify_offer_identity_js(expected_heading: str, offer_code: str) -> str:
     return f"""
 (() => {{
-  const heading = String({json.dumps(str(expected_heading), ensure_ascii=False)} || '').trim().toLowerCase();
-  const offerCode = String({json.dumps(str(offer_code), ensure_ascii=False)} || '').trim();
-  const txt = String(document.body?.innerText || '').toLowerCase();
-  if (heading && !txt.includes(heading)) {{
-    return JSON.stringify({{ok:false, reason:'heading_mismatch'}});
-  }}
+	  const heading = String({json.dumps(str(expected_heading), ensure_ascii=False)} || '').trim().toLowerCase();
+	  const offerCode = String({json.dumps(str(offer_code), ensure_ascii=False)} || '').trim();
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  const bodyTextRaw = String(document.body?.innerText || '');
+	  const txt = bodyTextRaw.toLowerCase();
+	  if (!/информация о товаре|добавление товара|присоединиться|существующей карточк/i.test(bodyTextRaw)) {{
+	    return JSON.stringify({{ok:false, reason:'add_product_context_missing'}});
+	  }}
+	  if (heading && !txt.includes(heading)) {{
+	    return JSON.stringify({{ok:false, reason:'heading_mismatch'}});
+	  }}
   if (offerCode) {{
     const rx = new RegExp('\\\\b' + offerCode + '\\\\b');
     if (!rx.test(String(document.body?.innerText || ''))) {{
@@ -607,16 +1042,24 @@ def _step_verify_offer_identity_js(expected_heading: str, offer_code: str) -> st
 def _step_choose_card_js(expected_heading: str, offer_code: str = "") -> str:
     return f"""
 (() => {{
-  const expected = String({json.dumps(str(expected_heading), ensure_ascii=False)} || '').trim().toLowerCase();
-  const offerCode = String({json.dumps(str(offer_code), ensure_ascii=False)} || '').trim();
-  const visible = (el) => {{
-    if (!el) return false;
+	  const expected = String({json.dumps(str(expected_heading), ensure_ascii=False)} || '').trim().toLowerCase();
+	  const offerCode = String({json.dumps(str(offer_code), ensure_ascii=False)} || '').trim();
+	  const visible = (el) => {{
+	    if (!el) return false;
     const st = window.getComputedStyle(el);
     const r = el.getBoundingClientRect();
-    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
-  }};
-  const norm = (v) => String(v || '').trim().toLowerCase();
-  const collectContext = (el) => {{
+	    return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+	  }};
+	  const norm = (v) => String(v || '').trim().toLowerCase();
+	  const href = String(location.href || '');
+	  const bodyTextRaw = String(document.body?.innerText || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  if (!/добавление товара|информация о товаре|присоединиться|существующей карточк|выбрать/i.test(bodyTextRaw)) {{
+	    return JSON.stringify({{ok:false, reason:'add_product_context_missing'}});
+	  }}
+	  const collectContext = (el) => {{
     const roots = [
       '.product-list__item',
       '.product',
@@ -665,7 +1108,7 @@ def _step_choose_card_js(expected_heading: str, offer_code: str = "") -> str:
       best = {{ btn, score, txt }};
     }}
   }}
-  if (best && best.score > 0) {{
+  if (best && best.score > 0 && (!offerCode || offerCodeScore(best.txt) > 0)) {{
     best.btn.click();
     return JSON.stringify({{
       ok: true,
@@ -674,12 +1117,20 @@ def _step_choose_card_js(expected_heading: str, offer_code: str = "") -> str:
       offer_code_score: offerCodeScore(best.txt),
     }});
   }}
-  if (chooseButtons.length > 0) {{
-    chooseButtons[0].click();
-    return JSON.stringify({{ok:true, mode:'fallback_first_choose'}});
+  if (best && offerCode && chooseButtons.length === 1 && headingScore(best.txt) > 0) {{
+    best.btn.click();
+    return JSON.stringify({{
+      ok: true,
+      mode: 'single_heading_match_after_exact_code_search',
+      heading_score: headingScore(best.txt),
+      offer_code_score: offerCodeScore(best.txt),
+    }});
   }}
-  const bodyTextRaw = String(document.body?.innerText || '');
-  const bodyText = norm(bodyTextRaw);
+  if (chooseButtons.length > 0 && offerCode) {{
+    return JSON.stringify({{ok:false, reason:'exact_offer_code_card_not_found'}});
+  }}
+  if (chooseButtons.length > 0) return JSON.stringify({{ok:false, reason:'ambiguous_choose_without_offer_code'}});
+	  const bodyText = norm(bodyTextRaw);
   const infoHeadingPresent = bodyText.includes('информация о товаре');
   const continueButtonPresent = buttons.some(btn => /продолжить/i.test(norm(btn.innerText)));
   const sizeOptionsPresent = Array.from(document.querySelectorAll('.matrix__values, .matrix__values *')).some(
@@ -690,7 +1141,7 @@ def _step_choose_card_js(expected_heading: str, offer_code: str = "") -> str:
     infoHeadingPresent
     && continueButtonPresent
     && sizeOptionsPresent
-    && (headingScore(bodyText) > 0 || offerCodeMatch || !expected)
+    && (offerCode ? offerCodeMatch : (headingScore(bodyText) > 0 || !expected))
   ) {{
     return JSON.stringify({{
       ok: true,
@@ -713,9 +1164,13 @@ def _step_select_size_js(size_rus: Any) -> str:
     const st = window.getComputedStyle(el);
     const r = el.getBoundingClientRect();
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
-  }};
-  const norm = (v) => String(v || '').trim().toLowerCase();
-  const containsSizeToken = (text) => {{
+	  }};
+	  const norm = (v) => String(v || '').trim().toLowerCase();
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  const containsSizeToken = (text) => {{
     const hay = norm(text);
     const needle = norm(sizeNeedle);
     if (!hay || !needle) return false;
@@ -801,9 +1256,13 @@ def _step_verify_selected_size_js(size_rus: Any) -> str:
     const st = window.getComputedStyle(el);
     const r = el.getBoundingClientRect();
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
-  }};
-  const norm = (v) => String(v || '').trim().toLowerCase();
-  const containsSizeToken = (text) => {{
+	  }};
+	  const norm = (v) => String(v || '').trim().toLowerCase();
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  const containsSizeToken = (text) => {{
     const hay = norm(text);
     const needle = norm(sizeNeedle);
     if (!hay || !needle) return false;
@@ -841,8 +1300,19 @@ def _step_fill_identity_fields_js(article: str, name: str) -> str:
     const st = window.getComputedStyle(el);
     const r = el.getBoundingClientRect();
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
-  }};
-  const norm = (v) => String(v || '').trim().toLowerCase();
+	  }};
+	  const norm = (v) => String(v || '').trim().toLowerCase();
+	  const bodyText = String(document.body?.innerText || '');
+	  const href = String(location.href || '');
+	  if (!href.toLowerCase().includes('#/add-product/v2')) {{
+	    return JSON.stringify({{ok:false, reason:'not_add_product_page', url: href}});
+	  }}
+	  if (!/информация о товаре/i.test(bodyText)) {{
+	    return JSON.stringify({{ok:false, reason:'product_info_context_missing'}});
+	  }}
+	  if (/ваш товар успешно добавлен/i.test(bodyText)) {{
+	    return JSON.stringify({{ok:false, reason:'stale_success_modal_present'}});
+	  }}
 
   const contextText = (el) => {{
     const parts = [el.placeholder, el.name, el.id, el.getAttribute && el.getAttribute('aria-label')];
@@ -895,7 +1365,8 @@ def _step_fill_price_js(price: Any, pp1: Any, pp2: Any, barcode: str) -> str:
   const priceVal = String({json.dumps(str(price), ensure_ascii=False)});
   const pp1Val = String({json.dumps(str(pp1), ensure_ascii=False)});
   const pp2Val = String({json.dumps(str(pp2), ensure_ascii=False)});
-  const barcodeVal = String({json.dumps(str(barcode or ''), ensure_ascii=False)});
+  // Owner rule for this uploader path: Kaspi barcode must stay empty.
+  const barcodeVal = '';
   const visible = (el) => {{
     if (!el) return false;
     const st = window.getComputedStyle(el);
@@ -903,6 +1374,10 @@ def _step_fill_price_js(price: Any, pp1: Any, pp2: Any, barcode: str) -> str:
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   }};
   const norm = (v) => String(v || '').trim().toLowerCase();
+  const bodyText = String(document.body?.innerText || '');
+  if (/ваш товар успешно добавлен/i.test(bodyText)) {{
+    return JSON.stringify({{ok:false, reason:'stale_success_modal_present'}});
+  }}
   const dialogs = Array.from(document.querySelectorAll('[role=\"dialog\"], .modal, .modal-content, .v-dialog, .dialog'))
     .filter(visible);
   const priceWarning = dialogs.find(el => /вы не указали цену/i.test(norm(el.innerText)));
@@ -982,9 +1457,7 @@ def _step_fill_price_js(price: Any, pp1: Any, pp2: Any, barcode: str) -> str:
   if (digits(priceInput.value) !== digits(priceVal)) return JSON.stringify({{ok:false, reason:'price_value_not_applied'}});
   if (digits(stockInputs[0].value) !== digits(pp1Val)) return JSON.stringify({{ok:false, reason:'pp1_value_not_applied'}});
   if (stockInputs[1] && digits(stockInputs[1].value) !== digits(pp2Val)) return JSON.stringify({{ok:false, reason:'pp2_value_not_applied'}});
-  if (barcodeInput && barcodeVal && digits(barcodeInput.value) !== digits(barcodeVal)) {{
-    return JSON.stringify({{ok:false, reason:'barcode_value_not_applied'}});
-  }}
+  if (barcodeInput && digits(barcodeInput.value)) return JSON.stringify({{ok:false, reason:'barcode_not_empty'}});
   return JSON.stringify({{ok:true, reason:'price_values_applied'}});
 }})();
 """.strip()
@@ -1000,6 +1473,10 @@ def _step_click_save_price_js() -> str:
     return st.display !== 'none' && st.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   };
   const norm = (v) => String(v || '').trim().toLowerCase();
+  const bodyText = String(document.body?.innerText || '');
+  if (/ваш товар успешно добавлен/i.test(bodyText)) {
+    return JSON.stringify({ok:false, reason:'stale_success_modal_present'});
+  }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], .modal, .modal-content, .v-dialog, .dialog'))
     .filter(visible);
   const priceWarning = dialogs.find(el => /вы не указали цену/i.test(norm(el.innerText)));
@@ -1097,10 +1574,27 @@ def _execute_row(
     step_delay_seconds: float,
     step_screenshot_dir: Path | None = None,
 ) -> tuple[bool, str]:
+    store_code = normalize_store_code(row.get("store_code"))
     expected_mid = str(_to_int(row.get("merchant_id")))
+    if store_code not in ALLOWED_UPLOAD_STORE_CODES:
+        return False, f"forbidden_store:{store_code or '<empty>'}"
+    if store_code in FORBIDDEN_UPLOAD_STORE_CODES or expected_mid in FORBIDDEN_UPLOAD_MERCHANT_IDS:
+        return False, f"forbidden_upload_surface store={store_code or '<empty>'} merchant_id={expected_mid}"
+    expected_mid_for_store = ALLOWED_UPLOAD_MERCHANT_IDS_BY_STORE.get(store_code)
+    if expected_mid_for_store and expected_mid != expected_mid_for_store:
+        return False, f"merchant_id_store_mismatch store={store_code} merchant_id={expected_mid} expected={expected_mid_for_store}"
     normalized_barcode = _normalize_barcode(row.get("barcode"))
     normalized_size_rus = _normalize_size_rus(row.get("size_rus"))
-    offer_code = _extract_offer_code_from_variant_url(row.get("variant_url"))
+    offer_code = _product_code_for_search(row)
+
+    def has_size_like_option(values: Any) -> bool:
+        for value in values or []:
+            text = str(value or "").strip().upper()
+            if re.search(r"\d", text):
+                return True
+            if re.search(r"\b(?:XS|S|M|L|XL|2XL|3XL|4XL|5XL|6XL)\b", text):
+                return True
+        return False
 
     def resolve_window() -> int:
         nonlocal window_index
@@ -1118,39 +1612,99 @@ def _execute_row(
         article = re.sub(r"[^a-zA-Z0-9._-]+", "_", str(row.get("merchant_sku_article") or "")).strip("_")
         if not article:
             article = "no_article"
-        fname = f"row{row_no:04d}_{stage}_{article[:80]}.png"
-        _capture_window_screenshot(resolve_window(), step_screenshot_dir / fname)
+        stem = f"row{row_no:04d}_{stage}_{article[:80]}"
+        win = resolve_window()
+        try:
+            state = _json_result(_execute_tab_js(win, _step_page_state_js()))
+            state["stage"] = stage
+            state["row_number"] = row_no
+            state["merchant_sku_article"] = str(row.get("merchant_sku_article") or "")
+            state["expected_price_kzt"] = row.get("price_kzt")
+            state["expected_stock_pp1"] = row.get("stock_pp1")
+            state["expected_stock_pp2"] = row.get("stock_pp2")
+            state["expected_product_code"] = offer_code
+            (step_screenshot_dir / f"{stem}.json").write_text(
+                json.dumps(state, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        _capture_window_screenshot(win, step_screenshot_dir / f"{stem}.png")
+
+    def close_stale_success(stage: str) -> dict[str, Any]:
+        try:
+            res = _json_result(_execute_tab_js(resolve_window(), _step_close_stale_success_modal_js()))
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc)}
+        if res.get("closed"):
+            time.sleep(0.5)
+            snap(f"{stage}_closed_stale_success")
+        return res
 
     entry_url = str(row.get("ui_entry_url") or DEFAULT_ENTRY_URL)
     direct_code_mode = ("link-catalog" in entry_url.lower()) and ("code=" in entry_url.lower())
 
-    _set_tab_url(resolve_window(), entry_url)
+    selected_window = resolve_window()
+    pre_mid = ""
+    try:
+        pre_mid = str(_execute_tab_js(selected_window, _merchant_id_js()) or "").strip()
+    except Exception:
+        pre_mid = ""
+    if pre_mid in FORBIDDEN_UPLOAD_MERCHANT_IDS:
+        return False, f"forbidden_merchant_window_before_navigation window={pre_mid}"
+    if pre_mid and pre_mid != expected_mid:
+        return False, f"merchant_id_mismatch_before_navigation window={pre_mid} expected={expected_mid}"
+
+    _set_tab_url(selected_window, entry_url)
     time.sleep(max(step_delay_seconds, 1.2))
+    close_stale_success("01_open")
     snap("01_open")
 
     mid_raw = _execute_tab_js(resolve_window(), _merchant_id_js())
     actual_mid = str(mid_raw or "").strip()
+    if actual_mid in FORBIDDEN_UPLOAD_MERCHANT_IDS:
+        snap("err_forbidden_merchant")
+        return False, f"forbidden_merchant_window_after_navigation window={actual_mid}"
     if actual_mid and actual_mid != expected_mid:
         snap("err_mid_mismatch")
         return False, f"merchant_id_mismatch window={actual_mid} expected={expected_mid}"
 
     if not direct_code_mode:
+        close_stale_success("pre_search")
+        unsafe = _json_result(_execute_tab_js(resolve_window(), _step_assert_not_unsafe_identity_form_js()))
+        if not unsafe.get("ok"):
+            snap("err_unsafe_identity_form")
+            return False, f"unsafe_page_state:{unsafe.get('reason')}"
         search_ready = False
+        search_reason = "search_input_not_found"
         for _ in range(12):
             probe = _json_result(_execute_tab_js(resolve_window(), _step_probe_search_input_js()))
+            search_reason = str(probe.get("reason") or search_reason)
+            if not probe.get("ok") and search_reason in {
+                "unsafe_seller_identity_form_not_search",
+                "marketplace_url_in_article_field",
+            }:
+                snap("err_unsafe_identity_form")
+                return False, f"unsafe_page_state:{search_reason}"
             if bool(probe.get("ready")):
                 search_ready = True
                 break
             time.sleep(0.8)
         if not search_ready:
             snap("err_search")
-            return False, "search_failed:search_input_not_found"
+            return False, f"search_failed:{search_reason}"
 
-        res = _json_result(_execute_tab_js(resolve_window(), _step_search_js(str(row.get("variant_url") or ""))))
+        res = _json_result(_execute_tab_js(resolve_window(), _step_search_js(offer_code)))
         if not res.get("ok"):
-            snap("err_search")
-            return False, f"search_failed:{res.get('reason')}"
+            reason = str(res.get("reason") or "")
+            snap("err_unsafe_identity_form" if reason in {
+                "unsafe_seller_identity_form_not_search",
+                "marketplace_url_in_article_field",
+                "refusing_article_field_as_search",
+            } else "err_search")
+            return False, f"search_failed:{reason}"
         time.sleep(step_delay_seconds)
+        close_stale_success("02_search")
         snap("02_search")
 
         res = _json_result(
@@ -1166,6 +1720,7 @@ def _execute_row(
             snap("err_choose")
             return False, f"choose_card_failed:{res.get('reason')}"
         time.sleep(step_delay_seconds + 0.6)
+        close_stale_success("03_choose")
         snap("03_choose")
 
         identity_check = _json_result(
@@ -1194,6 +1749,24 @@ def _execute_row(
         )
         if not res_select.get("ok"):
             size_reason = str(res_select.get("reason") or "size_select_failed")
+            if (
+                direct_code_mode
+                and size_reason == "size_option_not_found"
+                and not has_size_like_option(res_select.get("available_sizes"))
+            ):
+                identity_check = _json_result(
+                    _execute_tab_js(
+                        resolve_window(),
+                        _step_verify_offer_identity_js(
+                            str(row.get("expected_kaspi_heading") or ""),
+                            offer_code,
+                        ),
+                    )
+                )
+                if identity_check.get("ok"):
+                    size_ok = True
+                    size_reason = "direct_code_no_size_options_identity_verified"
+                    break
             snap("err_size_select")
             break
         time.sleep(step_delay_seconds + 0.4)
@@ -1212,6 +1785,7 @@ def _execute_row(
     if not size_ok:
         snap("err_fill_info")
         return False, f"fill_info_failed:{size_reason}"
+    close_stale_success("04_size_selected")
     snap("04_size_selected")
 
     identity_check = _json_result(
@@ -1227,15 +1801,21 @@ def _execute_row(
         snap("err_identity")
         return False, f"identity_failed:{identity_check.get('reason')}"
 
-    res = _json_result(
-        _execute_tab_js(
-            resolve_window(),
-            _step_fill_identity_fields_js(
-                str(row.get("merchant_sku_article") or ""),
-                str(row.get("merchant_offer_name") or ""),
-            ),
+    res: dict[str, Any] = {"ok": False, "reason": "identity_fill_not_attempted"}
+    for _ in range(2):
+        close_stale_success("pre_fill_info")
+        res = _json_result(
+            _execute_tab_js(
+                resolve_window(),
+                _step_fill_identity_fields_js(
+                    str(row.get("merchant_sku_article") or ""),
+                    str(row.get("merchant_offer_name") or ""),
+                ),
+            )
         )
-    )
+        if res.get("ok") or res.get("reason") != "stale_success_modal_present":
+            break
+        close_stale_success("fill_info")
     if not res.get("ok"):
         snap("err_fill_info")
         return False, f"fill_info_failed:{res.get('reason')}"
@@ -1245,6 +1825,7 @@ def _execute_row(
     price_ok = False
     price_reason = ""
     for i in range(8):
+        close_stale_success(f"pre_fill_price_retry{i+1}")
         res_fill = _json_result(
             _execute_tab_js(
                 resolve_window(),
@@ -1259,6 +1840,10 @@ def _execute_row(
         if not res_fill.get("ok"):
             price_reason = str(res_fill.get("reason") or "unknown")
             snap(f"06_fill_price_retry{i+1}")
+            if price_reason == "stale_success_modal_present":
+                close_stale_success(f"fill_price_retry{i+1}")
+                time.sleep(step_delay_seconds + 0.6)
+                continue
             if price_reason in {
                 "price_required_popup_closed",
                 "price_modal_not_found",
@@ -1287,6 +1872,10 @@ def _execute_row(
             break
         price_reason = str(res_save.get("reason") or "unknown")
         snap(f"05_fill_price_retry{i+1}")
+        if price_reason == "stale_success_modal_present":
+            close_stale_success(f"save_price_retry{i+1}")
+            time.sleep(step_delay_seconds + 0.6)
+            continue
         if price_reason in {
             "price_required_popup_closed",
             "price_required_popup_no_button",
@@ -1330,13 +1919,18 @@ def run_kaspi_offer_ui_upload(
     step_delay_seconds: float = 1.8,
     retries: int = 1,
     step_screenshots: bool = False,
+    require_black_coverage: bool = True,
 ) -> dict[str, Any]:
     stores = parse_store_codes(store_codes)
     if not stores:
         stores = ["UNIVERSAL", "STOREB"]
 
     rows = load_offer_upload_rows(workbook_path, store_codes=stores)
-    validation = validate_upload_rows(rows, required_store_codes=stores)
+    validation = validate_upload_rows(
+        rows,
+        required_store_codes=stores,
+        require_black_coverage=require_black_coverage,
+    )
 
     run_id = datetime.now(ASTANA_TZ).strftime("%Y%m%d_%H%M%S")
     run_dir = Path(output_root) / run_id
@@ -1355,6 +1949,7 @@ def run_kaspi_offer_ui_upload(
         "errors": [],
         "window_map": {},
         "step_screenshots": bool(step_screenshots),
+        "require_black_coverage": bool(require_black_coverage),
     }
 
     if not validation.get("ok"):
@@ -1452,6 +2047,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--step-delay-seconds", type=float, default=1.8, help="Delay between UI steps")
     parser.add_argument("--retries", type=int, default=1, help="Retries per row")
     parser.add_argument("--step-screenshots", action="store_true", help="Capture window screenshots for each row step")
+    parser.add_argument(
+        "--allow-partial-color-batch",
+        action="store_true",
+        help="Allow scoped white/grey-only retry batches without requiring a black row in each target store",
+    )
     parser.add_argument("--list-windows", action="store_true", help="Print Chrome window candidates with detected merchant IDs")
     parser.add_argument("--json", action="store_true", help="Print JSON summary")
     args = parser.parse_args(argv)
@@ -1481,6 +2081,7 @@ def main(argv: list[str] | None = None) -> int:
         step_delay_seconds=args.step_delay_seconds,
         retries=args.retries,
         step_screenshots=args.step_screenshots,
+        require_black_coverage=not args.allow_partial_color_batch,
     )
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))

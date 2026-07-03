@@ -25,6 +25,7 @@ from .repricer_competitors import (
     _get_records_total,
     _wait_table_ready,
 )
+from .repricer_protection import protected_row_identity
 from .utils import ensure_env
 
 
@@ -84,6 +85,8 @@ def run_repricer_dumping_enable_api(
         "api_requests": 0,
         "api_sets_attempted": 0,
         "api_sets_succeeded": 0,
+        "protected_rows_skipped": 0,
+        "protected_rows_dumping_on": 0,
         "errors": 0,
         "per_store": {},
         "remaining_off_after_verify": {},
@@ -153,6 +156,8 @@ def run_repricer_dumping_enable_api(
                         "api_requests": 0,
                         "api_sets_attempted": 0,
                         "api_sets_succeeded": 0,
+                        "protected_rows_skipped": 0,
+                        "protected_rows_dumping_on": 0,
                         "errors": 0,
                     },
                 )
@@ -264,6 +269,20 @@ def run_repricer_dumping_enable_api(
                             summary["products_visited"] += 1
                             store_summary["products_visited"] += 1
 
+                            protected_identity = protected_row_identity(
+                                row,
+                                config.protected_merchant_sku_prefixes,
+                            )
+                            if protected_identity:
+                                summary["protected_rows_skipped"] += 1
+                                store_summary["protected_rows_skipped"] += 1
+                                if row.get("dumping"):
+                                    summary["protected_rows_dumping_on"] += 1
+                                    store_summary["protected_rows_dumping_on"] += 1
+                                checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                save_checkpoint(effective_checkpoint, checkpoint)
+                                continue
+
                             if row.get("dumping"):
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
@@ -348,6 +367,8 @@ def run_repricer_dumping_enable_api(
                                 break
 
                             for row in rows:
+                                if protected_row_identity(row, config.protected_merchant_sku_prefixes):
+                                    continue
                                 if not row.get("dumping"):
                                     remaining_off += 1
 

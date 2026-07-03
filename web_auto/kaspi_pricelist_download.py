@@ -43,7 +43,8 @@ def download_target_filename(store_name: str, sale_state: str) -> str:
 def _products_page_ready(page: Page) -> bool:
     body_text = page.locator("body").inner_text()
     normalized = " ".join(str(body_text or "").split())
-    return "Прайс-лист" in normalized and ("В продаже" in normalized or "Сняты с продажи" in normalized)
+    has_export_control = "Прайс-лист" in normalized or "Действия с файлами" in normalized
+    return has_export_control and ("В продаже" in normalized or "Сняты с продажи" in normalized)
 
 
 def _wait_for_products_page(page: Page) -> None:
@@ -93,9 +94,9 @@ def _select_sale_state(page: Page, sale_state: str, sale_state_select=None) -> s
 
 
 def _open_pricelist_dropdown(page: Page):
-    button = page.locator("button").filter(has_text=re.compile(r"Прайс-лист")).first
+    button = page.locator("button").filter(has_text=re.compile(r"(Прайс-лист|Действия с файлами)")).first
     button.click()
-    dropdown_item = page.locator("a.dropdown-item").filter(has_text="Скачать в Excel").first
+    dropdown_item = page.locator("a.dropdown-item").filter(has_text=re.compile(r"Скачать.*Excel")).first
     dropdown_item.wait_for(timeout=15000, state="visible")
     # Kaspi can render the Excel export item while it is still disabled/loading.
     # Clicking during that state silently produces no download, especially on

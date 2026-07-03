@@ -22,6 +22,11 @@ from .kaspi_pricelist_ops import (
 SAFE_ACTIVE_CONFIRM_PHRASE = "FULL_ACTIVE_STATE"
 UPDATE_COLUMNS = {"price", "PP1", "PP2", "PP3", "PP4", "PP5", "preorder"}
 CONTROL_COLUMNS = {"SKU", "sku", "activate_from_archive", "note", "owner_note"}
+RESTRICTED_CLASSIFICATIONS = {
+    "direct_platform_restricted",
+    "family_platform_restriction_risk",
+    "platform_restricted",
+}
 
 
 class SafeActivePatchError(ValueError):
@@ -79,6 +84,47 @@ def load_safe_patch_updates(path: Path) -> list[SafeActivePatchUpdate]:
             raise SafeActivePatchError(f"updates CSV row {row_index} has no mutation fields")
         updates.append(SafeActivePatchUpdate(sku=sku, values=values, activate_from_archive=activate_from_archive))
     return updates
+
+
+def load_restricted_skus_from_ledger(path: Path | None) -> dict[str, dict[str, str]]:
+    if path is None:
+        return {}
+    with path.open(newline="", encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh))
+    restricted: dict[str, dict[str, str]] = {}
+    for row_index, row in enumerate(rows, start=2):
+        sku = _clean_cell(row.get("merchant_sku") or row.get("SKU") or row.get("sku"))
+        classification = _clean_cell(row.get("classification")).lower()
+        if not sku:
+            continue
+        if classification in RESTRICTED_CLASSIFICATIONS:
+            restricted[sku] = {
+                "classification": classification,
+                "row_index": str(row_index),
+                "evidence_path": _clean_cell(row.get("evidence_path") or row.get("source_artifact") or row.get("direct_restriction_evidence") or row.get("family_restriction_evidence")),
+            }
+    return restricted
+
+
+def load_restriction_probe_approval(path: Path | None, *, store_name: str) -> dict[str, str]:
+    if path is None:
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise SafeActivePatchError("restriction probe approval must be a JSON object")
+    if _clean_cell(data.get("approval_type")) != "restriction_probe":
+        raise SafeActivePatchError("restriction probe approval approval_type must equal restriction_probe")
+    if data.get("owner_approved") is not True:
+        raise SafeActivePatchError("restriction probe approval owner_approved must be true")
+    store_norm = normalize_store_name(store_name)
+    approved_store = _clean_cell(data.get("store"))
+    if approved_store and normalize_store_name(approved_store) != store_norm:
+        raise SafeActivePatchError(f"restriction probe approval store {approved_store} does not match {store_norm}")
+    allowed_skus = data.get("allowed_skus")
+    if not isinstance(allowed_skus, list) or not allowed_skus:
+        raise SafeActivePatchError("restriction probe approval must include non-empty allowed_skus list")
+    approval_id = _clean_cell(data.get("approval_id") or data.get("created_at") or path.name)
+    return {_clean_cell(sku): approval_id for sku in allowed_skus if _clean_cell(sku)}
 
 
 def _load_pricelist_l1(path: Path) -> pd.DataFrame:
@@ -158,6 +204,8 @@ def build_safe_active_patch(
     expected_active_before: int | None = None,
     expected_active_after: int | None = None,
     allow_activate_from_archive: bool = False,
+    restriction_ledger_path: Path | None = None,
+    restriction_probe_approval_path: Path | None = None,
     prefix: str | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -169,6 +217,11 @@ def build_safe_active_patch(
     archive_df = _load_pricelist_l1(archive_path)
     active_l2 = _load_l2(active_path)
     updates = load_safe_patch_updates(updates_path)
+    restricted_skus = load_restricted_skus_from_ledger(restriction_ledger_path)
+    restriction_probe_approvals = load_restriction_probe_approval(
+        restriction_probe_approval_path,
+        store_name=store_name,
+    )
 
     active_index, active_duplicates = _unique_index(active_df)
     archive_index, archive_duplicates = _unique_index(archive_df)
@@ -193,8 +246,20 @@ def build_safe_active_patch(
     updated_active: list[str] = []
     unknown_skus: list[str] = []
     archive_activation_blocked: list[str] = []
+    restricted_update_skus: list[str] = []
+    restricted_update_details: list[dict[str, str]] = []
+    restriction_probe_override_skus: list[str] = []
 
     for update in updates:
+        restricted_detail = restricted_skus.get(update.sku)
+        if restricted_detail:
+            approval_id = restriction_probe_approvals.get(update.sku)
+            if not approval_id:
+                restricted_update_skus.append(update.sku)
+                restricted_update_details.append({"SKU": update.sku, **restricted_detail})
+                continue
+            restriction_probe_override_skus.append(update.sku)
+
         if update.sku in final_by_sku:
             before = dict(final_by_sku[update.sku])
             after = dict(before)
@@ -242,6 +307,11 @@ def build_safe_active_patch(
             "updates target ARCHIVE rows without activation approval: "
             + ", ".join(sorted(archive_activation_blocked))
         )
+    if restricted_update_skus:
+        errors.append(
+            "updates target platform-restricted/risk SKU rows: "
+            + ", ".join(sorted(restricted_update_skus))
+        )
     if unknown_skus:
         errors.append(f"updates target SKU rows missing from ACTIVE and ARCHIVE: {', '.join(sorted(unknown_skus))}")
 
@@ -274,6 +344,8 @@ def build_safe_active_patch(
         "source_active_path": str(active_path),
         "source_archive_path": str(archive_path),
         "updates_path": str(updates_path),
+        "restriction_ledger_path": str(restriction_ledger_path) if restriction_ledger_path else "",
+        "restriction_probe_approval_path": str(restriction_probe_approval_path) if restriction_probe_approval_path else "",
         "safe_patch_contract": "FULL_ACTIVE_STATE_REPLACEMENT",
         "required_confirm_phrase_for_apply": SAFE_ACTIVE_CONFIRM_PHRASE,
         "archive_upload_allowed": False,
@@ -290,6 +362,9 @@ def build_safe_active_patch(
         "updated_active_skus": sorted(updated_active),
         "activated_from_archive_skus": sorted(activated_from_archive),
         "unknown_update_skus": sorted(unknown_skus),
+        "restricted_update_skus": sorted(restricted_update_skus),
+        "restricted_update_details": sorted(restricted_update_details, key=lambda row: row["SKU"]),
+        "restriction_probe_override_skus": sorted(restriction_probe_override_skus),
         "errors": errors,
         "active_output": str(active_output) if status == "ready" else "",
         "restore_output": str(restore_output),

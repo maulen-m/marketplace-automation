@@ -34,6 +34,14 @@ from .repricer_min_price_logic import (
     should_skip_line52_locked_9990,
     should_apply_external_anchor,
 )
+from .repricer_protection import is_protected_merchant_sku
+from .price_write_vintage import (
+    PRICE_WRITE_VINTAGE_VERSION,
+    build_price_write_vintage_record,
+    ensure_price_write_vintage_ok,
+    live_source_times,
+    write_price_write_vintage_log,
+)
 from .utils import ensure_env
 
 
@@ -84,8 +92,11 @@ def run_repricer_min_price_sync_api(
     effective_artifacts = Path(artifacts_dir or run_cfg.artifacts_dir)
     effective_artifacts.mkdir(parents=True, exist_ok=True)
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_checked_at = datetime.now().astimezone()
     run_dir = effective_artifacts / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    price_write_source_times = live_source_times(run_checked_at)
+    price_write_source_basis = "live_repricer_reference"
 
     effective_timeout_ms = int(timeout_ms or run_cfg.page_timeout_ms)
     effective_slowmo_ms = int(slowmo_ms or run_cfg.slowmo_ms)
@@ -130,12 +141,18 @@ def run_repricer_min_price_sync_api(
         "missing_matches": 0,
         "external_floor_found": 0,
         "external_line52_locked_skipped": 0,
+        "protected_rows_skipped": 0,
         "errors": 0,
         "per_store": {},
         "remaining_mismatches": {},
+        "price_write_vintage_version": PRICE_WRITE_VINTAGE_VERSION,
+        "price_write_vintage_source_basis": price_write_source_basis,
+        "price_write_vintage_logged_rows": 0,
+        "price_write_vintage_log_csv": "",
         "artifacts_dir": str(run_dir),
         "checkpoint_path": effective_checkpoint,
     }
+    price_write_vintage_rows: list[dict[str, Any]] = []
 
     def log_error(label: str, exc: Exception | None = None, context: dict[str, Any] | None = None) -> None:
         payload: dict[str, Any] = {
@@ -158,6 +175,30 @@ def run_repricer_min_price_sync_api(
         if exc:
             logging.debug("%s", exc)
         log_error(label, exc, context)
+
+    def build_vintage_record(
+        *,
+        store_id: int,
+        row_id: Any,
+        merchant_sku: Any,
+        operation: str,
+        target_field: str,
+        target_value: int,
+    ) -> dict[str, Any]:
+        return build_price_write_vintage_record(
+            writer_id="web_auto.repricer_min_price_sync",
+            run_id=run_id,
+            store_id=store_id,
+            store_name=str(store_id),
+            row_id=row_id,
+            merchant_sku=str(merchant_sku or ""),
+            operation=operation,
+            target_field=target_field,
+            target_value=target_value,
+            source_times=price_write_source_times,
+            source_basis=price_write_source_basis,
+            as_of=run_checked_at,
+        )
 
     def open_context(playwright):
         if effective_profile_dir:
@@ -432,6 +473,7 @@ def run_repricer_min_price_sync_api(
                         "missing_matches": 0,
                         "external_floor_found": 0,
                         "external_line52_locked_skipped": 0,
+                        "protected_rows_skipped": 0,
                         "errors": 0,
                     },
                 )
@@ -529,6 +571,15 @@ def run_repricer_min_price_sync_api(
                             sku = _normalize_sku(row.get("merchant_sku"))
                             kaspi_sku = _normalize_sku(row.get("kaspi_sku"))
 
+                            if is_protected_merchant_sku(sku, config.protected_merchant_sku_prefixes) or (
+                                kaspi_sku and is_protected_merchant_sku(kaspi_sku, config.protected_merchant_sku_prefixes)
+                            ):
+                                summary["protected_rows_skipped"] += 1
+                                store_summary["protected_rows_skipped"] += 1
+                                checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                save_checkpoint(effective_checkpoint, checkpoint)
+                                continue
+
                             current_min = parse_price_int(row.get("min_price"))
                             if current_min is None:
                                 current_min = parse_price_int(row.get("price"))
@@ -617,12 +668,42 @@ def run_repricer_min_price_sync_api(
 
                             if effective_dry_run:
                                 if need_min_update:
+                                    price_write_vintage_rows.append(
+                                        build_vintage_record(
+                                            store_id=store_id,
+                                            row_id=row_id,
+                                            merchant_sku=sku or kaspi_sku or "",
+                                            operation="planned_price_write",
+                                            target_field="min_price",
+                                            target_value=int(source_min),
+                                        )
+                                    )
                                     summary["min_price_updates"] += 1
                                     store_summary["min_price_updates"] += 1
                                 if need_max_update:
+                                    price_write_vintage_rows.append(
+                                        build_vintage_record(
+                                            store_id=store_id,
+                                            row_id=row_id,
+                                            merchant_sku=sku or kaspi_sku or "",
+                                            operation="planned_price_write",
+                                            target_field="max_price",
+                                            target_value=int(source_min),
+                                        )
+                                    )
                                     summary["max_price_updates"] += 1
                                     store_summary["max_price_updates"] += 1
                                 if need_live_price_update:
+                                    price_write_vintage_rows.append(
+                                        build_vintage_record(
+                                            store_id=store_id,
+                                            row_id=row_id,
+                                            merchant_sku=sku or kaspi_sku or "",
+                                            operation="planned_price_write",
+                                            target_field="price",
+                                            target_value=int(source_min),
+                                        )
+                                    )
                                     summary["current_price_updates"] += 1
                                     store_summary["current_price_updates"] += 1
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
@@ -630,6 +711,16 @@ def run_repricer_min_price_sync_api(
                                 continue
 
                             if need_min_update:
+                                vintage_record = build_vintage_record(
+                                    store_id=store_id,
+                                    row_id=row_id,
+                                    merchant_sku=sku or kaspi_sku or "",
+                                    operation="set_new_price",
+                                    target_field="min_price",
+                                    target_value=int(source_min),
+                                )
+                                price_write_vintage_rows.append(vintage_record)
+                                ensure_price_write_vintage_ok(vintage_record)
                                 summary["api_sets_attempted"] += 1
                                 store_summary["api_sets_attempted"] += 1
                                 form_data = urlencode({"id": str(row_id), "min_price": str(source_min)})
@@ -653,6 +744,16 @@ def run_repricer_min_price_sync_api(
                                     )
 
                             if need_max_update:
+                                vintage_record = build_vintage_record(
+                                    store_id=store_id,
+                                    row_id=row_id,
+                                    merchant_sku=sku or kaspi_sku or "",
+                                    operation="set_max_price",
+                                    target_field="max_price",
+                                    target_value=int(source_min),
+                                )
+                                price_write_vintage_rows.append(vintage_record)
+                                ensure_price_write_vintage_ok(vintage_record)
                                 summary["api_sets_attempted"] += 1
                                 store_summary["api_sets_attempted"] += 1
                                 form_data = urlencode({"id": str(row_id), "max_price": str(source_min)})
@@ -676,6 +777,16 @@ def run_repricer_min_price_sync_api(
                                     )
 
                             if need_live_price_update:
+                                vintage_record = build_vintage_record(
+                                    store_id=store_id,
+                                    row_id=row_id,
+                                    merchant_sku=sku or kaspi_sku or "",
+                                    operation="set_item_price",
+                                    target_field="price",
+                                    target_value=int(source_min),
+                                )
+                                price_write_vintage_rows.append(vintage_record)
+                                ensure_price_write_vintage_ok(vintage_record)
                                 summary["api_sets_attempted"] += 1
                                 store_summary["api_sets_attempted"] += 1
                                 form_data = urlencode({"id": str(row_id), "price": str(source_min)})
@@ -743,6 +854,14 @@ def run_repricer_min_price_sync_api(
                                 link = _normalize_link(row.get("link"))
                                 sku = _normalize_sku(row.get("merchant_sku"))
                                 kaspi_sku = _normalize_sku(row.get("kaspi_sku"))
+                                if is_protected_merchant_sku(sku, config.protected_merchant_sku_prefixes) or (
+                                    kaspi_sku
+                                    and is_protected_merchant_sku(
+                                        kaspi_sku,
+                                        config.protected_merchant_sku_prefixes,
+                                    )
+                                ):
+                                    continue
                                 current_min = parse_price_int(row.get("min_price"))
                                 if current_min is None:
                                     current_min = parse_price_int(row.get("price"))
@@ -819,6 +938,12 @@ def run_repricer_min_price_sync_api(
         finally:
             if close_context:
                 target_context.close()
+
+    if price_write_vintage_rows:
+        vintage_path = run_dir / "price_write_vintage_log.csv"
+        write_price_write_vintage_log(vintage_path, price_write_vintage_rows)
+        summary["price_write_vintage_logged_rows"] = len(price_write_vintage_rows)
+        summary["price_write_vintage_log_csv"] = str(vintage_path)
 
     summary_path = run_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 from dotenv import load_dotenv
+from playwright.sync_api import Error as PWError
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
@@ -128,6 +129,45 @@ def _as_scalar(value: Any) -> Any:
     return value
 
 
+def _open_store(page, *, base_url: str, token: str, store_id: int, timeout_ms: int) -> None:
+    last_error: Exception | None = None
+    for attempt in range(2):
+        page.goto(f"{base_url}?token={token}", wait_until="domcontentloaded", timeout=timeout_ms)
+        try:
+            _close_login_modal(page)
+            page.wait_for_selector("#mid_header", timeout=timeout_ms)
+            page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
+            try:
+                page.evaluate(
+                    """
+                    (sid) => {
+                      const el = document.getElementById(String(sid));
+                      if (el && typeof window.get_mid_data === 'function') {
+                        window.get_mid_data(el);
+                      }
+                    }
+                    """,
+                    store_id,
+                )
+            except PWError as exc:
+                # The radio click can already start get_mid_data; a duplicate call can
+                # collide with DataTables teardown. Proceed only if params settle.
+                last_error = exc
+                page.wait_for_timeout(1000)
+            _close_login_modal(page)
+            _wait_table_ready(page, timeout_ms)
+            if not _get_datatable_params(page):
+                raise RuntimeError(f"missing_datatables_params_store_{store_id}")
+            return
+        except (PWTimeout, PWError, RuntimeError) as exc:
+            last_error = exc
+            if attempt == 0:
+                page.wait_for_timeout(1500)
+                continue
+            raise RuntimeError(f"Table load failed for store {store_id}") from None
+    raise RuntimeError(f"Table load failed for store {store_id}") from None
+
+
 def export_repricer_items_to_sqlite(
     *,
     config_path: str | Path,
@@ -174,30 +214,10 @@ def export_repricer_items_to_sqlite(
                 summary["stores"][str(store_id)] = store_summary
 
                 try:
-                    page.goto(
-                        f"{account.base_url}?token={token}",
-                        wait_until="domcontentloaded",
-                        timeout=config.timeout_ms,
-                    )
-                    _close_login_modal(page)
-                    page.wait_for_selector("#mid_header", timeout=config.timeout_ms)
-                    page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
-                    page.evaluate(
-                        """
-                        (sid) => {
-                          const el = document.getElementById(String(sid));
-                          if (el && typeof window.get_mid_data === 'function') {
-                            window.get_mid_data(el);
-                          }
-                        }
-                        """,
-                        store_id,
-                    )
-                    _close_login_modal(page)
-                    _wait_table_ready(page, config.timeout_ms)
-                except PWTimeout as exc:
-                    _capture_artifact(page, Path("runs/repricer_items_export"), f"store_{store_id}_timeout")
-                    raise RuntimeError(f"Table load timeout for store {store_id}") from exc
+                    _open_store(page, base_url=account.base_url, token=token, store_id=store_id, timeout_ms=config.timeout_ms)
+                except RuntimeError as exc:
+                    _capture_artifact(page, Path("runs/repricer_items_export"), f"store_{store_id}_load_failed")
+                    raise RuntimeError(f"Table load failed for store {store_id}") from None
 
                 params = _get_datatable_params(page)
                 if not params:
@@ -319,10 +339,10 @@ def export_repricer_items_to_sqlite(
                     if config.slowmo_ms:
                         time.sleep(config.slowmo_ms / 1000.0)
 
-        conn.commit()
         context.close()
         browser.close()
 
+    conn.commit()
     conn.close()
     return summary
 

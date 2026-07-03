@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from playwright.sync_api import Error as PWError
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
@@ -48,6 +49,12 @@ KASPI_ACCEPT = "application/json, text/plain, */*"
 KASPI_ACCEPT_LANGUAGE = "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
 DEFAULT_FLOOR_MAP_PATH = Path(__file__).resolve().parents[1] / "exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v7.csv"
 DELIVERY_DAYS_CACHE_TTL_HOURS = 24
+SCOPE_MAP_STORE_IDS = {
+    "UNIVERSAL": 30000001,
+    "STORE-B": 30000002,
+    "STOREB": 30000002,
+    "11KZ": 30290083,
+}
 
 
 def _extract_competition_scope_for_row(row: dict[str, Any] | None, row_text: str | None = "") -> str | None:
@@ -77,6 +84,183 @@ def _load_floor_map_from_csv(path: Path) -> dict[str, int]:
             prev = out.get(sku_key)
             out[sku_key] = max(prev or 0, value)
     return out
+
+
+def _parse_positive_int(value: Any) -> int | None:
+    text = str(value or "").strip().replace(" ", "").replace(",", ".")
+    if not text:
+        return None
+    try:
+        parsed = int(float(text))
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _scope_map_store_id(row: dict[str, Any]) -> int | None:
+    direct = _parse_positive_int(row.get("store_id") or row.get("repricer_store_id"))
+    if direct:
+        return direct
+    store = str(row.get("store") or row.get("store_name") or "").strip().upper()
+    store = store.replace("_", "-")
+    return SCOPE_MAP_STORE_IDS.get(store)
+
+
+def _load_competition_scope_map(path: str | Path | None) -> dict[str, Any]:
+    if not path:
+        return {"path": "", "by_row_id": {}, "by_merchant_sku": {}, "entries": 0}
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"competition scope map not found: {p}")
+
+    by_row_id: dict[tuple[int, int], dict[str, Any]] = {}
+    by_merchant_sku: dict[tuple[int, str], dict[str, Any]] = {}
+    with p.open("r", encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        for raw in reader:
+            store_id = _scope_map_store_id(raw)
+            if not store_id:
+                continue
+            merchant_sku = str(raw.get("merchant_sku") or "").strip()
+            sku_key = str(raw.get("sku_key") or raw.get("resolved_sku_key") or "").strip().upper()
+            mapped_row = {
+                "resolved_sku_key": sku_key,
+                "merchant_sku": merchant_sku,
+                "kaspi_sku": str(raw.get("kaspi_sku") or "").strip(),
+                "link": str(raw.get("link") or raw.get("url") or "").strip(),
+            }
+            scope = str(raw.get("competition_scope") or "").strip().upper()
+            if not scope:
+                scope = classify_competition_scope(mapped_row) or ""
+            competitive_floor = (
+                _parse_positive_int(raw.get("competitive_floor_kzt"))
+                or _parse_positive_int(raw.get("effective_floor"))
+                or _parse_positive_int(raw.get("floor_5pct"))
+                or _parse_positive_int(raw.get("floor_35pct"))
+            )
+            entry = {
+                "store_id": store_id,
+                "row_id": _parse_positive_int(raw.get("repricer_row_id") or raw.get("row_id") or raw.get("id")),
+                "merchant_sku": merchant_sku,
+                "kaspi_sku": mapped_row["kaspi_sku"],
+                "link": mapped_row["link"],
+                "resolved_sku_key": sku_key,
+                "competition_scope": scope,
+                "competitive_floor_kzt": competitive_floor,
+                "stock_status": str(raw.get("stock_status") or "").strip().upper(),
+                "source_path": str(p),
+            }
+            if entry["row_id"]:
+                by_row_id[(store_id, int(entry["row_id"]))] = entry
+            if merchant_sku:
+                by_merchant_sku[(store_id, merchant_sku)] = entry
+
+    return {
+        "path": str(p),
+        "by_row_id": by_row_id,
+        "by_merchant_sku": by_merchant_sku,
+        "entries": len(by_row_id) + len(by_merchant_sku),
+    }
+
+
+def _lookup_competition_scope_map_entry(
+    scope_map: dict[str, Any] | None,
+    *,
+    store_id: int,
+    row: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str]:
+    if not scope_map:
+        return None, ""
+    row_id = _extract_row_id(row.get("DT_RowId") or row.get("id") or row.get("row_id"))
+    merchant_sku = str(row.get("merchant_sku") or "").strip()
+    candidates: list[tuple[dict[str, Any] | None, str]] = []
+    if row_id is not None:
+        candidates.append((scope_map.get("by_row_id", {}).get((int(store_id), int(row_id))), "scope_map_row_id"))
+    if merchant_sku:
+        candidates.append((scope_map.get("by_merchant_sku", {}).get((int(store_id), merchant_sku)), "scope_map_merchant_sku"))
+    for entry, source in candidates:
+        if not entry:
+            continue
+        expected_sku = str(entry.get("merchant_sku") or "").strip()
+        if expected_sku and merchant_sku and expected_sku != merchant_sku:
+            continue
+        return entry, source
+    return None, ""
+
+
+def _resolve_competition_scope_and_floor(
+    *,
+    row: dict[str, Any] | None,
+    row_text: str | None,
+    floor_by_sku_key: dict[str, int],
+    scope_map: dict[str, Any] | None = None,
+    store_id: int | None = None,
+) -> tuple[str | None, int | None, str]:
+    map_entry: dict[str, Any] | None = None
+    map_source = ""
+    if row is not None and store_id is not None:
+        map_entry, map_source = _lookup_competition_scope_map_entry(scope_map, store_id=int(store_id), row=row)
+    if map_entry:
+        enriched = dict(row or {})
+        for key in ("resolved_sku_key", "merchant_sku", "kaspi_sku", "link"):
+            value = map_entry.get(key)
+            if value and not enriched.get(key):
+                enriched[key] = value
+        scope = str(map_entry.get("competition_scope") or "").strip().upper() or classify_competition_scope(enriched, row_text)
+        floor = _parse_positive_int(map_entry.get("competitive_floor_kzt"))
+        if floor is None:
+            floor = effective_competition_floor_kzt(enriched, floor_by_sku_key, row_text)
+        return scope, floor, map_source
+
+    scope = _extract_competition_scope_for_row(row, row_text or "")
+    return scope, effective_competition_floor_kzt(row, floor_by_sku_key, row_text or ""), "row_text" if row_text else "row"
+
+
+def _split_filter_values(values: list[str] | tuple[str, ...] | set[str] | None) -> set[str]:
+    out: set[str] = set()
+    for value in values or []:
+        for part in str(value or "").split(","):
+            text = part.strip()
+            if text:
+                out.add(text)
+    return out
+
+
+def _competitor_action_allowed(
+    *,
+    action: str,
+    reason: str,
+    allowed_actions: set[str],
+    allowed_reasons: set[str],
+) -> bool:
+    if allowed_actions and action not in allowed_actions:
+        return False
+    if allowed_reasons and reason not in allowed_reasons:
+        return False
+    return True
+
+
+def _competitor_row_allowed(
+    row: dict[str, Any],
+    *,
+    allowed_row_ids: set[str],
+    allowed_merchant_skus: set[str],
+) -> bool:
+    row_id = _extract_row_id(row.get("DT_RowId") or row.get("id") or row.get("row_id"))
+    merchant_sku = str(row.get("merchant_sku") or "").strip()
+    if allowed_row_ids and (row_id is None or str(row_id) not in allowed_row_ids):
+        return False
+    if allowed_merchant_skus and merchant_sku not in allowed_merchant_skus:
+        return False
+    return True
+
+
+def _competitor_mid_allowed(competitor_mid: Any, allowed_competitor_mids: set[str]) -> bool:
+    if not allowed_competitor_mids:
+        return True
+    if competitor_mid is None:
+        return False
+    return str(competitor_mid).strip() in allowed_competitor_mids
 
 
 def _parse_competitor_price_value(value: Any) -> float | None:
@@ -346,12 +530,17 @@ def _determine_competitor_toggle_action(
         exact_targets=exact_targets,
         contains_targets=contains_targets,
     )
+    if reason == "self_store":
+        return "", reason
     if should_ignore:
         if currently_ignored:
             return "", "already_ignored"
         if mid_str is None:
             return "", reason
         return "set_true", reason
+
+    if currently_ignored and mid_str == "30321583":
+        return "set_false", "stale_ignore_tesso_valid_competitor"
 
     if currently_ignored and competition_scope and competitive_floor_kzt is not None:
         return "set_false", "stale_ignore_valid_competitor"
@@ -446,6 +635,46 @@ def _wait_table_ready(page, timeout_ms: int) -> None:
         """,
         timeout=timeout_ms,
     )
+
+
+def _open_price_strategy_store(page, *, base_url: str, token: str, store_id: int, timeout_ms: int) -> str:
+    last_error: Exception | None = None
+    for attempt in range(2):
+        _goto_token_page(page, base_url=base_url, token=token, timeout_ms=timeout_ms)
+        referer = page.url
+        try:
+            _close_login_modal(page)
+            page.wait_for_selector("#mid_header", timeout=timeout_ms)
+            page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
+            try:
+                page.evaluate(
+                    """
+                    (sid) => {
+                      const el = document.getElementById(String(sid));
+                      if (el && typeof window.get_mid_data === 'function') {
+                        window.get_mid_data(el);
+                      }
+                    }
+                    """,
+                    store_id,
+                )
+            except PWError as exc:
+                # The click can already trigger get_mid_data. A duplicate call can
+                # collide with DataTables teardown; continue only if params settle.
+                last_error = exc
+                page.wait_for_timeout(1000)
+            _close_login_modal(page)
+            _wait_table_ready(page, timeout_ms)
+            if not _get_datatable_params(page):
+                raise RuntimeError(f"missing_datatables_params_store_{store_id}")
+            return referer
+        except (PWTimeout, PWError, RuntimeError) as exc:
+            last_error = exc
+            if attempt == 0:
+                page.wait_for_timeout(1500)
+                continue
+            raise RuntimeError(f"Table load failed for store {store_id}") from None
+    raise RuntimeError(f"Table load failed for store {store_id}") from None
 
 
 def _goto_first_page(page, timeout_ms: int) -> None:
@@ -867,33 +1096,13 @@ def run_repricer_competitors(
                 })
 
                 try:
-                    _goto_token_page(page, base_url=base_url, token=token, timeout_ms=effective_timeout_ms)
-                    _close_login_modal(page)
-                    page.wait_for_selector("#mid_header", timeout=effective_timeout_ms)
-                    page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
-                    page.evaluate(
-                        """
-                        (sid) => {
-                          const el = document.getElementById(String(sid));
-                          if (el && typeof window.get_mid_data === 'function') {
-                            window.get_mid_data(el);
-                          }
-                        }
-                        """,
-                        store_id,
+                    _open_price_strategy_store(
+                        page,
+                        base_url=base_url,
+                        token=token,
+                        store_id=store_id,
+                        timeout_ms=effective_timeout_ms,
                     )
-                    _close_login_modal(page)
-
-                    try:
-                        _wait_table_ready(page, effective_timeout_ms)
-                    except PWTimeout as exc:
-                        record_error(
-                            f"Table load timeout for store {store_id}",
-                            exc,
-                            {"store_id": store_id},
-                        )
-                        _capture_artifact(page, run_dir, f"store_{store_id}_table_timeout")
-                        continue
 
                     # Ensure we start from first page
                     try:
@@ -1082,6 +1291,12 @@ def run_repricer_competitors_api(
     profile_dir: str | None,
     storage_state: str | None,
     api_verify: bool,
+    competition_scope_map_path: str | None = None,
+    only_competitor_actions: list[str] | None = None,
+    only_competitor_reasons: list[str] | None = None,
+    only_row_ids: list[str] | None = None,
+    only_merchant_skus: list[str] | None = None,
+    only_competitor_mids: list[str] | None = None,
 ) -> dict[str, Any]:
     run_cfg = config.run
     set_line52_pricing_profile(config.line52_pricing_profile)
@@ -1111,6 +1326,12 @@ def run_repricer_competitors_api(
 
     exact_targets, contains_targets = build_target_sets(config.targets, config.contains_targets)
     floor_by_sku_key = _load_floor_map_from_csv(DEFAULT_FLOOR_MAP_PATH)
+    competition_scope_map = _load_competition_scope_map(competition_scope_map_path)
+    allowed_actions = _split_filter_values(only_competitor_actions)
+    allowed_reasons = _split_filter_values(only_competitor_reasons)
+    allowed_row_ids = _split_filter_values(only_row_ids)
+    allowed_merchant_skus = _split_filter_values(only_merchant_skus)
+    allowed_competitor_mids = _split_filter_values(only_competitor_mids)
     delivery_days_cache_payload = load_delivery_days_cache(DEFAULT_DELIVERY_DAYS_CACHE_PATH)
     delivery_days_cache_dirty = False
 
@@ -1137,8 +1358,54 @@ def run_repricer_competitors_api(
         "remaining_after_verify": {},
         "artifacts_dir": str(run_dir),
         "checkpoint_path": effective_checkpoint,
+        "competition_scope_map_path": competition_scope_map.get("path", ""),
+        "competition_scope_map_entries": competition_scope_map.get("entries", 0),
+        "competition_scope_map_hits": 0,
+        "only_competitor_actions": sorted(allowed_actions),
+        "only_competitor_reasons": sorted(allowed_reasons),
+        "only_row_ids": sorted(allowed_row_ids),
+        "only_merchant_skus": sorted(allowed_merchant_skus),
+        "only_competitor_mids": sorted(allowed_competitor_mids),
     }
     delivery_days_cache: dict[str, dict[str, int]] = {}
+    action_rows: list[dict[str, Any]] = []
+
+    def record_action(
+        *,
+        phase: str,
+        store_id: int,
+        row: dict[str, Any],
+        competition_scope: str | None,
+        competitive_floor: int | None,
+        scope_source: str,
+        comp: dict[str, Any],
+        action: str,
+        reason: str,
+        delivery_days: int | None,
+        status: str,
+    ) -> None:
+        action_rows.append(
+            {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "phase": phase,
+                "dry_run": str(effective_dry_run).lower(),
+                "store_id": store_id,
+                "row_id": _extract_row_id(row.get("DT_RowId") or row.get("id") or row.get("row_id")) or "",
+                "merchant_sku": row.get("merchant_sku") or "",
+                "kaspi_sku": row.get("kaspi_sku") or "",
+                "link": row.get("link") or "",
+                "competition_scope": competition_scope or "",
+                "competitive_floor_kzt": competitive_floor or "",
+                "scope_source": scope_source,
+                "competitor_mid": comp.get("mid") or "",
+                "competitor_name": comp.get("name") or "",
+                "competitor_price": comp.get("price") or "",
+                "competitor_delivery_days": "" if delivery_days is None else delivery_days,
+                "action": action,
+                "reason": reason,
+                "status": status,
+            }
+        )
 
     def log_error(label: str, exc: Exception | None = None, context: dict[str, Any] | None = None) -> None:
         payload: dict[str, Any] = {
@@ -1209,34 +1476,13 @@ def run_repricer_competitors_api(
                 )
 
                 try:
-                    _goto_token_page(page, base_url=base_url, token=token, timeout_ms=effective_timeout_ms)
-                    referer = page.url
-                    _close_login_modal(page)
-                    page.wait_for_selector("#mid_header", timeout=effective_timeout_ms)
-                    page.locator(f"#mid_header input[id='{store_id}']").click(timeout=5000, force=True)
-                    page.evaluate(
-                        """
-                        (sid) => {
-                          const el = document.getElementById(String(sid));
-                          if (el && typeof window.get_mid_data === 'function') {
-                            window.get_mid_data(el);
-                          }
-                        }
-                        """,
-                        store_id,
+                    referer = _open_price_strategy_store(
+                        page,
+                        base_url=base_url,
+                        token=token,
+                        store_id=store_id,
+                        timeout_ms=effective_timeout_ms,
                     )
-                    _close_login_modal(page)
-
-                    try:
-                        _wait_table_ready(page, effective_timeout_ms)
-                    except PWTimeout as exc:
-                        record_error(
-                            f"Table load timeout for store {store_id}",
-                            exc,
-                            {"store_id": store_id},
-                        )
-                        _capture_artifact(page, run_dir, f"store_{store_id}_table_timeout")
-                        continue
 
                     params = _get_datatable_params(page)
                     if not params:
@@ -1323,12 +1569,27 @@ def run_repricer_competitors_api(
                                 checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
                                 save_checkpoint(effective_checkpoint, checkpoint)
                                 continue
+                            if not _competitor_row_allowed(
+                                row,
+                                allowed_row_ids=allowed_row_ids,
+                                allowed_merchant_skus=allowed_merchant_skus,
+                            ):
+                                checkpoint.progress[store_key] = Progress(page_index=page_index, row_index=row_idx)
+                                save_checkpoint(effective_checkpoint, checkpoint)
+                                continue
 
                             competitors = row.get("competitors") or []
                             not_competitors = row.get("not_competitors") or []
                             not_set = {str(x) for x in not_competitors if x is not None}
-                            competition_scope = _extract_competition_scope_for_row(row, "")
-                            competitive_floor = effective_competition_floor_kzt(row, floor_by_sku_key)
+                            competition_scope, competitive_floor, scope_source = _resolve_competition_scope_and_floor(
+                                row=row,
+                                row_text="",
+                                floor_by_sku_key=floor_by_sku_key,
+                                scope_map=competition_scope_map,
+                                store_id=store_id,
+                            )
+                            if scope_source.startswith("scope_map"):
+                                summary["competition_scope_map_hits"] += 1
                             delivery_days_by_mid: dict[str, int] = {}
                             row_link = row.get("link")
                             cache_key = _canonical_offer_link(row_link)
@@ -1368,6 +1629,15 @@ def run_repricer_competitors_api(
                                 )
                                 if not action:
                                     continue
+                                if not _competitor_action_allowed(
+                                    action=action,
+                                    reason=reason,
+                                    allowed_actions=allowed_actions,
+                                    allowed_reasons=allowed_reasons,
+                                ):
+                                    continue
+                                if not _competitor_mid_allowed(mid, allowed_competitor_mids):
+                                    continue
                                 if mid is None:
                                     continue
                                 if reason == "competition_scope_long_delivery_10plus_days":
@@ -1379,6 +1649,19 @@ def run_repricer_competitors_api(
 
                                 remaining_targets += 1
                                 if effective_dry_run:
+                                    record_action(
+                                        phase="plan",
+                                        store_id=store_id,
+                                        row=row,
+                                        competition_scope=competition_scope,
+                                        competitive_floor=competitive_floor,
+                                        scope_source=scope_source,
+                                        comp=comp,
+                                        action=action,
+                                        reason=reason,
+                                        delivery_days=comp_delivery_days,
+                                        status="planned",
+                                    )
                                     summary["checkboxes_changed"] += 1
                                     store_summary["checkboxes_changed"] += 1
                                     if action == "set_true":
@@ -1405,6 +1688,19 @@ def run_repricer_competitors_api(
                                 summary["api_requests"] += 1
                                 store_summary["api_requests"] += 1
                                 if resp_set.status == 200:
+                                    record_action(
+                                        phase="apply",
+                                        store_id=store_id,
+                                        row=row,
+                                        competition_scope=competition_scope,
+                                        competitive_floor=competitive_floor,
+                                        scope_source=scope_source,
+                                        comp=comp,
+                                        action=action,
+                                        reason=reason,
+                                        delivery_days=comp_delivery_days,
+                                        status="succeeded",
+                                    )
                                     summary["api_sets_succeeded"] += 1
                                     store_summary["api_sets_succeeded"] += 1
                                     summary["checkboxes_changed"] += 1
@@ -1415,6 +1711,19 @@ def run_repricer_competitors_api(
                                         not_set.discard(str(mid))
                                 else:
                                     err_text = _safe_response_text(resp_set)
+                                    record_action(
+                                        phase="apply",
+                                        store_id=store_id,
+                                        row=row,
+                                        competition_scope=competition_scope,
+                                        competitive_floor=competitive_floor,
+                                        scope_source=scope_source,
+                                        comp=comp,
+                                        action=action,
+                                        reason=reason,
+                                        delivery_days=comp_delivery_days,
+                                        status=f"failed_http_{resp_set.status}",
+                                    )
                                     record_error(
                                         f"API set failed store {store_id} row {row_id}",
                                         None,
@@ -1480,11 +1789,24 @@ def run_repricer_competitors_api(
                                 break
 
                             for row in rows:
+                                if not _competitor_row_allowed(
+                                    row,
+                                    allowed_row_ids=allowed_row_ids,
+                                    allowed_merchant_skus=allowed_merchant_skus,
+                                ):
+                                    continue
                                 competitors = row.get("competitors") or []
                                 not_competitors = row.get("not_competitors") or []
                                 not_set = {str(x) for x in not_competitors if x is not None}
-                                competition_scope = _extract_competition_scope_for_row(row, "")
-                                competitive_floor = effective_competition_floor_kzt(row, floor_by_sku_key)
+                                competition_scope, competitive_floor, scope_source = _resolve_competition_scope_and_floor(
+                                    row=row,
+                                    row_text="",
+                                    floor_by_sku_key=floor_by_sku_key,
+                                    scope_map=competition_scope_map,
+                                    store_id=store_id,
+                                )
+                                if scope_source.startswith("scope_map"):
+                                    summary["competition_scope_map_hits"] += 1
                                 delivery_days_by_mid: dict[str, int] = {}
                                 row_link = row.get("link")
                                 cache_key = _canonical_offer_link(row_link)
@@ -1523,9 +1845,31 @@ def run_repricer_competitors_api(
                                     )
                                     if not action:
                                         continue
+                                    if not _competitor_action_allowed(
+                                        action=action,
+                                        reason=reason,
+                                        allowed_actions=allowed_actions,
+                                        allowed_reasons=allowed_reasons,
+                                    ):
+                                        continue
+                                    if not _competitor_mid_allowed(mid, allowed_competitor_mids):
+                                        continue
                                     if reason == "competition_scope_long_delivery_10plus_days":
                                         summary["delivery_days_ignored"] += 1
                                         store_summary["delivery_days_ignored"] += 1
+                                    record_action(
+                                        phase="verify",
+                                        store_id=store_id,
+                                        row=row,
+                                        competition_scope=competition_scope,
+                                        competitive_floor=competitive_floor,
+                                        scope_source=scope_source,
+                                        comp=comp,
+                                        action=action,
+                                        reason=reason,
+                                        delivery_days=comp_delivery_days,
+                                        status="remaining",
+                                    )
                                     verify_remaining += 1
 
                             start += length
@@ -1546,6 +1890,35 @@ def run_repricer_competitors_api(
 
     if delivery_days_cache_dirty:
         save_delivery_days_cache(DEFAULT_DELIVERY_DAYS_CACHE_PATH, delivery_days_cache_payload)
+
+    if action_rows:
+        action_path = run_dir / "competitor_actions.csv"
+        action_fields = [
+            "timestamp",
+            "phase",
+            "dry_run",
+            "store_id",
+            "row_id",
+            "merchant_sku",
+            "kaspi_sku",
+            "link",
+            "competition_scope",
+            "competitive_floor_kzt",
+            "scope_source",
+            "competitor_mid",
+            "competitor_name",
+            "competitor_price",
+            "competitor_delivery_days",
+            "action",
+            "reason",
+            "status",
+        ]
+        with action_path.open("w", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=action_fields)
+            writer.writeheader()
+            writer.writerows(action_rows)
+        summary["competitor_actions_csv"] = str(action_path)
+        summary["competitor_actions_rows"] = len(action_rows)
 
     summary_path = run_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

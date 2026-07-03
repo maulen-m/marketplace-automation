@@ -57,12 +57,22 @@ def history_row_to_payload(row: HistoryRow) -> dict[str, Any]:
 
 
 def detail_url_from_history_row(row: HistoryRow) -> str:
-    href = str(row.detail_href or "").strip()
-    if not href:
+    return detail_url_from_history_ref(row.detail_href)
+
+
+def detail_url_from_history_ref(value: str) -> str:
+    ref = str(value or "").strip()
+    if not ref:
         return ""
-    if href.startswith("http://") or href.startswith("https://"):
-        return href
-    return f"https://kaspi.kz/mc/{href.lstrip('/')}"
+    if ref.startswith("http://") or ref.startswith("https://"):
+        return ref
+    if ref.startswith("#/"):
+        return f"https://kaspi.kz/mc/{ref}"
+    if "/history/detail/" in ref:
+        return f"https://kaspi.kz/mc/{ref.lstrip('/')}"
+    if re.fullmatch(r"[A-Za-z0-9_-]+", ref):
+        return f"https://kaspi.kz/mc/#/history/detail/{ref}"
+    return ref
 
 
 def resolve_upload_file_paths(
@@ -117,8 +127,7 @@ def select_latest_matching_history_row(rows: list[HistoryRow], filename: str, *,
     return matches[0]
 
 
-def _extract_detail_error_text(page: Page) -> str:
-    text = page.locator("body").inner_text()
+def extract_detail_error_text_from_text(text: str) -> str:
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("В ячейке "):
@@ -126,8 +135,11 @@ def _extract_detail_error_text(page: Page) -> str:
     return text[:3000].strip()
 
 
-def _extract_detail_metrics(page: Page) -> dict[str, int]:
-    text = page.locator("body").inner_text()
+def _extract_detail_error_text(page: Page) -> str:
+    return extract_detail_error_text_from_text(page.locator("body").inner_text())
+
+
+def extract_detail_metrics_from_text(text: str) -> dict[str, int]:
     patterns = {
         "total": r"Всего товаров:\s*(\d+)",
         "unrecognized": r"Нераспознанные товары:\s*(\d+)",
@@ -141,6 +153,10 @@ def _extract_detail_metrics(page: Page) -> dict[str, int]:
         match = re.search(pattern, text)
         out[key] = int(match.group(1)) if match else 0
     return out
+
+
+def _extract_detail_metrics(page: Page) -> dict[str, int]:
+    return extract_detail_metrics_from_text(page.locator("body").inner_text())
 
 
 def _parse_history_rows(page: Page) -> list[HistoryRow]:
@@ -179,6 +195,11 @@ def _parse_history_rows(page: Page) -> list[HistoryRow]:
 def _ensure_upload_page(page: Page) -> None:
     page.goto(PRICE_LIST_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
+    if page.locator('input[type="file"]').count() == 0:
+        nav_link = page.get_by_text("Загрузить прайс-лист", exact=True)
+        if nav_link.count() > 0:
+            nav_link.first.click()
+            page.wait_for_timeout(3000)
     page.locator('input[type="file"]').wait_for(timeout=15000)
     page.get_by_text("Загрузить файл вручную").wait_for(timeout=15000)
 
@@ -329,6 +350,112 @@ def run_kaspi_pricelist_upload(
         browser.close()
     summary["status"] = "success"
     summary["store_name"] = normalize_store_name(store_name)
+    return summary
+
+
+def run_kaspi_pricelist_history_detail(
+    *,
+    store_name: str,
+    email: str,
+    password: str,
+    detail_ref: str,
+    run_dir: Path,
+    headless: bool,
+    detail_filter: str = "",
+    download_result_excel: bool = False,
+) -> dict[str, Any]:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    detail_url = detail_url_from_history_ref(detail_ref)
+    if not detail_url:
+        return {
+            "store_name": normalize_store_name(store_name),
+            "run_dir": str(run_dir),
+            "status": "invalid_args",
+            "error": "empty_history_detail_ref",
+        }
+    summary: dict[str, Any] = {
+        "store_name": normalize_store_name(store_name),
+        "run_dir": str(run_dir),
+        "detail_ref": detail_ref,
+        "detail_url": detail_url,
+        "detail_filter": detail_filter or "all",
+        "download_result_excel": download_result_excel,
+        "status": "unknown",
+        "production_write_action_executed": False,
+    }
+    with sync_playwright() as p:
+        browser = p.chromium.launch(**merchant_browser_launch_kwargs(headless=headless))
+        page = browser.new_page(viewport={"width": 1440, "height": 1400})
+        login_kaspi_merchant(page, email=email, password=password)
+        page.screenshot(path=str(run_dir / "logged_in_home.png"), full_page=True)
+        page.goto(detail_url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(3000)
+        filter_labels = {
+            "unrecognized": "Нераспознанные товары",
+            "restricted": "Ограниченные товары",
+            "errors": "Товары с ошибками",
+            "warnings": "Товары с предупреждениями",
+            "all": "Всего товаров",
+        }
+        if detail_filter:
+            filter_label = filter_labels.get(detail_filter)
+            if not filter_label:
+                browser.close()
+                return {
+                    **summary,
+                    "status": "invalid_args",
+                    "error": f"unknown_detail_filter:{detail_filter}",
+                }
+            filter_applied = page.evaluate(
+                """
+                (label) => {
+                  for (const select of Array.from(document.querySelectorAll('select'))) {
+                    for (const option of Array.from(select.options || [])) {
+                      if ((option.textContent || '').includes(label)) {
+                        select.value = option.value;
+                        select.dispatchEvent(new Event('input', {bubbles: true}));
+                        select.dispatchEvent(new Event('change', {bubbles: true}));
+                        return true;
+                      }
+                    }
+                  }
+                  return false;
+                }
+                """,
+                filter_label,
+            )
+            summary["filter_applied"] = bool(filter_applied)
+            if not filter_applied:
+                summary["filter_warning"] = f"filter_control_not_found:{filter_label}"
+            page.wait_for_timeout(3000)
+        page.screenshot(path=str(run_dir / "history_detail.png"), full_page=True)
+        body_text = page.locator("body").inner_text()
+        (run_dir / "history_detail_text.txt").write_text(body_text, encoding="utf-8")
+        summary.update(
+            {
+                "status": "success",
+                "final_url": page.url,
+                "detail_metrics": extract_detail_metrics_from_text(body_text),
+                "detail_error": extract_detail_error_text_from_text(body_text),
+                "body_excerpt": body_text[:3000],
+            }
+        )
+        if download_result_excel:
+            try:
+                with page.expect_download(timeout=60000) as download_info:
+                    page.get_by_text("Выгрузить в EXCEL", exact=True).click()
+                download = download_info.value
+                suggested_name = download.suggested_filename or "history_detail_result.xlsx"
+                export_path = run_dir / suggested_name
+                download.save_as(str(export_path))
+                summary["detail_export_path"] = str(export_path)
+            except Exception as exc:  # pragma: no cover - transport/runtime guard
+                summary["detail_export_error"] = f"{type(exc).__name__}: {exc}"
+        browser.close()
+    (run_dir / "history_detail_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return summary
 
 

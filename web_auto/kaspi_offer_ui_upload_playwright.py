@@ -15,11 +15,12 @@ from playwright.sync_api import Locator, Page, sync_playwright
 from .kaspi_merchant_common import login_kaspi_merchant, resolve_store_credentials
 from .kaspi_offer_ui_upload import (
     DEFAULT_ENTRY_URL,
-    _extract_offer_code_from_variant_url,
     _merchant_id_js,
     _normalize_barcode,
     _normalize_size_rus,
+    _product_code_for_search,
     _step_choose_card_js,
+    _step_close_stale_success_modal_js,
     _step_detect_price_warning_js,
     _step_fill_identity_fields_js,
     _step_probe_search_input_js,
@@ -65,7 +66,9 @@ def modal_input_slot_plan(input_count: int) -> dict[str, int | None]:
 
 
 def digits_only(value: Any) -> str:
-    return re.sub(r"\D", "", str(value or ""))
+    if value is None:
+        return ""
+    return re.sub(r"\D", "", str(value))
 
 
 def build_browser_launch_kwargs(*, headless: bool) -> dict[str, Any]:
@@ -114,6 +117,31 @@ def success_state_from_page(page: Page) -> dict[str, Any]:
         return parse_step_result(page.evaluate(_step_verify_success_js()))
     except Exception as exc:
         return {"ok": False, "reason": f"success_probe_failed:{exc.__class__.__name__}"}
+
+
+def _click_price_required_popup(page: Page) -> bool:
+    try:
+        button = page.get_by_role("button", name=re.compile("Указать цену", re.I))
+        if button.count() > 0:
+            button.first.click(timeout=2500)
+            return True
+    except Exception:
+        pass
+    try:
+        close_button = page.get_by_role("button", name=re.compile("Закрыть|Close", re.I))
+        if close_button.count() > 0:
+            close_button.first.click(timeout=2500)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _close_stale_success_modal(page: Page) -> dict[str, Any]:
+    try:
+        return parse_step_result(page.evaluate(_step_close_stale_success_modal_js()))
+    except Exception as exc:
+        return {"ok": False, "reason": f"close_success_failed:{exc.__class__.__name__}"}
 
 
 def _capture_page_screenshot(page: Page, out_path: Path) -> None:
@@ -232,6 +260,149 @@ def _set_locator_value(page: Page, locator: Locator, value: str, *, typing_delay
             pass
 
 
+def _type_price_locator_value(page: Page, locator: Locator, value: str, *, typing_delay_ms: int = 180) -> None:
+    target = str(value)
+    for _ in range(3):
+        try:
+            locator.click(timeout=2500)
+        except Exception:
+            locator.click(force=True, timeout=2500)
+        try:
+            locator.fill("", timeout=2500)
+        except Exception:
+            try:
+                locator.press("Meta+A", timeout=1500)
+                locator.press("Backspace", timeout=1500)
+            except Exception:
+                pass
+        try:
+            locator.press_sequentially(target, delay=typing_delay_ms, timeout=4000)
+        except Exception:
+            try:
+                locator.type(target, delay=typing_delay_ms, timeout=4000)
+            except Exception:
+                page.keyboard.type(target, delay=typing_delay_ms)
+        try:
+            locator.press("Tab", timeout=1500)
+        except Exception:
+            try:
+                locator.blur(timeout=1500)
+            except Exception:
+                pass
+        page.wait_for_timeout(500)
+        if digits_only(read_locator_value(locator)) == digits_only(target):
+            return
+    _set_locator_value(page, locator, target, typing_delay_ms=typing_delay_ms)
+
+
+def _input_context(locator: Locator) -> str:
+    try:
+        return str(
+            locator.evaluate(
+                """(el) => {
+                  const parts = [
+                    el.placeholder,
+                    el.name,
+                    el.id,
+                    el.getAttribute && el.getAttribute('aria-label'),
+                    el.getAttribute && el.getAttribute('data-testid'),
+                  ];
+                  let p = el;
+                  for (let i = 0; i < 5 && p; i++) {
+                    parts.push(p.innerText || '');
+                    p = p.parentElement;
+                  }
+                  return parts.join('\\n');
+                }"""
+            )
+            or ""
+        )
+    except Exception:
+        return ""
+
+
+def _input_y(locator: Locator) -> float:
+    try:
+        return float(locator.evaluate("(el) => el.getBoundingClientRect().y") or 0)
+    except Exception:
+        return 0.0
+
+
+def _price_modal_value_snapshot(page: Page) -> dict[str, Any]:
+    try:
+        return dict(
+            page.evaluate(
+                """() => {
+                  const visible = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return rect.width > 0 && rect.height > 0 &&
+                      style.visibility !== 'hidden' &&
+                      style.display !== 'none';
+                  };
+                  const context = (el) => {
+                    const parts = [
+                      el.placeholder,
+                      el.name,
+                      el.id,
+                      el.getAttribute('aria-label'),
+                      el.getAttribute('data-testid'),
+                    ];
+                    let p = el;
+                    for (let i = 0; i < 5 && p; i++) {
+                      parts.push(p.innerText || '');
+                      p = p.parentElement;
+                    }
+                    return parts.join('\\n').toLowerCase();
+                  };
+                  const inputs = Array.from(document.querySelectorAll('input'))
+                    .filter(visible)
+                    .map((el, idx) => {
+                      const rect = el.getBoundingClientRect();
+                      return {
+                        idx,
+                        value: el.value || '',
+                        dataTestid: (el.getAttribute('data-testid') || '').toLowerCase(),
+                        inputmode: (el.getAttribute('inputmode') || '').toLowerCase(),
+                        context: context(el),
+                        y: rect.y,
+                      };
+                    });
+                  const stocks = inputs
+                    .filter((item) => item.dataTestid === 'edit-stock-input' ||
+                      (item.context.includes('остатки') && !item.context.includes('артикул')))
+                    .sort((a, b) => a.y - b.y);
+                  let prices = inputs
+                    .filter((item) => !stocks.includes(item) &&
+                      item.inputmode === 'numeric' &&
+                      !item.context.includes('артикул') &&
+                      !item.context.includes('наименование'));
+                  if (!prices.length) {
+                    prices = inputs.filter((item) => !stocks.includes(item) &&
+                      item.context.includes('цена') &&
+                      !item.context.includes('артикул') &&
+                      !item.context.includes('наименование'));
+                  }
+                  if (stocks.length) {
+                    const firstStockY = stocks[0].y;
+                    const aboveStock = prices.filter((item) => item.y < firstStockY);
+                    if (aboveStock.length) prices = aboveStock;
+                  }
+                  prices.sort((a, b) => a.y - b.y);
+                  return {
+                    inputs,
+                    price: prices[0] ? prices[0].value : '',
+                    pp1: stocks[0] ? stocks[0].value : '',
+                    pp2: stocks[1] ? stocks[1].value : '',
+                  };
+                }"""
+            )
+            or {}
+        )
+    except Exception as exc:
+        return {"error": f"{exc.__class__.__name__}:{exc}"}
+
+
 def _fill_price_modal_with_playwright(
     page: Page,
     *,
@@ -243,42 +414,106 @@ def _fill_price_modal_with_playwright(
     dialogs = page.locator('[role="dialog"], .modal, .modal-content, .v-dialog, .dialog').filter(has_text="Цена и остатки")
     if dialogs.count() < 1:
         return False, "price_modal_not_found"
-    container = dialogs.first
-    inputs = [locator for locator in container.locator("input").all() if locator.is_visible()]
-    stock_indices = [
-        idx
-        for idx, locator in enumerate(inputs)
-        if (locator.get_attribute("data-testid") or "").strip().lower() == "edit-stock-input"
-    ]
-    if stock_indices:
-        price_idx = next((idx for idx in range(len(inputs)) if idx not in stock_indices), None)
-        extra_indices = [idx for idx in range(len(inputs)) if idx not in stock_indices and idx != price_idx]
-        slots = {
-            "price": price_idx,
-            "pp1": stock_indices[0] if len(stock_indices) >= 1 else None,
-            "pp2": stock_indices[1] if len(stock_indices) >= 2 else None,
-            "barcode": extra_indices[0] if extra_indices else None,
-        }
+
+    def select_price_modal_inputs() -> tuple[Locator | None, Locator | None, Locator | None, int]:
+        inputs = [locator for locator in page.locator("input").all() if locator.is_visible()]
+        infos: list[dict[str, Any]] = []
+        for idx, locator in enumerate(inputs):
+            context = _input_context(locator)
+            context_lower = context.lower()
+            data_testid = (locator.get_attribute("data-testid") or "").strip().lower()
+            inputmode = (locator.get_attribute("inputmode") or "").strip().lower()
+            infos.append(
+                {
+                    "idx": idx,
+                    "locator": locator,
+                    "context": context,
+                    "context_lower": context_lower,
+                    "data_testid": data_testid,
+                    "inputmode": inputmode,
+                    "y": _input_y(locator),
+                }
+            )
+
+        # Kaspi can keep the product identity form visible behind the modal. Do not
+        # infer "first non-stock input" as price; classify by the actual label text.
+        stock_infos = [
+            info
+            for info in infos
+            if info["data_testid"] == "edit-stock-input"
+            or ("остатки" in info["context_lower"] and "артикул" not in info["context_lower"])
+        ]
+        stock_infos.sort(key=lambda info: info["y"])
+
+        price_candidates = [
+            info
+            for info in infos
+            if info not in stock_infos
+            and info["inputmode"] == "numeric"
+            and "артикул" not in info["context_lower"]
+            and "наименование" not in info["context_lower"]
+        ]
+        price_label_infos = [
+            info
+            for info in infos
+            if info not in stock_infos
+            and "цена" in info["context_lower"]
+            and "артикул" not in info["context_lower"]
+            and "наименование" not in info["context_lower"]
+        ]
+        price_candidates.extend(info for info in price_label_infos if info not in price_candidates)
+        if stock_infos:
+            first_stock_y = stock_infos[0]["y"]
+            above_stock = [info for info in price_candidates if info["y"] < first_stock_y]
+            if above_stock:
+                price_candidates = above_stock
+        price_candidates.sort(key=lambda info: info["y"])
+
+        price_input = price_candidates[0]["locator"] if price_candidates else None
+        pp1_input = stock_infos[0]["locator"] if len(stock_infos) >= 1 else None
+        pp2_input = stock_infos[1]["locator"] if len(stock_infos) >= 2 else None
+        return price_input, pp1_input, pp2_input, len(inputs)
+
+    price_input, pp1_input, pp2_input, input_count = select_price_modal_inputs()
+    if price_input is None or pp1_input is None:
+        return False, f"not_enough_inputs_for_price_stock:{input_count}"
+
+    # Kaspi resets the price input when stock pickup-point values change.
+    # Fill stocks first, then price last, and only then verify all fields.
+    for attempt in range(3):
+        _type_price_locator_value(page, pp1_input, str(pp1), typing_delay_ms=120)
+        page.wait_for_timeout(400 + attempt * 250)
+        if digits_only(read_locator_value(pp1_input)) == digits_only(pp1):
+            break
+    if pp2_input is not None:
+        for attempt in range(3):
+            _type_price_locator_value(page, pp2_input, str(pp2), typing_delay_ms=120)
+            page.wait_for_timeout(400 + attempt * 250)
+            if digits_only(read_locator_value(pp2_input)) == digits_only(pp2):
+                break
+    for attempt in range(3):
+        _type_price_locator_value(page, price_input, str(price), typing_delay_ms=180)
+        page.wait_for_timeout(500 + attempt * 250)
+        if digits_only(read_locator_value(price_input)) == digits_only(price):
+            break
     else:
-        slots = modal_input_slot_plan(len(inputs))
-    if slots["price"] is None or slots["pp1"] is None:
-        return False, f"not_enough_inputs_for_price_stock:{len(inputs)}"
-    _set_locator_value(page, inputs[int(slots["price"])], str(price), typing_delay_ms=180)
-    _set_locator_value(page, inputs[int(slots["pp1"])], str(pp1), typing_delay_ms=120)
-    if slots["pp2"] is not None:
-        _set_locator_value(page, inputs[int(slots["pp2"])], str(pp2), typing_delay_ms=120)
-    if slots["barcode"] is not None and barcode:
-        _set_locator_value(page, inputs[int(slots["barcode"])], str(barcode), typing_delay_ms=80)
-    page.wait_for_timeout(800)
-    if digits_only(read_locator_value(inputs[int(slots["price"])])) != digits_only(price):
         return False, "price_value_not_applied"
-    if digits_only(read_locator_value(inputs[int(slots["pp1"])])) != digits_only(pp1):
-        return False, "pp1_value_not_applied"
-    if slots["pp2"] is not None and digits_only(read_locator_value(inputs[int(slots["pp2"])])) != digits_only(pp2):
-        return False, "pp2_value_not_applied"
-    if slots["barcode"] is not None and barcode and digits_only(read_locator_value(inputs[int(slots["barcode"])])) != digits_only(barcode):
-        return False, "barcode_value_not_applied"
-    save_btn = container.get_by_role("button", name="Сохранить изменения")
+    page.wait_for_timeout(800)
+    fresh_price_input, fresh_pp1_input, fresh_pp2_input, _ = select_price_modal_inputs()
+    price_input = fresh_price_input or price_input
+    pp1_input = fresh_pp1_input or pp1_input
+    pp2_input = fresh_pp2_input or pp2_input
+    snapshot = _price_modal_value_snapshot(page)
+    price_digits = digits_only(snapshot.get("price") or read_locator_value(price_input))
+    pp1_digits = digits_only(snapshot.get("pp1") or read_locator_value(pp1_input))
+    pp2_digits = digits_only(snapshot.get("pp2") or (read_locator_value(pp2_input) if pp2_input is not None else ""))
+    if price_digits != digits_only(price):
+        return False, f"price_value_not_applied:{snapshot}"
+    if pp1_digits != digits_only(pp1):
+        return False, f"pp1_value_not_applied:{snapshot}"
+    if pp2_input is not None and pp2_digits != digits_only(pp2):
+        return False, f"pp2_value_not_applied:{snapshot}"
+    save_btn = page.get_by_role("button", name="Сохранить изменения")
     if save_btn.count() < 1:
         return False, "save_button_not_found"
     save_btn.first.click()
@@ -295,7 +530,16 @@ def _execute_row_pw(
     expected_mid = str(int(float(str(row.get("merchant_id") or "0"))))
     normalized_barcode = _normalize_barcode(row.get("barcode"))
     normalized_size_rus = _normalize_size_rus(row.get("size_rus"))
-    offer_code = _extract_offer_code_from_variant_url(row.get("variant_url"))
+    offer_code = _product_code_for_search(row)
+
+    def has_size_like_option(values: Any) -> bool:
+        for value in values or []:
+            text = str(value or "").strip().upper()
+            if re.search(r"\d", text):
+                return True
+            if re.search(r"\b(?:XS|S|M|L|XL|2XL|3XL|4XL|5XL|6XL)\b", text):
+                return True
+        return False
 
     def snap(stage: str) -> None:
         if not step_screenshot_dir:
@@ -309,8 +553,15 @@ def _execute_row_pw(
     entry_url = str(row.get("ui_entry_url") or DEFAULT_ENTRY_URL)
     direct_code_mode = ("link-catalog" in entry_url.lower()) and ("code=" in entry_url.lower())
 
+    _close_stale_success_modal(page)
+    page.wait_for_timeout(400)
     page.goto(entry_url, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(int(max(step_delay_seconds, 1.2) * 1000))
+    _close_stale_success_modal(page)
+    page.wait_for_timeout(400)
+    if "#/add-product/v2" not in page.url:
+        page.goto(entry_url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(int(max(step_delay_seconds, 1.2) * 1000))
     snap("01_open")
 
     mid_raw = page.evaluate(_merchant_id_js())
@@ -331,7 +582,7 @@ def _execute_row_pw(
             snap("err_search")
             return False, "search_failed:search_input_not_found"
 
-        res = parse_step_result(page.evaluate(_step_search_js(str(row.get("variant_url") or ""))))
+        res = parse_step_result(page.evaluate(_step_search_js(offer_code)))
         if not res.get("ok"):
             snap("err_search")
             return False, f"search_failed:{res.get('reason')}"
@@ -372,6 +623,23 @@ def _execute_row_pw(
         res_select = parse_step_result(page.evaluate(_step_select_size_js(normalized_size_rus)))
         if not res_select.get("ok"):
             size_reason = str(res_select.get("reason") or "size_select_failed")
+            if (
+                direct_code_mode
+                and size_reason == "size_option_not_found"
+                and not has_size_like_option(res_select.get("available_sizes"))
+            ):
+                identity_check = parse_step_result(
+                    page.evaluate(
+                        _step_verify_offer_identity_js(
+                            str(row.get("expected_kaspi_heading") or ""),
+                            offer_code,
+                        )
+                    )
+                )
+                if identity_check.get("ok"):
+                    size_ok = True
+                    size_reason = "direct_code_no_size_options_identity_verified"
+                    break
             snap("err_size_select")
             break
         page.wait_for_timeout(int((step_delay_seconds + 0.4) * 1000))
@@ -399,14 +667,20 @@ def _execute_row_pw(
         snap("err_identity")
         return False, f"identity_failed:{identity_check.get('reason')}"
 
-    res = parse_step_result(
-        page.evaluate(
-            _step_fill_identity_fields_js(
-                str(row.get("merchant_sku_article") or ""),
-                str(row.get("merchant_offer_name") or ""),
+    res: dict[str, Any] = {"ok": False, "reason": "identity_fill_not_attempted"}
+    for _ in range(3):
+        _close_stale_success_modal(page)
+        res = parse_step_result(
+            page.evaluate(
+                _step_fill_identity_fields_js(
+                    str(row.get("merchant_sku_article") or ""),
+                    str(row.get("merchant_offer_name") or ""),
+                )
             )
         )
-    )
+        if res.get("ok") or res.get("reason") != "stale_success_modal_present":
+            break
+        page.wait_for_timeout(int((step_delay_seconds + 0.5) * 1000))
     if not res.get("ok"):
         snap("err_fill_info")
         return False, f"fill_info_failed:{res.get('reason')}"
@@ -443,6 +717,7 @@ def _execute_row_pw(
                 snap("06_success_after_warning")
                 return True, ""
             snap("06_price_warning")
+            _click_price_required_popup(page)
             page.wait_for_timeout(int((step_delay_seconds + 0.8) * 1000))
             continue
         price_ok = True
