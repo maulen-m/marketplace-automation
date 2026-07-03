@@ -1,6 +1,6 @@
 schema_version: 1
 generated_at_local: "2026-04-24 17:11:38 +05"
-last_updated_local: "2026-05-02 11:13:33 +05"
+last_updated_local: "2026-06-23 18:57:36 +05"
 owner_decision_source: "Docs/agent_handoffs/2026-04-24_external_expert_line61_price_ads_scenarios_efficiency_plan.md"
 store: "ACMEWEAR"
 sku_key: "CL_NEW-CLO2_MEN_SUIT-61_BLACK"
@@ -39,6 +39,23 @@ stock_starvation_protocol:
   warehouse_signature: "PP1=no|PP2=no|PP3=no|PP4=no|PP5=no"
   reorder_policy_status: "do_not_order_30_60_days_due_shr_supplier_repayment"
   interpretation_note: "Historical 14990/15990 demand may not compare apples-to-apples with current tests if 4XL availability differed."
+  current_sales_off_sizes:
+    - "3XL"
+    - "4XL"
+  current_sales_off_evidence: "runs/line61_2xl_reactivation_live/20260604_135326_owner_requested/post_timeout_readonly_download_1/downloads/acmewear_ARCHIVE.xlsx"
+  current_active_size_note: "Fresh 2026-06-22 12:28 verification found 105 active ACMEWEAR rows after the owner-approved family price upload. Line61 parent/full active rows are price=19990. The active-size/sellability surface, PP columns, and preorder fields were preserved by the upload; 3XL/4XL remain off-sale/archive context."
+  current_2xl_reactivation_event:
+    status: "active_live_verified"
+    owner_decision_at_local: "2026-06-04T13:53:26+05:00"
+    platform_effective_at_local: "2026-06-04T13:57:00+05:00"
+    verify_at_local: "2026-06-04T14:14:47+05:00"
+    upload_history_id: "6a213dfc470551059adcf892"
+    target_price_kzt: 16900
+    target_PP1_per_offer: 30
+    target_skus:
+      - "CL_NEW-CLO2_MEN_SUIT-61_BLACK_K-O_2XL_156399703"
+      - "CL_NEW-CLO2_MEN_SUIT-61_BLACK_K-O_TRM_2XL_156517216"
+    evidence: "runs/line61_2xl_reactivation_live/20260604_135326_owner_requested/LIVE_CLOSEOUT.md"
 
 ladder:
   - step_id: "step_0_closeout"
@@ -80,11 +97,12 @@ ladder:
     success_criteria: "Demand >= 5.5/day, ads/u <= 1600 KZT, no delivery-promise penalty, mature shipped truth."
     stop_conditions: "Ads/u > 1800 after 20 units, demand < 4.5/day after clean 5 days, or delivery promise stays delayed."
   - step_id: "step_2"
-    status: "active_live_verified"
+    status: "closed_by_owner_override_price16900"
     price_kzt: 13990
     st_bid: 120
     trm_bid: 100
     actual_started_at_local: "2026-05-02 10:54:00 +05"
+    actual_ended_at_local: "2026-06-04T13:21:00+05:00"
     price_upload_history_id: "69f59180e91eaf1ddaffd8bd"
     price_upload_history_at_local: "2026-05-02 10:54:00 +05"
     price_upload_verify_at_local: "2026-05-02 11:11:39 +05"
@@ -100,6 +118,62 @@ ladder:
     experiment_type: "profit_roic_balance_test"
     success_criteria: "Demand >= 4/day, ads/u <= 2200 KZT, monthly profit >= 350000 KZT."
     stop_conditions: "Demand < 3/day, ads/u > 2500 KZT, or TRM waste dominates spend."
+  - step_id: "owner_override_16900_20260604"
+    status: "closed_by_owner_override_price19990"
+    price_kzt: 16900
+    st_bid: 120
+    trm_bid: 57
+    actual_started_at_local: "2026-06-04T13:21:00+05:00"
+    actual_ended_at_local: "2026-06-22 12:10:00 +05"
+    price_upload_history_id: "6a21358693bc4753c173d42c"
+    price_upload_history_at_local: "2026-06-04T13:21:00+05:00"
+    price_upload_verify_at_local: "2026-06-04T13:38:46+05:00"
+    previous_st_bid: 50
+    owner_latest_st_bid_event_at_local: "2026-06-20 15:20:09 +05:00"
+    owner_latest_st_bid_event: "owner manually increased ACMEWEAR_LINE61 / campaign 2545773 BID to 120; owner referred to this as the 161 offer campaign; record-only, no Codex live write."
+    bid_action: "owner_manual_ST_bid_increase_to_120_recorded_20260620_152009_no_codex_live_write"
+    evidence:
+      closeout: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/LIVE_CLOSEOUT.md"
+      latest_2xl_reactivation_closeout: "runs/line61_2xl_reactivation_live/20260604_135326_owner_requested/LIVE_CLOSEOUT.md"
+      owner_decision: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/OWNER_DECISION.md"
+      upload_workbook: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/apply/safe_active_patch/acmewear_FULL_ACTIVE_UPLOAD.xlsx"
+      verification_active_download: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/post_timeout_readonly_download_1/downloads/acmewear_ACTIVE.xlsx"
+      verification_archive_download: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/post_timeout_readonly_download_1/downloads/acmewear_ARCHIVE.xlsx"
+      active_diff_validation: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/validation/post_timeout_download_1_active_diff_validation.json"
+      archive_exact_match_validation: "runs/line61_16900_owner_upload_live/20260604_131536_owner_approved/validation/post_timeout_download_1_archive_exact_match.json"
+    period_rule: "First checkpoint after one full closed day; current-day 2026-06-04 data is partial."
+    minimum_units_before_interpretation: "closed_day_economics_required"
+    expected_duration_days: 3
+    experiment_type: "owner_approved_price_experiment"
+    success_criteria: "Evaluate profit/ROIC and order volume under 16900 with the 2XL size surface reintroduced from 2026-06-04T13:57+05; do not compare directly against full-size-surface historical windows without a stock/sellability covariate."
+    stop_conditions: "Reassess if demand collapses, ads/order rises beyond profit guardrails, or 2XL physical-stock reconciliation becomes risky."
+  - step_id: "owner_override_19990_20260622"
+    status: "active_live_verified"
+    price_kzt: 19990
+    st_bid: 160
+    trm_bid: 100
+    actual_started_at_local: "2026-06-22 12:10:00 +05"
+    price_upload_history_id: "6a38dfcb2022207bc8b522f4"
+    price_upload_history_at_local: "2026-06-22 12:10:00 +05"
+    price_upload_verify_at_local: "2026-06-22 12:28:45 +05"
+    previous_st_bid: 120
+    previous_trm_bid: 57
+    owner_latest_bid_event_at_local: "2026-06-23 18:51:02 +05:00"
+    owner_latest_st_bid_event: "owner manually increased ACMEWEAR_LINE61 / campaign 2545773 BID from 120 to 160; record-only, no Codex live write."
+    owner_latest_trm_bid_event: "owner manually changed Line61_K-O_TRM_2.3.26_15_34_00 / campaign 2629982 BID from 57 to 100; record-only, no Codex live write."
+    bid_action: "owner_manual_ST_bid160_TRM_bid100_recorded_20260623_185102_no_codex_live_write"
+    evidence:
+      closeout: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/ACMEWEAR_FAMILY_PRICE_CHANGE_LIVE_CLOSEOUT.md"
+      owner_bid_decision: "runs/kaspi_marketing_manual_decisions/20260623_185102_acmewear_multi_campaign_bid_changes_owner_decision/OWNER_DECISION.md"
+      verification_summary: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_verification_1/post_timeout_verification_summary.json"
+      active_readback: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_readback_1/downloads/acmewear_ACTIVE.xlsx"
+      archive_readback: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_readback_1/downloads/acmewear_ARCHIVE.xlsx"
+    period_rule: "First clean closed-day review after 2026-06-22; current-day upload/readback is partial."
+    minimum_units_before_interpretation: "closed_day_economics_required"
+    expected_duration_days: 3
+    experiment_type: "owner_approved_family_price_repositioning"
+    success_criteria: "Evaluate demand, ads/order, and contribution at 19990 separately from the prior 16900 interval."
+    stop_conditions: "Reassess if order volume collapses, ads/order breaches profit guardrails, or stock/sellability drift appears."
   - step_id: "step_3"
     status: "conditional_planned"
     price_kzt: 13990

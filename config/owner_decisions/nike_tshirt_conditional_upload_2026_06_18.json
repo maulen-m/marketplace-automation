@@ -1,0 +1,47 @@
+{
+  "schema_version": "web_auto.owner_decision.v1",
+  "decision_id": "nike_tshirt_conditional_upload_2026_06_18",
+  "recorded_at": "2026-06-18T10:02:54+05:00",
+  "decision_owner": "human_owner",
+  "record_owner": "Codex",
+  "scope": {
+    "stores": [
+      "UNIVERSAL",
+      "STORE-B"
+    ],
+    "families": [
+      "Nike t-shirts"
+    ],
+    "excluded_stores": [
+      "ACMEWEAR"
+    ]
+  },
+  "approval_text_summary": "If Nike t-shirts are uploadable and have positive warehouse stock, the owner approves activating them according to stock values to release capital tied in inventory.",
+  "hard_gates": [
+    "fresh_internal_stock_positive",
+    "fresh_kaspi_uploadability_proven_for_exact_merchant_sku",
+    "direct_kaspi_activation_price_14990_guard",
+    "repricer_floor_safe_configuration_after_active",
+    "no_known_kaspi_brand_owner_restriction_for_exact_row_or_family",
+    "fresh_readback_after_upload"
+  ],
+  "non_approval_boundaries": [
+    "This approval does not override Kaspi brand-owner restriction evidence.",
+    "This approval does not permit direct low-price activation.",
+    "This approval does not permit ACMEWEAR changes.",
+    "This approval does not permit broad activation of rows only classified as family-risk unless uploadability is separately proven."
+  ],
+  "current_known_blockers": [
+    {
+      "merchant_sku": "CL_NEW-CLO_MEN_NIKE-SHIRT_BLACK_M_134333255",
+      "blocker": "Kaspi upload-history row-level brand-owner restriction",
+      "evidence": "runs/universal_storeb_reactivation/20260617_142000_final_goal/history_detail_probe_20260618_091500_export/HISTORY_DETAIL_INVESTIGATION_CLOSEOUT.md"
+    },
+    {
+      "merchant_sku": "CL_NEW-CLO_MEN_T-SHIRT_WHITE_M_140493416",
+      "blocker": "Kaspi upload-history row-level brand-owner restriction",
+      "evidence": "runs/universal_storeb_reactivation/20260617_142000_final_goal/nonrestricted_one_row_pilot_20260618_093000/NONRESTRICTED_ONE_ROW_PILOT_CLOSEOUT.md"
+    }
+  ],
+  "execution_rule": "Proceed only for exact Nike T-shirt color-size rows that pass the hard gates. If fresh Kaspi evidence indicates restriction, keep the row blocked and do not retry through broad pricelist upload."
+}

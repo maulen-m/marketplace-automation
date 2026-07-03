@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.line61_line51_daily_ops_fetch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; WEB_AUTOMATION_ENV_FILE=__ENV_FILE__ __REPO_ROOT__/scripts/schedule/run_line61_line51_daily_ops_fetch.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>86400</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/line61_line51_daily_ops_fetch/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/line61_line51_daily_ops_fetch/logs/stderr.log</string>
+</dict>
+</plist>

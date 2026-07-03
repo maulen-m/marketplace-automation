@@ -1,0 +1,76 @@
+schema_version: web_auto.acmewear_universal_marketing_ops_tiers.v1
+label: com.webautomation.acmewear_universal_marketing_ops_fetch
+timezone: Asia/Almaty
+mode: read_only
+
+store:
+  name: ACMEWEAR
+  marketing_merchant_id: "759051"
+  marketing_store_code: "30137883"
+
+registry:
+  path: config/tasks/acmewear_universal_marketing_registry.yaml
+  source_owner: Agent 1 registry foundation
+
+runner:
+  path: scripts/schedule/run_acmewear_universal_marketing_ops_fetch.sh
+  run_root: runs/acmewear_universal_marketing_ops_fetch
+  latest_symlink: runs/acmewear_universal_marketing_ops_fetch/latest
+  launchd_template: scripts/schedule/com.webautomation.acmewear_universal_marketing_ops_fetch.plist.template
+  launchd_install_requires: Agent 2 GREEN live or acceptable smoke closeout
+  tier_b_start_interval_seconds: 21600
+
+tiers:
+  - id: A
+    label: urgent_strategy_products
+    cadence:
+      six_hour_seconds: 21600
+      daily_seconds: 86400
+      policy: Use six-hour checks for urgent strategy experiments, then fall back to daily read-only evidence when the urgent window closes.
+    examples:
+      - LINE31 active strategy lanes
+      - child-bundle proof lanes
+      - price-ladder experiment reads
+  - id: B
+    label: active_internal_campaigns
+    cadence_seconds: 21600
+    policy: Six-hour universal collector coverage for active internal campaigns and regular operating families, with current-day plus 48-hour delayed-attribution replay.
+    launchd_label: com.webautomation.acmewear_universal_marketing_ops_fetch
+  - id: C
+    label: paused_archived_history
+    cadence:
+      weekly_seconds: 604800
+      policy: Weekly read-only retention checks for paused, archived, historical, or hold lanes.
+
+guardrails:
+  external_behavior: read_only
+  live_writes_allowed: false
+  local_outputs_only: true
+  allowed_local_writes:
+    - runs/acmewear_universal_marketing_ops_fetch/**
+    - data/kaspi_marketing.sqlite
+  forbidden_external_writes:
+    - ~/Docs/Autonomous_business/**
+    - Kaspi price
+    - Kaspi stock
+    - Kaspi listing state
+    - Kaspi campaign BID
+    - Kaspi campaign budget
+    - Kaspi campaign or product state
+    - Kaspi seller-bonus promo
+    - Kaspi upload workflows
+    - Meta/Facebook
+    - Repricer
+    - CRM
+    - secrets/cookies/storageState/tokens
+  narrow_scheduler_policy:
+    - Keep existing Line61/LINE51 LaunchAgents intact.
+    - Keep LINE31 and other narrow schedule configs as specialized consumers or proofs.
+    - The universal collector is a shared evidence source, not a replacement for narrow schedulers.
+
+artifacts:
+  summary: runs/acmewear_universal_marketing_ops_fetch/<timestamp>/summary.json
+  closeout: runs/acmewear_universal_marketing_ops_fetch/<timestamp>/UNIVERSAL_MARKETING_OPS_CLOSEOUT.md
+  review_prompt: runs/acmewear_universal_marketing_ops_fetch/<timestamp>/CODEX_5_5_HIGH_REVIEW_PROMPT.md
+  exports: runs/acmewear_universal_marketing_ops_fetch/<timestamp>/exports/
+  latest: runs/acmewear_universal_marketing_ops_fetch/latest

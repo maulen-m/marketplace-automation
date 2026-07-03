@@ -1,0 +1,227 @@
+schema_version: web_auto.scheduled_checkpoints.v1
+timezone: Asia/Almaty
+run_root: runs/scheduled_checkpoints/line31_marketing_fetch_24h
+
+jobs:
+  - job_id: line31_marketing_fetch_20260526_1645
+    title: LINE31 Kaspi Marketing 24h read-only fetch 1 of 5
+    scheduled_at: "2026-05-26 16:45:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_FETCH_CLOSEOUT.md; no automatic live bid, budget, state, stock, price, or promo write is authorized.
+    commands:
+      - id: line31_fetch_20260526_1645
+        description: Fetch/read LINE31 campaign and seller-bonus promo snapshot.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-26"
+          - --closed-day
+          - "2026-05-25"
+          - --include-promos
+          - --headless
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-26"
+          - --closed-day
+          - "2026-05-25"
+          - --include-promos
+          - --plan-only
+
+  - job_id: line31_marketing_fetch_20260526_2245
+    title: LINE31 Kaspi Marketing 24h read-only fetch 2 of 5
+    scheduled_at: "2026-05-26 22:45:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_FETCH_CLOSEOUT.md; no automatic live bid, budget, state, stock, price, or promo write is authorized.
+    commands:
+      - id: line31_fetch_20260526_2245
+        description: Fetch/read LINE31 campaign and seller-bonus promo snapshot.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-26"
+          - --closed-day
+          - "2026-05-25"
+          - --include-promos
+          - --headless
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-26"
+          - --closed-day
+          - "2026-05-25"
+          - --include-promos
+          - --plan-only
+
+  - job_id: line31_marketing_fetch_20260527_0445
+    title: LINE31 Kaspi Marketing 24h read-only fetch 3 of 5
+    scheduled_at: "2026-05-27 04:45:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_FETCH_CLOSEOUT.md; no automatic live bid, budget, state, stock, price, or promo write is authorized.
+    commands:
+      - id: line31_fetch_20260527_0445
+        description: Fetch/read LINE31 campaign and seller-bonus promo snapshot.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --headless
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --plan-only
+
+  - job_id: line31_marketing_fetch_20260527_1045
+    title: LINE31 Kaspi Marketing 24h read-only fetch 4 of 5
+    scheduled_at: "2026-05-27 10:45:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_FETCH_CLOSEOUT.md; no automatic live bid, budget, state, stock, price, or promo write is authorized.
+    commands:
+      - id: line31_fetch_20260527_1045
+        description: Fetch/read LINE31 campaign and seller-bonus promo snapshot.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --headless
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --plan-only
+
+  - job_id: line31_marketing_fetch_20260527_1645
+    title: LINE31 Kaspi Marketing 24h read-only fetch 5 of 5
+    scheduled_at: "2026-05-27 16:45:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_FETCH_CLOSEOUT.md; no automatic live bid, budget, state, stock, price, or promo write is authorized.
+    commands:
+      - id: line31_fetch_20260527_1645
+        description: Fetch/read LINE31 campaign and seller-bonus promo snapshot.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --headless
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-fetch
+          - --scope
+          - config/tasks/line31_marketing_scope.yaml
+          - --date
+          - "2026-05-27"
+          - --closed-day
+          - "2026-05-26"
+          - --include-promos
+          - --plan-only
+
+  - job_id: line31_marketing_24h_rollup_20260527_1700
+    title: LINE31 Kaspi Marketing 24h read-only rollup
+    scheduled_at: "2026-05-27 17:00:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review LINE31_ANALYSIS_REPORT.md and checkpoint closeouts before any separate owner-gated action.
+    commands:
+      - id: line31_analyze_20260527_1700
+        description: Analyze the latest LINE31 fetch summary after the 24h read-only collection window.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-analyze
+          - --fetch-summary
+          - runs/kaspi_marketing_line31_fetch/current/LINE31_FETCH_SUMMARY.json
+          - --emit-report
+          - Docs/experiments/line31/line31_marketing_response_report.md
+        dry_live_argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - line31-analyze
+          - --plan-only

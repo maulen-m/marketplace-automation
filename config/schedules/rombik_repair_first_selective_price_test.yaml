@@ -1,0 +1,518 @@
+schema_version: web_auto.scheduled_checkpoints.v1
+timezone: Asia/Almaty
+run_root: runs/scheduled_checkpoints/rombik_repair_first_selective_price_test
+
+jobs:
+  - job_id: rombik_repair_first_selective_24h_checkpoint_20260614_0120
+    title: ROMBIK repair-first selective test 24h read-only checkpoint
+    scheduled_at: "2026-06-14 01:20:00"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review route-safe velocity, merchant/Repricer drift, competitors, and KID BID40 economics before any separate owner-gated price or bid action.
+    commands:
+      - id: rombik_24h_order_health_universal
+        description: Fetch API/CRM/DB order health for Universal without syncing the production order DB.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ~/Docs/Autonomous_business/.venv/bin/python3
+          - ~/Docs/Autonomous_business/scripts/report_import_status.py
+          - --date
+          - "2026-06-14"
+          - --since-days
+          - "4"
+          - --store
+          - UNIVERSAL
+          - --json-out
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/report_import_status_universal_20260614.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_order_health_universal','live_writes_allowed':False}))"
+      - id: rombik_24h_order_health_storeb
+        description: Fetch API/CRM/DB order health for STORE-B without syncing the production order DB.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ~/Docs/Autonomous_business/.venv/bin/python3
+          - ~/Docs/Autonomous_business/scripts/report_import_status.py
+          - --date
+          - "2026-06-14"
+          - --since-days
+          - "4"
+          - --store
+          - STOREB
+          - --json-out
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/report_import_status_storeb_20260614.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_order_health_storeb','live_writes_allowed':False}))"
+      - id: rombik_24h_route_order_classifier
+        description: Classify ROMBIK orders by family, route, size bucket, and post-block MEN XL leakage from the read-only order DB.
+        read_only: true
+        timeout_seconds: 600
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/export_rombik_route_orders.py
+          - --since
+          - "2026-06-11 00:00:00"
+          - --until
+          - "2026-06-14 01:20:00"
+          - --leak-after
+          - "2026-06-13 00:30:00"
+          - --out-csv
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/rombik_route_orders_20260614_0120.csv
+          - --out-summary-json
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/rombik_route_orders_20260614_0120_summary.json
+          - --out-bucket-csv
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/rombik_route_orders_20260614_0120_buckets.csv
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_route_order_classifier','live_writes_allowed':False}))"
+      - id: rombik_24h_merchant_universal_download
+        description: Download fresh Universal ACTIVE/ARCHIVE merchant pricelists.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - UNIVERSAL
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/merchant_universal_download
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_merchant_universal_download','live_writes_allowed':False}))"
+      - id: rombik_24h_merchant_storeb_download
+        description: Download fresh STORE-B ACTIVE/ARCHIVE merchant pricelists.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - STORE-B
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/merchant_storeb_download
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_merchant_storeb_download','live_writes_allowed':False}))"
+      - id: rombik_24h_merchant_target_verify
+        description: Verify fresh merchant workbook rows against the approved ROMBIK target matrix.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/verify_rombik_checkpoint_state.py
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120
+          - --target-matrix
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/rombik_pricelist_target_matrix.csv
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_merchant_target_verify','live_writes_allowed':False}))"
+      - id: rombik_24h_kid_marketing_bid40_readback
+        description: Read KID BID40 campaign state for Universal and STORE-B without applying planned actions.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/rombik_kid_marketing_bid40_live_apply.py
+          - --env-file
+          - ~/Docs/Autonomous_business/.env
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/marketing_bid40_checkpoint_20260614_0120_both
+          - --date
+          - "2026-06-14"
+          - --stores
+          - UNIVERSAL,STOREB
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_kid_marketing_bid40_readback','live_writes_allowed':False}))"
+      - id: rombik_24h_repricer_guardrails_strict_dry_run
+        description: Check Repricer current/min/max target state and fail if any ROMBIK target action would be needed.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/apply_rombik_repricer_guardrails.py
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --storage-state
+          - data/storage_state.json
+          - --artifacts-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/repricer_guardrails
+          - --dry-run
+          - --strict-zero-plan
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_repricer_guardrails_strict_dry_run','live_writes_allowed':False}))"
+      - id: rombik_24h_redflag_oos_dry_run
+        description: Run OOS safety scan in dry-run mode.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - inventory/apply_oos_live_minprice.py
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --snapshot-date
+          - "2026-06-14"
+          - --dry-run
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_redflag_oos_dry_run','live_writes_allowed':False}))"
+      - id: rombik_24h_redflag_dlro_dry_run
+        description: Guard ROMBIK-scoped DLRO/min-max state and block broad all-catalog DLRO from overriding the selective test.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/run_rombik_dlro_scope_guard.py
+          - --checkpoint-label
+          - 24h
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120
+          - --snapshot-date
+          - "2026-06-14"
+          - --out-json
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/repricer_dlro_scope_guard_20260614_0120.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_redflag_dlro_dry_run','live_writes_allowed':False}))"
+      - id: rombik_24h_competitors_dry_run
+        description: Refresh competitor selection plan in dry-run API mode for both stores.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - run
+          - repricer-competitors
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --account
+          - app_1
+          - --stores
+          - 30000001,30000002
+          - --api
+          - --dry-run
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_competitors_dry_run','live_writes_allowed':False}))"
+      - id: rombik_24h_business_closeout
+        description: Build the ROMBIK 24h business closeout from checkpoint evidence without mutating live systems.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/build_rombik_checkpoint_business_closeout.py
+          - --checkpoint-label
+          - 24h
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120
+          - --route-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/orders/rombik_route_orders_20260614_0120_summary.json
+          - --merchant-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/merchant_target_verify.json
+          - --marketing-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/marketing_bid40_checkpoint_20260614_0120_both/rombik_kid_marketing_bid40_summary.json
+          - --out-md
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260614_0120/ROMBIK_CHECKPOINT_CLOSEOUT_20260614_0120.md
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_24h_business_closeout','live_writes_allowed':False}))"
+
+  - job_id: rombik_repair_first_selective_48h_checkpoint_20260615_0120
+    title: ROMBIK repair-first selective test 48h read-only checkpoint
+    scheduled_at: "2026-06-15 01:20:00"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Decide hold, raise/protect, repair, stop, or new owner-approved experiment based on the 48h evidence.
+    commands:
+      - id: rombik_48h_order_health_universal
+        description: Fetch API/CRM/DB order health for Universal without syncing the production order DB.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ~/Docs/Autonomous_business/.venv/bin/python3
+          - ~/Docs/Autonomous_business/scripts/report_import_status.py
+          - --date
+          - "2026-06-15"
+          - --since-days
+          - "5"
+          - --store
+          - UNIVERSAL
+          - --json-out
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/report_import_status_universal_20260615.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_order_health_universal','live_writes_allowed':False}))"
+      - id: rombik_48h_order_health_storeb
+        description: Fetch API/CRM/DB order health for STORE-B without syncing the production order DB.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ~/Docs/Autonomous_business/.venv/bin/python3
+          - ~/Docs/Autonomous_business/scripts/report_import_status.py
+          - --date
+          - "2026-06-15"
+          - --since-days
+          - "5"
+          - --store
+          - STOREB
+          - --json-out
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/report_import_status_storeb_20260615.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_order_health_storeb','live_writes_allowed':False}))"
+      - id: rombik_48h_route_order_classifier
+        description: Classify ROMBIK orders by family, route, size bucket, and post-block MEN XL leakage from the read-only order DB.
+        read_only: true
+        timeout_seconds: 600
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/export_rombik_route_orders.py
+          - --since
+          - "2026-06-11 00:00:00"
+          - --until
+          - "2026-06-15 01:20:00"
+          - --leak-after
+          - "2026-06-13 00:30:00"
+          - --out-csv
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/rombik_route_orders_20260615_0120.csv
+          - --out-summary-json
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/rombik_route_orders_20260615_0120_summary.json
+          - --out-bucket-csv
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/rombik_route_orders_20260615_0120_buckets.csv
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_route_order_classifier','live_writes_allowed':False}))"
+      - id: rombik_48h_merchant_universal_download
+        description: Download fresh Universal ACTIVE/ARCHIVE merchant pricelists.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - UNIVERSAL
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/merchant_universal_download
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_merchant_universal_download','live_writes_allowed':False}))"
+      - id: rombik_48h_merchant_storeb_download
+        description: Download fresh STORE-B ACTIVE/ARCHIVE merchant pricelists.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - STORE-B
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/merchant_storeb_download
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_merchant_storeb_download','live_writes_allowed':False}))"
+      - id: rombik_48h_merchant_target_verify
+        description: Verify fresh merchant workbook rows against the approved ROMBIK target matrix.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/verify_rombik_checkpoint_state.py
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120
+          - --target-matrix
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/rombik_pricelist_target_matrix.csv
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_merchant_target_verify','live_writes_allowed':False}))"
+      - id: rombik_48h_kid_marketing_bid40_readback
+        description: Read KID BID40 campaign state for Universal and STORE-B without applying planned actions.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/rombik_kid_marketing_bid40_live_apply.py
+          - --env-file
+          - ~/Docs/Autonomous_business/.env
+          - --run-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/marketing_bid40_checkpoint_20260615_0120_both
+          - --date
+          - "2026-06-15"
+          - --stores
+          - UNIVERSAL,STOREB
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_kid_marketing_bid40_readback','live_writes_allowed':False}))"
+      - id: rombik_48h_repricer_guardrails_strict_dry_run
+        description: Check Repricer current/min/max target state and fail if any ROMBIK target action would be needed.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/apply_rombik_repricer_guardrails.py
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --storage-state
+          - data/storage_state.json
+          - --artifacts-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/repricer_guardrails
+          - --dry-run
+          - --strict-zero-plan
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_repricer_guardrails_strict_dry_run','live_writes_allowed':False}))"
+      - id: rombik_48h_redflag_oos_dry_run
+        description: Run OOS safety scan in dry-run mode.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - inventory/apply_oos_live_minprice.py
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --snapshot-date
+          - "2026-06-15"
+          - --dry-run
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_redflag_oos_dry_run','live_writes_allowed':False}))"
+      - id: rombik_48h_redflag_dlro_dry_run
+        description: Guard ROMBIK-scoped DLRO/min-max state and block broad all-catalog DLRO from overriding the selective test.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/run_rombik_dlro_scope_guard.py
+          - --checkpoint-label
+          - 48h
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120
+          - --snapshot-date
+          - "2026-06-15"
+          - --out-json
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/repricer_dlro_scope_guard_20260615_0120.json
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_redflag_dlro_dry_run','live_writes_allowed':False}))"
+      - id: rombik_48h_competitors_dry_run
+        description: Refresh competitor selection plan in dry-run API mode for both stores.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - run
+          - repricer-competitors
+          - --config
+          - config/tasks/repricer_competitors.yaml
+          - --account
+          - app_1
+          - --stores
+          - 30000001,30000002
+          - --api
+          - --dry-run
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_competitors_dry_run','live_writes_allowed':False}))"
+      - id: rombik_48h_business_closeout
+        description: Build the ROMBIK 48h business closeout from checkpoint evidence without mutating live systems.
+        read_only: true
+        timeout_seconds: 300
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./.venv/bin/python
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/build_rombik_checkpoint_business_closeout.py
+          - --checkpoint-label
+          - 48h
+          - --checkpoint-dir
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120
+          - --route-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/orders/rombik_route_orders_20260615_0120_summary.json
+          - --merchant-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/merchant_target_verify.json
+          - --marketing-summary
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/marketing_bid40_checkpoint_20260615_0120_both/rombik_kid_marketing_bid40_summary.json
+          - --out-md
+          - runs/rombik_repair_first_selective_price_test_20260612_2204/checkpoint_20260615_0120/ROMBIK_CHECKPOINT_CLOSEOUT_20260615_0120.md
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'rombik_48h_business_closeout','live_writes_allowed':False}))"

@@ -1,0 +1,27 @@
+schema_version: web_auto.kaspi_market_events.v1
+
+events:
+  - event_id: kaspi_zhuma_20260618_20260621
+    name: "KASPI жума"
+    timezone: Asia/Almaty
+    start_date: "2026-06-18"
+    end_date: "2026-06-21"
+    affected_dates:
+      - "2026-06-18"
+      - "2026-06-19"
+      - "2026-06-20"
+      - "2026-06-21"
+    attribution_lag_dates:
+      - "2026-06-22"
+      - "2026-06-23"
+    distortion_risk: sales_volume_inflation
+    reporting_labels:
+      - countrywide_installment_event
+      - cash_flow_overlay_context
+      - not_deterministic_meta_attribution
+      - allow_24_48h_internal_marketing_order_delay
+    owner_context: Countrywide quarterly Kaspi platform event where the bank offers 24-month installments broadly across the marketplace, which can increase order volume during the event window.
+    analysis_policy: Sales and internal-marketing order volume during this window must not be treated as constant baseline demand; reports must annotate the event window and allow 24-48h delayed internal-marketing order attribution.
+    owner_decision_at: "2026-06-20 21:14:29 +05:00"
+    record_owner: Codex
+    external_writes_executed_by_codex: false

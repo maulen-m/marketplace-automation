@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.acmewear_express_sidecar_watch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; WEB_AUTOMATION_ENV_FILE=__ENV_FILE__ __REPO_ROOT__/scripts/schedule/run_acmewear_express_sidecar_watch.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/acmewear_express_selfpickup_sidecar/watch_schedule/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/acmewear_express_selfpickup_sidecar/watch_schedule/logs/stderr.log</string>
+</dict>
+</plist>

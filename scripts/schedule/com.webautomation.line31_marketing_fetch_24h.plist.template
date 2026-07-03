@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.line31_marketing_fetch_24h</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; LINE31_MARKETING_FETCH_24H_END_AT=__END_AT__ WEB_AUTOMATION_ENV_FILE=__ENV_FILE__ __REPO_ROOT__/scripts/schedule/run_line31_marketing_fetch_24h_launchd.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/line31_marketing_fetch_24h/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/line31_marketing_fetch_24h/logs/stderr.log</string>
+</dict>
+</plist>

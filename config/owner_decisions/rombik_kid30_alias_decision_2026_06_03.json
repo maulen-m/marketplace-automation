@@ -1,0 +1,40 @@
+{
+  "schema_version": "owner_alias_decision.v1",
+  "decision_id": "OWNER_ROMBIK_KID30_ALIAS_2026_06_03",
+  "status": "OWNER_APPROVED",
+  "effective_at_almaty": "2026-06-03T10:09:14+05:00",
+  "owner_approval_phrase": "OWNER APPROVES ROMBIK_KID30_ALIAS_2026_06_03_EFFECTIVE_2026-06-03T10:09:14+05:00: Kaspi product codes 135222379 (152) and 128541983 (158) are authorized sellable routes for canonical stock pool CL_NEW-CLO_KID_ROMBIK_BLACK_30. Expose 47 units on 135222379 and 46 units on 128541983 per store, preserve one 93-unit physical stock pool in Autonomous_business, preserve non-Rombik and non-target rows, use future-only order canonicalization, and execute guarded Web_automation safe-active-patch plus Repricer verification for UNIVERSAL and STORE-B.",
+  "canonical_stock_pool_id": "CL_NEW-CLO_KID_ROMBIK_BLACK_30",
+  "canonical_sku_key": "CL_NEW-CLO_KID_ROMBIK_BLACK",
+  "canonical_size": "30",
+  "physical_stock_pool_units": 93,
+  "stock_allocation_policy": "owner_approved_route_split_per_store",
+  "non_multiplication_rule": "Do not create another Autonomous_business physical stock pool. Web_automation may expose only the authorized route split for the two target product codes; other Rombik S rows remain outside this alias.",
+  "authorized_routes": [
+    {
+      "public_product_code": "135222379",
+      "public_height_label": "152",
+      "public_url": "https://kaspi.kz/shop/p/rashgard-5-v-1-chernyi-152-135222379/",
+      "merchant_sku_suffix": "_135222379",
+      "stock_to_expose_per_store": 47
+    },
+    {
+      "public_product_code": "128541983",
+      "public_height_label": "158",
+      "public_url": "https://kaspi.kz/shop/p/rashgard-5-v-1-chernyi-158-128541983/",
+      "merchant_sku_suffix": "_128541983",
+      "stock_to_expose_per_store": 46
+    }
+  ],
+  "explicitly_unchanged_product_codes": [
+    "143893497",
+    "147855005"
+  ],
+  "verification_requirements": [
+    "mapping",
+    "stock_non_multiplication",
+    "order_import_future_only",
+    "repricer_target_rows",
+    "regression"
+  ]
+}

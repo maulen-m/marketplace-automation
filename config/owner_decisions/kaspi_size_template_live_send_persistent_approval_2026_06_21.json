@@ -1,0 +1,64 @@
+{
+  "approval_type": "kaspi_customer_size_template_live_send_persistent",
+  "approval_id": "kaspi_size_template_live_send_persistent_owner_approval_2026_06_21",
+  "status": "active",
+  "approved_by_owner": true,
+  "approved_at_local": "2026-06-21T17:23:05+05:00",
+  "approval_source": "owner_chat_message_current_thread",
+  "one_time_persistent_approval": true,
+  "human_owner_approval_required_per_run": false,
+  "must_not_ask_owner_again_if_policy_valid": true,
+  "approval_does_not_override_machine_safety_gates": true,
+  "scope": {
+    "store_codes": [
+      "UNIVERSAL",
+      "ACMEWEAR",
+      "STOREB"
+    ],
+    "merchant_account_ids": [
+      "30000001",
+      "30137883",
+      "30000002"
+    ],
+    "allowed_action": "send_size_request_template_to_blank_missing_size_orders",
+    "allowed_send_surface": "kaspi_visible_order_chat_ui",
+    "allowed_template_text": "Добрый день, пожалуйста подскажите примерный Рост и Вес, подберем точный размер😊",
+    "allowed_template_sha256": "c68968319ac3d3d245df3d74722dad5b788c0cec5963c609fc362f723d069884",
+    "eligible_when_google_board_my_size_blank": true,
+    "eligible_when_size_facts_unknown": true
+  },
+  "required_machine_gates": [
+    "QUEUE_SCOPE_GATE",
+    "SESSION_SURFACE_GATE",
+    "MERCHANT_CONTEXT_GATE",
+    "ORDER_CONTEXT_GATE",
+    "CHAT_CONTEXT_GATE",
+    "DUPLICATE_GATE",
+    "TEMPLATE_SOURCE_GATE",
+    "DRAFT_RENDER_GATE",
+    "FOCUS_AND_CLICK_GATE",
+    "POST_SEND_BUBBLE_GATE",
+    "SECOND_READBACK_GATE",
+    "LEDGER_WRITE_GATE"
+  ],
+  "forbidden_actions": [
+    "send_modified_template_text",
+    "send_free_form_customer_message",
+    "send_follow_up_or_discount_or_delivery_or_payment_text",
+    "bulk_send_without_per_order_gate_readback",
+    "send_when_google_board_my_size_nonblank",
+    "send_when_height_weight_or_customer_size_known",
+    "send_when_prior_outgoing_approved_template_visible",
+    "send_from_direct_private_chat_api_without_separate_endpoint_proof",
+    "export_cookies_storage_auth_headers_or_otps",
+    "store_raw_customer_chat_text_outside_ignored_private_db"
+  ],
+  "post_send_recording": {
+    "write_private_duplicate_ledger_after_second_readback": true,
+    "write_system_of_record_event_after_second_readback": true,
+    "raw_order_id_exported_to_closeout": false,
+    "raw_customer_text_exported_to_closeout": false,
+    "raw_phone_exported_to_closeout": false,
+    "raw_session_material_exported_to_closeout": false
+  }
+}

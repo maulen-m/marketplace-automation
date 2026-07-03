@@ -1,0 +1,105 @@
+{
+  "approval_type": "acmewear_express_label_on_demand_persistent",
+  "approval_id": "acmewear_express_label_on_demand_owner_approval_2026_06_24",
+  "status": "active",
+  "approved_by_owner": true,
+  "approved_at_local": "2026-06-24T15:00:00+05:00",
+  "approval_source": "owner_chat_message_current_thread",
+  "one_time_persistent_approval": true,
+  "human_owner_approval_required_per_run": false,
+  "must_not_ask_owner_again_if_policy_valid": true,
+  "approval_does_not_override_machine_safety_gates": true,
+  "lane_id": "ACMEWEAR_PP2_EXPRESS_SELFPICKUP_V1",
+  "scope": {
+    "store_codes": [
+      "ACMEWEAR"
+    ],
+    "merchant_account_ids": [
+      "30137883"
+    ],
+    "allowed_operator_intents": [
+      "prepare express delivery",
+      "prepare PDF of active order",
+      "prepare active Express order shipping label",
+      "fetch crop and send ACMEWEAR Express label PDF",
+      "prepare label before manual size entry when owner will assign size separately"
+    ],
+    "allowed_current_actions": [
+      "read ACMEWEAR Kaspi orders by GET API",
+      "download already-present Kaspi Express waybill PDF",
+      "crop existing platform waybill to one 75x120mm product-label PDF",
+      "send one cropped product-label PDF to Telegram waybill group",
+      "send one cropped product-label PDF even when size is not yet recorded, because size is packaging/operator metadata and not required for label download",
+      "append repo-local ignored send ledger rows",
+      "write repo-local ignored run evidence"
+    ],
+    "allowed_telegram_bot_token_env": "TELEGRAM_BOT_TOKEN_WAYBILL",
+    "allowed_telegram_chat_id_env": "TELEGRAM_WAYBILL_CHAT_ID",
+    "allowed_kaspi_token_env_aliases": [
+      "KASPI_TOKEN_ACMEWEAR",
+      "ACMEWEAR_KASPI_API_TOKEN"
+    ],
+    "default_ledger_csv": "data/acmewear_express_telegram_label_ledger.csv",
+    "default_run_root": "runs/acmewear_express_selfpickup_sidecar",
+    "size_optional_for_label_send": true,
+    "owner_size_caption_allowed_when_provided": true,
+    "duplicate_guard": "order_hash_before_download_then_attachment_hash_before_send",
+    "required_label_geometry_mm": [
+      75,
+      120
+    ]
+  },
+  "future_live_mutation_business_approval": {
+    "owner_business_approval_granted_for_express_assemble": true,
+    "owner_business_approval_granted_for_waybill_generation_when_required_by_assemble": true,
+    "human_owner_approval_required_per_run_after_tooling_is_green": false,
+    "execution_status_today": "not_unlocked_by_this_policy_until_a_dedicated_tested_cli_or_contract_exists",
+    "required_before_any_future_assemble_or_waybill_generation": [
+      "dedicated CLI or reviewed API/browser contract exists",
+      "dry-run request shape evidence exists",
+      "exact target order and ACMEWEAR merchant context are machine-proven",
+      "order is still active and Express delivery",
+      "size or owner size override is resolved when size affects fulfillment",
+      "operator physical readiness is true when courier search may start",
+      "post-mutation Kaspi readback is implemented",
+      "ledger is append-only and idempotent",
+      "raw tokens, customer PII, raw order id, and raw waybill URL are not persisted"
+    ]
+  },
+  "required_machine_gates": [
+    "OWNER_POLICY_FILE_PRESENT",
+    "ACMEWEAR_MERCHANT_GATE",
+    "TARGET_ORDER_GATE",
+    "ACTIVE_EXPRESS_ORDER_GATE",
+    "WAYBILL_PRESENT_OR_APPROVED_ASSEMBLE_READBACK_GATE",
+    "HASHED_ORDER_REFERENCE_GATE",
+    "PDF_CROP_GEOMETRY_GATE",
+    "TELEGRAM_WAYBILL_GROUP_REACHABILITY_GATE",
+    "DUPLICATE_SEND_GATE",
+    "LIVE_SEND_SUMMARY_GATE",
+    "LEDGER_APPEND_GATE",
+    "NO_SECRET_OR_RAW_PII_ARTIFACT_SCAN"
+  ],
+  "forbidden_actions": [
+    "operate_non_ACMEWEAR_merchants",
+    "send_to_TELEGRAM_CHAT_ID_for_waybill_labels_when_TELEGRAM_WAYBILL_CHAT_ID_is_available",
+    "use_TELEGRAM_BOT_TOKEN_for_waybill_group_when_TELEGRAM_BOT_TOKEN_WAYBILL_is_available",
+    "persist_raw_order_id_in_run_dir_or_docs",
+    "persist_raw_waybill_url",
+    "persist_customer_name_phone_address_or_chat_text",
+    "persist_cookies_storage_auth_headers_or_token_values",
+    "perform_seller_self_pickup_completion_without_separate_security_code_gate",
+    "perform_price_stock_campaign_repricer_google_or_autonomous_business_writes",
+    "invent_ad_hoc_browser_click_mutations_when_a_dedicated_cli_or_contract_is_absent"
+  ],
+  "post_action_recording": {
+    "telegram_summary_required": true,
+    "telegram_message_id_recorded_when_sent": true,
+    "pdf_hash_recorded": true,
+    "order_reference_is_sha256_only": true,
+    "raw_order_id_exported_to_closeout": false,
+    "raw_customer_data_exported_to_closeout": false,
+    "raw_waybill_url_exported_to_closeout": false,
+    "raw_session_material_exported_to_closeout": false
+  }
+}

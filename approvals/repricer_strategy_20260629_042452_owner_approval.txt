@@ -1,0 +1,11 @@
+I approve live Kaspi safe-active-patch uploads for UNIVERSAL (`30000001`) and STORE-B (`30000002`) using exactly these generated full ACTIVE workbooks:
+UNIVERSAL (`30000001`): `~/Docs/Web_automation/runs/repricer_strategy_audit/20260629_042452_universal_storeb_report_only/high_stock_archive_activation_safe_patch_build/universal_safe_active_patch_run/safe_active_patch/universal_FULL_ACTIVE_UPLOAD.xlsx`
+UNIVERSAL sha256: `96bf1746a12e026d8f3fd589422416756ab75a32bf10a5ab352604720fcca5db`
+STORE-B (`30000002`): `~/Docs/Web_automation/runs/repricer_strategy_audit/20260629_042452_universal_storeb_report_only/high_stock_archive_activation_safe_patch_build/storeb_safe_active_patch_run/safe_active_patch/storeb_FULL_ACTIVE_UPLOAD.xlsx`
+STORE-B sha256: `7965f197d4ee7b62b1c330c469e350c67caa220aae29cfd58fb7dd9341303a2b`
+Review CSV sha256: `90fbb760045258ddc13c84e8ab901763af47bf3ec8b8961ff9cde8d962daae35`
+Stock-pool depletion proof: `~/Docs/Web_automation/runs/repricer_strategy_audit/20260629_042452_universal_storeb_report_only/stock_pool_depletion_audit_summary.json`
+Stock-pool depletion proof sha256: `3b7ce6450a1f36aab5956147a82b71c386fb3e47027c6dd4c7d031aedb3adf14`
+Stock-pool depletion rows: `685/685`
+Line52 recovered returns: `S +0, M +2, L +5, XL +16, 2XL +8, 3XL +15, 4XL +6`
+Scope is limited to the 88 rows in `~/Docs/Web_automation/runs/repricer_strategy_audit/20260629_042452_universal_storeb_report_only/high_stock_archive_activation_safe_patch_build/high_stock_archive_activation_review.csv`, with `price=14990`, `PP1=500`, `PP2..PP5=no`, `preorder=0`, preserving all baseline ACTIVE SKUs. After upload, verify by fresh ACTIVE/ARCHIVE download, then run the Repricer import/update and exact dynamic pricing convergence for the activated rows. No other stores, rows, prices, stock, or Autonomous_business writes are approved.

@@ -1,8 +1,9 @@
 schema_version: 1
 generated_at_local: "2026-05-02T12:35:28+05:00"
+last_updated_local: "2026-06-23 18:57:36 +05"
 timezone: "Asia/Almaty"
-status: "scaffold_planned_only"
-launch_status: "LINE51 scaffold planned only; no live upload or ad changes authorized"
+status: "current_group2_bid100_recorded"
+launch_status: "LINE51 group 2 K-O ST campaign has owner-reported BID100 from 2026-06-23 18:51:02 +05; future ad/price changes still require separate owner approval"
 store: "ACMEWEAR"
 product_family: "LINE51"
 raw_parent_sku_key: "CL_OC_MEN_LINE51_WHITE "
@@ -92,62 +93,117 @@ marketing_gate:
 baseline_offer_groups:
   - owner_group: "group_1"
     lane_id: "line51_original_sport_suit"
-    baseline_step_id: "group_1_baseline_current_16990"
-    status: "current_baseline_verified_not_future_live_step"
+    baseline_step_id: "group_1_current_price19990_20260622"
+    status: "active_live_verified_price_upload"
     executable: false
-    current_price_kzt: 16990
+    previous_baseline_price_kzt: 16990
+    current_price_kzt: 19990
     campaign_id: "2380614"
     campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2380614?startDate=2026-05-01&endDate=2026-05-01"
     public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true"
     public_product_id: "134547494"
-    public_page_price_kzt: 16990
-    active_row_count: 9
+    public_page_price_kzt: 19990
+    active_row_count: 7
     archive_row_count: 0
     active_pricelist_prices_kzt:
-      - 16990
-    marketing_metrics_status: "verification_required_no_local_marketing_rows"
+      - 19990
+    marketing_metrics_status: "not_refreshed_in_price_upload_flow"
     projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
-    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+    evidence_path: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/ACMEWEAR_FAMILY_PRICE_CHANGE_LIVE_CLOSEOUT.md"
   - owner_group: "group_2"
     lane_id: "line51_ko_sport_suit"
-    baseline_step_id: "group_2_baseline_current_15990"
-    status: "current_baseline_verified_not_future_live_step"
+    baseline_step_id: "group_2_current_price16990_20260623_bid100_20260623"
+    status: "active_live_verified_price_upload"
     executable: false
-    current_price_kzt: 15990
+    previous_baseline_price_kzt: 15990
+    current_price_kzt: 16990
     campaign_id: "2626530"
     campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2626530?startDate=2026-05-01&endDate=2026-05-01"
     public_offer_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-suit-61-blk-k-o-m-chernyi-belyi-m-159719353/?hasVariants=true"
     public_product_id: "159719353"
-    public_page_price_kzt: 15990
-    active_row_count: 10
+    public_page_price_kzt: 16990
+    current_bid_kzt: 100
+    previous_bid_kzt: 50
+    owner_latest_bid_event_at_local: "2026-06-23 18:51:02 +05:00"
+    owner_latest_bid_event: "owner manually changed Line51_K-O_1.3.26_12_12_00 / campaign 2626530 BID from 50 to 100; record-only, no Codex live write."
+    active_row_count: 7
     archive_row_count: 0
     active_pricelist_prices_kzt:
-      - 15990
-    marketing_metrics_status: "verification_required_no_local_marketing_rows"
+      - 16990
+    marketing_metrics_status: "not_refreshed_in_price_upload_flow"
     warning: "public_slug_contains_line61_but_merchant_sku_and_model_are_line51"
     projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
-    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+    evidence_path: "runs/kaspi_pricelist_ops/20260623_184410_acmewear_line31_line51_16990_current_recheck/CLOSEOUT.md"
+    owner_bid_decision_evidence_path: "runs/kaspi_marketing_manual_decisions/20260623_185102_acmewear_multi_campaign_bid_changes_owner_decision/OWNER_DECISION.md"
   - owner_group: "group_3"
     lane_id: "line51_ko_thermal_set"
-    baseline_step_id: "group_3_baseline_current_15990"
-    status: "current_baseline_verified_not_future_live_step"
+    baseline_step_id: "group_3_current_price19990_20260622"
+    status: "removed_from_active_live_verified"
     executable: false
-    current_price_kzt: 15990
+    previous_baseline_price_kzt: 15990
+    current_price_kzt: 19990
     campaign_id: "2690256"
     campaign_url: "https://marketing.kaspi.kz/advertising/campaigns/2690256?startDate=2026-05-01&endDate=2026-05-01"
     public_offer_url: "https://kaspi.kz/shop/p/komplekt-acmewear-of-line51-blk-k-o-trm-2xl-chernyi-belyi-2xl-159806793/?hasVariants=true"
     public_product_id: "159806793"
-    public_page_price_kzt: 15990
-    active_row_count: 10
-    archive_row_count: 0
-    active_pricelist_prices_kzt:
-      - 15990
-    marketing_metrics_status: "verification_required_no_local_marketing_rows"
-    projected_actual_status: "template_only_until_marketing_and_group_order_attribution_are_available"
-    evidence_path: "runs/line51_full_tracking_experiment/20260502_agent_execution/agent1_offer_registry/pricelist_group_summary.json"
+    public_page_price_kzt: 19990
+    active_row_count: 0
+    archive_row_count: 10
+    active_pricelist_prices_kzt: []
+    marketing_metrics_status: "not_refreshed_in_price_upload_flow"
+    projected_actual_status: "off_active_after_owner_approved_pricelist_removal"
+    evidence_path: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/CLOSEOUT.md"
+
+current_live_price_event_20260622:
+  status: "active_live_verified"
+  owner_decision_at_local: "2026-06-22 12:07:20 +05"
+  platform_effective_at_local: "2026-06-22 12:10:00 +05"
+  verified_at_local: "2026-06-22 12:28:45 +05"
+  upload_history_id: "6a38dfcb2022207bc8b522f4"
+  target_parent_full_price_kzt: 19990
+  target_counts:
+    LINE51_PARENT_FULL: 21
+    LINE51_CHILD: 24
+  evidence:
+    closeout: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/ACMEWEAR_FAMILY_PRICE_CHANGE_LIVE_CLOSEOUT.md"
+    verification_summary: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_verification_1/post_timeout_verification_summary.json"
+    active_readback: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_readback_1/downloads/acmewear_ACTIVE.xlsx"
+    archive_readback: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/post_timeout_readback_1/downloads/acmewear_ARCHIVE.xlsx"
+  boundary: "No LINE51 ad, bid, budget, campaign, stock, PP, preorder, Repricer/API, Meta, CRM, Telegram, or Autonomous_business write in this price-upload flow."
+
+current_live_sellability_event_20260622:
+  status: "removed_from_active_live_verified"
+  owner_decision_at_local: "2026-06-22 21:04:18 +05"
+  platform_effective_at_local: "2026-06-22 21:05:00 +05"
+  verified_at_local: "2026-06-22 21:21:28 +05"
+  upload_history_id: "6a395d2f388fe85c626cf6d4"
+  target_lane: "line51_ko_thermal_set"
+  target_campaign_id: "2690256"
+  active_rows_before: 7
+  active_rows_after: 0
+  archive_rows_before: 3
+  archive_rows_after: 10
+  active_removed_skus:
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_2XL_159806793"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_3XL_159806864"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_L_159806895"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_M_159806820"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_S_159806832"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_1_159806992"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_XL_2_159806817"
+  already_archive_skus:
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_1_159806789"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_2_159806794"
+    - "CL_OC_MEN_LINE51_WHITE_K-O_TRM_4XL_3_159806944"
+  evidence:
+    closeout: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/CLOSEOUT.md"
+    verification_summary: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/verify_readback_1/verification_summary.json"
+    active_readback: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/post_upload_readback_1/downloads/acmewear_ACTIVE.xlsx"
+    archive_readback: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/post_upload_readback_1/downloads/acmewear_ARCHIVE.xlsx"
+  boundary: "No LINE51 ad, bid, budget, campaign, stock API, Repricer/API, Meta, CRM, Telegram, website, scheduler, or Autonomous_business write in this sellability upload flow."
 
 future_ladder_scaffold:
-  rule: "Future candidate prices are scaffold placeholders computed from each verified current group price. They are not recommendations and are not executable."
+  rule: "Future candidate prices are placeholders computed from each verified current group price. They are not recommendations and are not executable."
   shared_gates:
     executable: false
     owner_approval_required: true
@@ -160,26 +216,26 @@ future_ladder_scaffold:
   candidate_steps:
     - owner_group: "group_1"
       lane_id: "line51_original_sport_suit"
-      current_price_kzt: 16990
-      candidate_price_kzt: 17990
+      current_price_kzt: 19990
+      candidate_price_kzt: 20990
       step_id: "group_1_candidate_plus_1000"
       status: "planned_owner_approval_required_not_executable"
       owner_approval_required: true
       executable: false
     - owner_group: "group_2"
       lane_id: "line51_ko_sport_suit"
-      current_price_kzt: 15990
-      candidate_price_kzt: 16990
+      current_price_kzt: 19990
+      candidate_price_kzt: 20990
       step_id: "group_2_candidate_plus_1000"
       status: "planned_owner_approval_required_not_executable"
       owner_approval_required: true
       executable: false
     - owner_group: "group_3"
       lane_id: "line51_ko_thermal_set"
-      current_price_kzt: 15990
-      candidate_price_kzt: 16990
+      current_price_kzt: 19990
+      candidate_price_kzt: 20990
       step_id: "group_3_candidate_plus_1000"
-      status: "planned_owner_approval_required_not_executable"
+      status: "blocked_not_executable_removed_from_active"
       owner_approval_required: true
       executable: false
 

@@ -1,0 +1,1071 @@
+schema_version: web_auto.scheduled_checkpoints.v1
+timezone: Asia/Almaty
+run_root: runs/scheduled_checkpoints
+
+child_bundle_campaign_scope:
+  - campaign_id: "2794142"
+    child_bundle_id: SUIT-31-LS
+    card_group: "LINE61|SUIT-31-LS|ST"
+    role: bid60_target
+    campaign_product_sku: "21282790b"
+  - campaign_id: "2794144"
+    child_bundle_id: SUIT-21-LS
+    card_group: "LINE61|SUIT-21-LS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282879b"
+  - campaign_id: "2794146"
+    child_bundle_id: SUIT-21-TS
+    card_group: "LINE61|SUIT-21-TS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282849b"
+  - campaign_id: "2794148"
+    child_bundle_id: LINE-21-TS
+    card_group: "LINE51|LINE-21-TS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282793b"
+  - campaign_id: "2794149"
+    child_bundle_id: SUIT-31-TS
+    card_group: "LINE61|SUIT-31-TS|ST"
+    role: bid60_target
+    campaign_product_sku: "21282813b"
+  - campaign_id: "2794150"
+    child_bundle_id: LINE-21-LS
+    card_group: "LINE51|LINE-21-LS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282859b"
+  - campaign_id: "2794152"
+    child_bundle_id: LINE-31-TS
+    card_group: "LINE51|LINE-31-TS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282840b"
+  - campaign_id: "2794153"
+    child_bundle_id: LINE-31-LS
+    card_group: "LINE51|LINE-31-LS|ST"
+    role: hold_readonly
+    campaign_product_sku: "21282826b"
+
+jobs:
+  - job_id: line61_line51_24h_checkpoint_20260509_1430
+    title: Line61/LINE51 24h post-action checkpoint
+    scheduled_at: "2026-05-09 14:30:00"
+    max_lag_minutes: 2880
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review CHECKPOINT_CLOSEOUT.md and only approve live actions in a separate owner command.
+    products:
+      - family: Line61
+        sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2545773", "2629982"]
+        route_note: ST/TRM independent route checkpoint after TRM bid lift.
+      - family: LINE51
+        sku_key: CL_OC_MEN_LINE51_WHITE
+        campaigns: ["2380614", "2626530", "2690256"]
+        route_note: Group 1 ad-intensity checkpoint; groups 2/3 stay independently evaluated.
+    commands:
+      - id: line61_dashboard_watch_health
+        description: Refresh/read Line61 dashboard evidence and heartbeat.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2545773"
+          - --campaign-id
+          - "2629982"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --headless
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2545773"
+          - --campaign-id
+          - "2629982"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --offline
+          - --allow-stale
+      - id: line51_dashboard_watch_health
+        description: Refresh/read LINE51 dashboard evidence and heartbeat.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_OC_MEN_LINE51_WHITE
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2380614"
+          - --campaign-id
+          - "2626530"
+          - --campaign-id
+          - "2690256"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --headless
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_OC_MEN_LINE51_WHITE
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2380614"
+          - --campaign-id
+          - "2626530"
+          - --campaign-id
+          - "2690256"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --offline
+          - --allow-stale
+
+  - job_id: line61_line51_3d_oracle_pack_20260511_1000
+    title: Line61/LINE51 three-day evidence pack checkpoint
+    scheduled_at: "2026-05-11 10:00:00"
+    max_lag_minutes: 2880
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review generated checkpoint artifacts, then route the evidence pack to the external expert.
+    oracle_backing:
+      required: true
+      pack_goal: Three-day external-expert re-evaluation pack with independent route analysis.
+      live_action_authorized: false
+    products:
+      - family: Line61
+        sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2545773", "2629982"]
+      - family: LINE51
+        sku_key: CL_OC_MEN_LINE51_WHITE
+        campaigns: ["2380614", "2626530", "2690256"]
+    commands:
+      - id: line61_dashboard_watch_health
+        description: Refresh/read Line61 dashboard evidence for the three-day pack.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2545773"
+          - --campaign-id
+          - "2629982"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --headless
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2545773"
+          - --campaign-id
+          - "2629982"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --offline
+          - --allow-stale
+      - id: line51_dashboard_watch_health
+        description: Refresh/read LINE51 dashboard evidence for the three-day pack.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_OC_MEN_LINE51_WHITE
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2380614"
+          - --campaign-id
+          - "2626530"
+          - --campaign-id
+          - "2690256"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --headless
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - CL_OC_MEN_LINE51_WHITE
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2380614"
+          - --campaign-id
+          - "2626530"
+          - --campaign-id
+          - "2690256"
+          - --date-from-days
+          - "90"
+          - --date-to
+          - today
+          - --offline
+          - --allow-stale
+
+  - job_id: acmewear_child_bundle_bid60_6h_watch_20260510_0204
+    title: ACMEWEAR child-bundle BID60 6h watch snapshot
+    scheduled_at: "2026-05-10 02:04:25"
+    max_lag_minutes: 90
+    owner_approval_required_for_live_writes: true
+    proof_anchor_at: "2026-05-09T20:04:25+05:00"
+    next_owner_action: Review CHECKPOINT_CLOSEOUT.md and stop/escalate manually if spend/carts/orders cross owner stoplines; no automatic live action is authorized.
+    operator_caps:
+      daily_watch_cap_kzt_per_campaign: 2000
+      zero_orders_zero_carts_spend_stop_kzt: 1500
+      campaign_ads_order_stop_caps_kzt:
+        "2794142": 900
+        "2794149": 1100
+    products:
+      - family: SUIT-31-LS child bundle
+        sku_key: SUIT-31-LS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794142"]
+        campaign_product_sku: "21282790b"
+        card_group: "LINE61|SUIT-31-LS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+      - family: SUIT-31-TS child bundle
+        sku_key: SUIT-31-TS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794149"]
+        campaign_product_sku: "21282813b"
+        card_group: "LINE61|SUIT-31-TS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+    commands:
+      - id: bid60_marketing_fetch_targets_20260510
+        description: Fetch/read all eight child-bundle campaigns once for this timestamp.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --campaign-id
+          - "2794144"
+          - --campaign-id
+          - "2794146"
+          - --campaign-id
+          - "2794148"
+          - --campaign-id
+          - "2794149"
+          - --campaign-id
+          - "2794150"
+          - --campaign-id
+          - "2794152"
+          - --campaign-id
+          - "2794153"
+          - --date
+          - "2026-05-10"
+          - --run-dir
+          - runs/kaspi_marketing/acmewear_child_bundle_bid60/20260510_0204
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'success','dry_live':'marketing_fetch_skipped','reason':'dry-live mode'}))"
+      - id: suit31_ls_dashboard_watch_health_20260510_0204
+        description: Build/read SUIT-31-LS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+      - id: suit31_ts_dashboard_watch_health_20260510_0204
+        description: Build/read SUIT-31-TS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+
+  - job_id: acmewear_child_bundle_bid60_12h_watch_20260510_0804
+    title: ACMEWEAR child-bundle BID60 12h watch snapshot
+    scheduled_at: "2026-05-10 08:04:25"
+    max_lag_minutes: 120
+    owner_approval_required_for_live_writes: true
+    proof_anchor_at: "2026-05-09T20:04:25+05:00"
+    next_owner_action: Review CHECKPOINT_CLOSEOUT.md and stop/escalate manually if spend/carts/orders cross owner stoplines; no automatic live action is authorized.
+    operator_caps:
+      daily_watch_cap_kzt_per_campaign: 2000
+      zero_orders_zero_carts_spend_stop_kzt: 1500
+      campaign_ads_order_stop_caps_kzt:
+        "2794142": 900
+        "2794149": 1100
+    products:
+      - family: SUIT-31-LS child bundle
+        sku_key: SUIT-31-LS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794142"]
+        campaign_product_sku: "21282790b"
+        card_group: "LINE61|SUIT-31-LS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+      - family: SUIT-31-TS child bundle
+        sku_key: SUIT-31-TS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794149"]
+        campaign_product_sku: "21282813b"
+        card_group: "LINE61|SUIT-31-TS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+    commands:
+      - id: bid60_marketing_fetch_targets_20260510
+        description: Fetch/read all eight child-bundle campaigns once for this timestamp.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --campaign-id
+          - "2794144"
+          - --campaign-id
+          - "2794146"
+          - --campaign-id
+          - "2794148"
+          - --campaign-id
+          - "2794149"
+          - --campaign-id
+          - "2794150"
+          - --campaign-id
+          - "2794152"
+          - --campaign-id
+          - "2794153"
+          - --date
+          - "2026-05-10"
+          - --run-dir
+          - runs/kaspi_marketing/acmewear_child_bundle_bid60/20260510_0804
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'success','dry_live':'marketing_fetch_skipped','reason':'dry-live mode'}))"
+      - id: suit31_ls_dashboard_watch_health_20260510_0804
+        description: Build/read SUIT-31-LS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+      - id: suit31_ts_dashboard_watch_health_20260510_0804
+        description: Build/read SUIT-31-TS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+
+  - job_id: acmewear_child_bundle_bid60_24h_checkpoint_20260510_2004
+    title: ACMEWEAR child-bundle BID60 24h checkpoint
+    scheduled_at: "2026-05-10 20:04:25"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    proof_anchor_at: "2026-05-09T20:04:25+05:00"
+    next_owner_action: Review CHECKPOINT_CLOSEOUT.md and the generated dashboard evidence before allowing the proof to continue; no automatic live action is authorized.
+    operator_caps:
+      daily_watch_cap_kzt_per_campaign: 2000
+      zero_orders_zero_carts_spend_stop_kzt: 1500
+      campaign_ads_order_stop_caps_kzt:
+        "2794142": 900
+        "2794149": 1100
+    products:
+      - family: SUIT-31-LS child bundle
+        sku_key: SUIT-31-LS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794142"]
+        campaign_product_sku: "21282790b"
+        card_group: "LINE61|SUIT-31-LS|ST"
+        route_note: 24h BID60 checkpoint; capture spend, clicks, carts, orders, stock/source stoplines.
+      - family: SUIT-31-TS child bundle
+        sku_key: SUIT-31-TS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794149"]
+        campaign_product_sku: "21282813b"
+        card_group: "LINE61|SUIT-31-TS|ST"
+        route_note: 24h BID60 checkpoint; capture spend, clicks, carts, orders, stock/source stoplines.
+    commands:
+      - id: bid60_marketing_fetch_targets_20260510
+        description: Fetch/read all eight child-bundle campaigns once for this timestamp.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --campaign-id
+          - "2794144"
+          - --campaign-id
+          - "2794146"
+          - --campaign-id
+          - "2794148"
+          - --campaign-id
+          - "2794149"
+          - --campaign-id
+          - "2794150"
+          - --campaign-id
+          - "2794152"
+          - --campaign-id
+          - "2794153"
+          - --date
+          - "2026-05-10"
+          - --run-dir
+          - runs/kaspi_marketing/acmewear_child_bundle_bid60/20260510_2004
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'success','dry_live':'marketing_fetch_skipped','reason':'dry-live mode'}))"
+      - id: suit31_ls_dashboard_watch_health_20260510_2004
+        description: Build/read SUIT-31-LS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+      - id: suit31_ts_dashboard_watch_health_20260510_2004
+        description: Build/read SUIT-31-TS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-10"
+          - --sync-date
+          - "2026-05-10"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+
+  - job_id: acmewear_child_bundle_bid60_36h_watch_20260511_0804
+    title: ACMEWEAR child-bundle BID60 36h watch snapshot
+    scheduled_at: "2026-05-11 08:04:25"
+    max_lag_minutes: 120
+    owner_approval_required_for_live_writes: true
+    proof_anchor_at: "2026-05-09T20:04:25+05:00"
+    next_owner_action: Review CHECKPOINT_CLOSEOUT.md and stop/escalate manually if spend/carts/orders cross owner stoplines; no automatic live action is authorized.
+    operator_caps:
+      daily_watch_cap_kzt_per_campaign: 2000
+      zero_orders_zero_carts_spend_stop_kzt: 1500
+      campaign_ads_order_stop_caps_kzt:
+        "2794142": 900
+        "2794149": 1100
+    products:
+      - family: SUIT-31-LS child bundle
+        sku_key: SUIT-31-LS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794142"]
+        campaign_product_sku: "21282790b"
+        card_group: "LINE61|SUIT-31-LS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+      - family: SUIT-31-TS child bundle
+        sku_key: SUIT-31-TS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794149"]
+        campaign_product_sku: "21282813b"
+        card_group: "LINE61|SUIT-31-TS|ST"
+        route_note: BID60 proof watch; price 8490 and budget 12000 must stay unchanged.
+    commands:
+      - id: bid60_marketing_fetch_targets_20260511
+        description: Fetch/read all eight child-bundle campaigns once for this timestamp.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --campaign-id
+          - "2794144"
+          - --campaign-id
+          - "2794146"
+          - --campaign-id
+          - "2794148"
+          - --campaign-id
+          - "2794149"
+          - --campaign-id
+          - "2794150"
+          - --campaign-id
+          - "2794152"
+          - --campaign-id
+          - "2794153"
+          - --date
+          - "2026-05-11"
+          - --run-dir
+          - runs/kaspi_marketing/acmewear_child_bundle_bid60/20260511_0804
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'success','dry_live':'marketing_fetch_skipped','reason':'dry-live mode'}))"
+      - id: suit31_ls_dashboard_watch_health_20260511_0804
+        description: Build/read SUIT-31-LS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+      - id: suit31_ts_dashboard_watch_health_20260511_0804
+        description: Build/read SUIT-31-TS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+
+  - job_id: acmewear_child_bundle_bid60_48h_closeout_20260511_2004
+    title: ACMEWEAR child-bundle BID60 48h closeout evidence checkpoint
+    scheduled_at: "2026-05-11 20:04:25"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    proof_anchor_at: "2026-05-09T20:04:25+05:00"
+    next_owner_action: Build/review the 48h owner packet from CHECKPOINT_CLOSEOUT.md and generated dashboards; any follow-up live action requires a new explicit owner approval.
+    oracle_backing:
+      required: true
+      pack_goal: 48h review-only owner/expert packet for the BID60 child-bundle proof.
+      live_action_authorized: false
+    operator_caps:
+      daily_watch_cap_kzt_per_campaign: 2000
+      zero_orders_zero_carts_spend_stop_kzt: 1500
+      campaign_ads_order_stop_caps_kzt:
+        "2794142": 900
+        "2794149": 1100
+    products:
+      - family: SUIT-31-LS child bundle
+        sku_key: SUIT-31-LS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794142"]
+        campaign_product_sku: "21282790b"
+        card_group: "LINE61|SUIT-31-LS|ST"
+        route_note: 48h BID60 closeout; no automatic scale.
+      - family: SUIT-31-TS child bundle
+        sku_key: SUIT-31-TS
+        parent_sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+        campaigns: ["2794149"]
+        campaign_product_sku: "21282813b"
+        card_group: "LINE61|SUIT-31-TS|ST"
+        route_note: 48h BID60 closeout; no automatic scale.
+    commands:
+      - id: bid60_marketing_fetch_targets_20260511
+        description: Fetch/read all eight child-bundle campaigns once for this timestamp.
+        read_only: true
+        timeout_seconds: 1200
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --campaign-id
+          - "2794144"
+          - --campaign-id
+          - "2794146"
+          - --campaign-id
+          - "2794148"
+          - --campaign-id
+          - "2794149"
+          - --campaign-id
+          - "2794150"
+          - --campaign-id
+          - "2794152"
+          - --campaign-id
+          - "2794153"
+          - --date
+          - "2026-05-11"
+          - --run-dir
+          - runs/kaspi_marketing/acmewear_child_bundle_bid60/20260511_2004
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'success','dry_live':'marketing_fetch_skipped','reason':'dry-live mode'}))"
+      - id: suit31_ls_dashboard_watch_health_20260511_2004
+        description: Build/read SUIT-31-LS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-LS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-LS
+          - --offline
+          - --allow-stale
+      - id: suit31_ts_dashboard_watch_health_20260511_2004
+        description: Build/read SUIT-31-TS dashboard evidence from the local fetch and AB read-only truth.
+        read_only: true
+        timeout_seconds: 900
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale
+        dry_live_argv:
+          - ./web-auto
+          - experiment-dashboard
+          - watch-health
+          - --json
+          - --sku-key
+          - SUIT-31-TS
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794149"
+          - --date-from
+          - "2026-05-09"
+          - --date-to
+          - "2026-05-11"
+          - --sync-date
+          - "2026-05-11"
+          - --cache-dir
+          - runs/experiment_dashboard/acmewear_child_bundle_bid60/SUIT-31-TS
+          - --offline
+          - --allow-stale

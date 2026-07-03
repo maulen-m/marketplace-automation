@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.suit21_ls_6990_suit31_ts_7990_price_ladder</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; __REPO_ROOT__/.venv/bin/python -m web_auto --env-file __ENV_FILE__ --json scheduled-checkpoint run --config config/schedules/suit21_ls_6990_suit31_ts_7990_price_ladder.yaml --due --mode live-readonly --allow-stale --max-jobs 1</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/suit21_ls_6990_suit31_ts_7990_price_ladder/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/suit21_ls_6990_suit31_ts_7990_price_ladder/logs/stderr.log</string>
+</dict>
+</plist>

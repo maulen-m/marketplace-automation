@@ -1,5 +1,9 @@
 task_id: repricer_dumping_enable
 
+repricer_protection:
+  fixed_price_protected_merchant_sku_prefixes:
+    - CL_OC_MEN_LINE51_WHITE_KO_CLEAR
+
 accounts:
   - name: app_1
     base_url: "https://repricer.kz/price_strategy/"

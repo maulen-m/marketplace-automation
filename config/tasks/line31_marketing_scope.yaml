@@ -1,0 +1,372 @@
+schema_version: web_auto.kaspi_marketing_line31.v1
+store: ACMEWEAR
+merchant_id: "759051"
+store_code: "30137883"
+family: LINE31
+timezone: Asia/Almaty
+
+price_context:
+  latest_family_price_event_at: "2026-06-30 19:08:29 +05"
+  verified_at: null
+  active_line31_target_price_kzt: "24990"
+  target_count: 33
+  source: "owner-reported ACMEWEAR ACTIVE pricelist upload plus local workbook read-only inspection; fresh Kaspi ACTIVE/ARCHIVE readback pending"
+  evidence:
+    stable_record: "Docs/experiments/line31/line31_price24990_pp2_owner_upload_20260630_190829.md"
+    run_record_md: "runs/kaspi_pricelist_manual_decisions/20260630_190829_line31_price24990_pp2_owner_upload/OWNER_DECISION.md"
+    run_record_json: "runs/kaspi_pricelist_manual_decisions/20260630_190829_line31_price24990_pp2_owner_upload/OWNER_DECISION.json"
+    owner_uploaded_workbook_path: "~/Downloads/ACTIVE_30.06.2026_19_08_29_line31_change.xlsx"
+    owner_uploaded_workbook_sha256: "8ed22ad4ee43e6dbda38cfa73fcc5b0ffe1445f80e2036730897dbe5badeb361"
+  previous_verified_context:
+    latest_family_price_event_at: "2026-06-23 11:58:51 +05"
+    verified_at: "2026-06-23 12:35:00 +05"
+    active_line31_target_price_kzt: "16990"
+    source: "fresh ACMEWEAR Kaspi ACTIVE/ARCHIVE pricelist readback"
+    evidence:
+      closeout: "runs/kaspi_pricelist_ops/20260623_115900_acmewear_line31_line51_price16990_reversal/CLOSEOUT.md"
+      verification_summary: "runs/kaspi_pricelist_ops/20260623_115900_acmewear_line31_line51_price16990_reversal/post_timeout_readback_1/verify_against_intended_upload.json"
+      active_readback: "runs/kaspi_pricelist_ops/20260623_115900_acmewear_line31_line51_price16990_reversal/post_timeout_readback_1/downloads/acmewear_ACTIVE.xlsx"
+      archive_readback: "runs/kaspi_pricelist_ops/20260623_115900_acmewear_line31_line51_price16990_reversal/post_timeout_readback_1/downloads/acmewear_ARCHIVE.xlsx"
+  stock_pp_context:
+    owner_event_at: "2026-06-30 19:08:29 +05"
+    pp2_change_scope: "owner reported PP2 express delivery warehouse unit tuning for LINE31 active offers; PP2 was not set above PP1"
+    local_workbook_rows_where_pp2_exceeds_pp1: 0
+    local_workbook_rows_where_pp1_equals_1_and_pp2_equals_0: 0
+  seller_bonus_eligibility_context:
+    status: "blocked_by_14_day_price_rule_pending_fresh_promo_readback"
+    assessed_at: "2026-06-30 22:34:07 +05"
+    official_source: "https://guide.kaspi.kz/partner/ru/marketing/bonus_purchase/q3814"
+    confidence: high
+    prior_verified_price_kzt: 16990
+    current_owner_reported_price_kzt: 24990
+    price_increase_kzt: 8000
+    price_increase_pct: 47.1
+    max_price_if_plus_3pct_from_prior_kzt: 17499.7
+    max_price_if_plus_3000_from_prior_kzt: 19990
+    conservative_earliest_recheck_after: "2026-07-15 19:08:29 +05"
+    interpretation: "Official Kaspi seller-bonus eligibility requires 14 days of sale/price stability and current price near the minimum; the LINE31 24990 owner price event is far above the prior 16990 context, so LINE31 seller-bonus promos should not be treated as active customer-effective promo exposure until fresh platform readback proves eligibility."
+    evidence:
+      stable_record: "Docs/experiments/line31/line31_price24990_seller_bonus_eligibility_block_20260630.md"
+  note: "Owner reported uploading ACTIVE_30.06.2026_19_08_29_line31_change.xlsx as the live ACMEWEAR ACTIVE pricelist: LINE31 active offer prices changed to 24990 and PP2 express warehouse units were tuned without exceeding PP1. Local workbook inspection found 33 LINE31 rows at 24990 and 0 rows where PP2 exceeds PP1. Fresh Kaspi ACTIVE/ARCHIVE readback was not performed in this record-only step, so future merchant readback should supersede this context for platform truth."
+
+sellability_overrides_20260622:
+  - merchant_sku: "OF_LINE31_ST_ESP_2XL"
+    color_label: espresso
+    size: "2XL"
+    status: "archive_out_of_stock_verified"
+    owner_decision_at_local: "2026-06-22 21:04:18 +05"
+    verified_at_local: "2026-06-22 21:21:28 +05"
+    evidence:
+      closeout: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/CLOSEOUT.md"
+      verification_summary: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/verify_readback_1/verification_summary.json"
+      archive_readback: "runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/post_upload_readback_1/downloads/acmewear_ARCHIVE.xlsx"
+
+discovery:
+  campaign_name_terms:
+    - LINE31
+    - LINE31Z
+  product_terms:
+    - LINE31
+  merchant_sku_terms:
+    - LINE31
+  exclude_terms:
+    - LINE51
+    - Line61
+    - SUIT-31
+    - SUIT-21
+    - LINE52
+
+seed_campaigns:
+  - campaign_id: "2695637"
+    campaign_name: LINE31_ST_25.3.26_01_05_00
+    color_label: starry_black
+    product_sku: "20754945b"
+    merchant_sku: CL_OF_ARC_WM_LINE31_C-023_STARRY-BLACK_ST_XL
+    launch_bid_kzt: "150"
+    previous_configured_bid_kzt: "150"
+    configured_bid_kzt: "120"
+    current_bid_kzt: "120"
+    previous_daily_budget_kzt: "9000"
+    daily_budget_kzt: "10000"
+    configured_daily_budget_kzt: "10000"
+    current_daily_budget_kzt: "10000"
+    owner_event_at: "2026-05-25 17:01:03 +05:00"
+    owner_event: owner manually reduced BID from 150 to 30 after low-score high-spend response.
+    owner_bid_event_at: "2026-05-27 15:35:06 +05:00"
+    owner_bid_event: owner manually increased BID value to 120.
+    owner_latest_bid_event_at: "2026-06-30 14:37:11 +05:00"
+    owner_latest_bid_event: owner manually changed BID from 150 to 120.
+    owner_budget_event_at: "2026-06-17 20:01:19 +05:00"
+    owner_budget_event: owner manually increased daily budget to 6000 because the campaign reached its daily budget limit.
+    owner_latest_budget_event_at: "2026-06-20 21:25:55 +05:00"
+    owner_latest_budget_event: owner manually increased daily budget from 9000 to 10000 while decreasing BID from 130 to 100 so the campaign could last fully active until day end.
+    bid_events:
+      - event_at: "2026-05-24 22:29:00 +05:00"
+        bid_kzt: "150"
+        event: owner-approved re-enable preserved existing BID 150.
+      - event_at: "2026-05-25 17:01:03 +05:00"
+        bid_kzt: "30"
+        event: owner manually reduced BID from 150 to 30 after low-score high-spend response.
+      - event_at: "2026-05-26 20:47:29 +05:00"
+        bid_kzt: "100"
+        event: owner manually increased BID from 30 to 100.
+      - event_at: "2026-05-27 15:35:06 +05:00"
+        bid_kzt: "120"
+        event: owner manually increased BID value to 120.
+      - event_at: "2026-06-18 14:17:46 +05:00"
+        bid_kzt: "80"
+        event: owner approved and Codex applied BID reduction from 120 to 80 because the campaign started consuming budget aggressively.
+      - event_at: "2026-06-19 20:36:28 +05:00"
+        bid_kzt: "130"
+        event: owner manually increased BID from 80 to 130 after anomalously low same-day spend, to restore exposure while ads cost/order was visible as 5.1% with one order.
+      - event_at: "2026-06-20 21:25:55 +05:00"
+        bid_kzt: "100"
+        event: owner manually decreased BID from 130 to 100 while increasing daily budget to 10000 so the campaign could last fully active until day end.
+      - event_at: "2026-06-23 18:41:39 +05:00"
+        bid_kzt: "150"
+        event: owner manually increased BID from 100 to 150 because today had low cost and low views exposure.
+      - event_at: "2026-06-30 14:37:11 +05:00"
+        bid_kzt: "120"
+        event: owner manually changed BID from 150 to 120.
+    budget_events:
+      - event_at: "2026-06-15 05:15:19 +05:00"
+        daily_budget_kzt: "3000"
+        event: owner-approved LINE31 overlay launch repair left Starry Black at daily budget 3000.
+      - event_at: "2026-06-17 20:01:19 +05:00"
+        daily_budget_kzt: "6000"
+        event: owner manually increased daily budget to 6000 after the campaign reached its daily budget limit.
+      - event_at: "2026-06-18 19:48:04 +05:00"
+        daily_budget_kzt: "9000"
+        event: owner manually increased daily budget from 6000 to 9000 because the campaign was almost near the prior 6000 budget limit.
+      - event_at: "2026-06-20 21:25:55 +05:00"
+        daily_budget_kzt: "10000"
+        event: owner manually increased daily budget from 9000 to 10000 while decreasing BID from 130 to 100 so the campaign could last fully active until day end.
+  - campaign_id: "2752402"
+    campaign_name: LINE31_misty-blue_ST_16.4.26_10_03_00
+    color_label: misty_blue
+  - campaign_id: "2752405"
+    campaign_name: LINE31_iris-purple_ST_16.4.26_10_03_00
+    color_label: iris_purple
+  - campaign_id: "2752406"
+    campaign_name: LINE31_IWB-mixed_ST_16.4.26_10_03_00
+    color_label: ivory_white_black_mixed
+  - campaign_id: "2903195"
+    campaign_name: LINE31_CGOG_ST_20260615_051028
+    color_label: olive_cardamom_green
+    product_sku: "20887378b"
+    merchant_sku: OF_LINE31_ST_CGOG_XL
+    product_name: Спортивный костюм ACMEWEAR зеленый оливковый
+    launch_bid_kzt: "50"
+    previous_configured_bid_kzt: "70"
+    configured_bid_kzt: "120"
+    current_bid_kzt: "120"
+    previous_daily_budget_kzt: "9000"
+    daily_budget_kzt: "12000"
+    configured_daily_budget_kzt: "12000"
+    current_daily_budget_kzt: "12000"
+    previous_price_kzt_before_20260622_family_upload: "16900"
+    price_kzt: "24990"
+    price_source: "owner_reported_active_upload_20260630_190829_fresh_readback_pending"
+    product_state: Active
+    campaign_state: Enabled
+    region_label: Весь Казахстан
+    target_location_ids: []
+    launch_source: owner_approved_line31_overlay_campaign_creation
+    campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2903195
+    evidence_json: runs/line31_internal_marketing_overlay/20260615_051447_live_apply_repair/live_apply_summary.json
+    owner_event_at: "2026-06-15 05:15:19 +05:00"
+    owner_event: owner-approved LINE31 internal marketing overlay created and enabled the minimum Olive/Cardamom Green campaign at BID 50 and daily budget 5000.
+    owner_latest_bid_event_at: "2026-06-23 18:51:02 +05:00"
+    owner_latest_bid_event: owner manually changed BID from 70 to 120.
+    owner_latest_budget_event_at: "2026-06-20 21:20:15 +05:00"
+    owner_latest_budget_event: owner manually increased daily budget from 9000 to 12000 because the campaign was approaching the daily budget limit after BID values behaved unpredictably and non-linearly increased the spend without proper views/click exposure.
+    bid_events:
+      - event_at: "2026-06-15 05:15:19 +05:00"
+        bid_kzt: "50"
+        event: owner-approved LINE31 overlay launch created/enabled Olive/Cardamom Green at BID 50.
+      - event_at: "2026-06-19 20:39:50 +05:00"
+        bid_kzt: "150"
+        event: owner manually increased BID from 50 to 150 for the same anomalously low same-day spend and exposure-restoration reason as Starry Black.
+      - event_at: "2026-06-20 15:15:22 +05:00"
+        bid_kzt: "70"
+        event: owner manually changed BID from 150 to 70; owner wrote "ID" and Codex recorded it as BID because campaign-control context for this lane is BID.
+      - event_at: "2026-06-23 18:51:02 +05:00"
+        bid_kzt: "120"
+        event: owner manually changed BID from 70 to 120.
+    budget_events:
+      - event_at: "2026-06-15 05:15:19 +05:00"
+        daily_budget_kzt: "5000"
+        event: owner-approved LINE31 overlay launch created/enabled Olive/Cardamom Green with daily budget 5000.
+      - event_at: "2026-06-19 20:39:50 +05:00"
+        daily_budget_kzt: "9000"
+        event: owner manually increased daily budget from 5000 to 9000 while increasing BID to restore exposure.
+      - event_at: "2026-06-20 21:20:15 +05:00"
+        daily_budget_kzt: "12000"
+        event: owner manually increased daily budget from 9000 to 12000 because the campaign was approaching the daily budget limit after BID values behaved unpredictably and non-linearly increased the spend without proper views/click exposure.
+  - campaign_id: "2862392"
+    campaign_name: LINE31_IWB-mixed_ST_28.05.2026_12_17_29
+    color_label: ivory_white_black_mixed
+    previous_configured_bid_kzt: "50"
+    configured_bid_kzt: "100"
+    current_bid_kzt: "100"
+    previous_daily_budget_kzt: "5000"
+    stale_config_daily_budget_kzt_before_20260620_owner_decision: "8000"
+    daily_budget_kzt: "9000"
+    configured_daily_budget_kzt: "9000"
+    current_daily_budget_kzt: "9000"
+    ad_score: "4.2/10"
+    campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2862392?startDate=2026-05-28&endDate=2026-05-28
+    owner_event_at: "2026-05-28 12:17:29 +05:00"
+    owner_event: owner manually launched LINE31 mixed white ivory black color campaign with starting score 4.2/10 and BID 50.
+    owner_latest_bid_event_at: "2026-06-20 21:21:27 +05:00"
+    owner_latest_bid_event: owner manually increased BID from 50 to 100 because orders per advertisement cost in the campaign showed 3.7%, which looked promising.
+    owner_latest_budget_event_at: "2026-06-20 21:21:27 +05:00"
+    owner_latest_budget_event: owner manually increased daily budget to 9000; latest DB readback showed daily budget 5000 while stale config still said 8000, so the prior interval is recorded as a live-readback/config discrepancy.
+    bid_events:
+      - event_at: "2026-05-28 12:17:29 +05:00"
+        bid_kzt: "50"
+        event: owner manually launched LINE31 mixed white ivory black color campaign with starting score 4.2/10 and BID 50.
+      - event_at: "2026-06-20 21:21:27 +05:00"
+        bid_kzt: "100"
+        event: owner manually increased BID from 50 to 100 because orders per advertisement cost in the campaign showed 3.7%, which looked promising.
+    budget_events:
+      - event_at: "2026-06-20 16:59:00 +05:00"
+        daily_budget_kzt: "5000"
+        event: latest DB readback before owner decision showed daily budget 5000; prior config still carried stale 8000 and is preserved as a discrepancy note.
+      - event_at: "2026-06-20 21:21:27 +05:00"
+        daily_budget_kzt: "9000"
+        event: owner manually increased daily budget to 9000 after promising 3.7% orders per advertisement cost signal.
+  - campaign_id: "2856404"
+    campaign_name: LINE31_WB_ST_25.05.2026_17_07_03
+    color_label: whale_blue
+    configured_bid_kzt: "50"
+    daily_budget_kzt: "7000"
+    owner_event_at: "2026-05-25 17:07:03 +05:00"
+    owner_event: owner manually launched fresh/no-score Whale Blue color probe.
+  - campaign_id: "2910290"
+    campaign_name: LINE31_Whale_blue_17.06.2026_20_02_14
+    color_label: whale_blue
+    product_sku: "21793800b"
+    merchant_sku: OF_LINE31_ST_WB_XL
+    product_name: Спортивный костюм ACMEWEAR синий
+    previous_configured_bid_kzt: "100"
+    configured_bid_kzt: "170"
+    current_bid_kzt: "170"
+    previous_daily_budget_kzt: "7000"
+    daily_budget_kzt: "10000"
+    configured_daily_budget_kzt: "10000"
+    current_daily_budget_kzt: "10000"
+    previous_price_kzt_before_20260622_family_upload: "16900"
+    price_kzt: "24990"
+    price_source: "owner_reported_active_upload_20260630_190829_fresh_readback_pending"
+    ad_score: "6.9/10"
+    product_state: Active
+    campaign_state: Enabled
+    buy_box: true
+    region_label: Весь Казахстан
+    target_location_ids: []
+    launch_source: owner_manual_platform_action
+    related_prior_whale_blue_campaign_id: "2856404"
+    campaign_url: https://marketing.kaspi.kz/advertising/campaigns/2910290
+    evidence_json: runs/kaspi_marketing_manual_decisions/20260617_200214_line31_whale_blue_new_launch_owner_decision/read_only_campaign_discovery/campaign_products_2910290.json
+    owner_event_at: "2026-06-17 20:02:14 +05:00"
+    owner_event: owner manually started the new LINE31 Whale Blue campaign for newly uploaded Whale Blue color product offer fully attached to the primary LINE31 grouped offer family.
+    owner_latest_bid_event_at: "2026-06-20 21:14:29 +05:00"
+    owner_latest_bid_event: owner manually increased BID from 100 to 170 because cost per order was shown as 3.4% and the new offer card had strong early conversion while Kaspi was actively pushing it.
+    owner_latest_budget_event_at: "2026-06-20 21:14:29 +05:00"
+    owner_latest_budget_event: owner manually increased daily budget from 7000 to 10000 while increasing BID to 170.
+    bid_events:
+      - event_at: "2026-06-17 20:02:14 +05:00"
+        bid_kzt: "100"
+        event: owner manually launched the new LINE31 Whale Blue campaign with BID 100.
+      - event_at: "2026-06-20 21:14:29 +05:00"
+        bid_kzt: "170"
+        event: owner manually increased BID from 100 to 170 because cost per order was shown as 3.4% and the new offer card had strong early conversion.
+    budget_events:
+      - event_at: "2026-06-17 20:02:14 +05:00"
+        daily_budget_kzt: "7000"
+        event: owner manually launched the new LINE31 Whale Blue campaign with daily budget 7000.
+      - event_at: "2026-06-20 21:14:29 +05:00"
+        daily_budget_kzt: "10000"
+        event: owner manually increased daily budget from 7000 to 10000 while increasing BID to 170.
+  - campaign_id: "2858476"
+    campaign_name: LINE31_Ivory_ST_26.05.2026_14_24_39
+    color_label: ivory
+    launch_bid_kzt: "30"
+    previous_configured_bid_kzt: "100"
+    configured_bid_kzt: "30"
+    current_bid_kzt: "30"
+    launch_ad_score: "7.4/10"
+    ad_score: "8.5/10"
+    owner_event_at: "2026-05-26 14:24:39 +05:00"
+    owner_event: owner manually launched highest-score Ivory Color LINE31Z probe.
+    owner_bid_event_at: "2026-05-28 12:20:25 +05:00"
+    owner_bid_event: owner manually decreased BID value to 30 because the full ivory set is an unpopular color and does not survive conversion rates, performance metrics, or benchmarks despite higher 8.5/10 advertisement score.
+    bid_events:
+      - event_at: "2026-05-26 14:24:39 +05:00"
+        bid_kzt: "30"
+        event: owner manually launched highest-score Ivory Color LINE31Z probe.
+      - event_at: "2026-05-26 16:12:36 +05:00"
+        bid_kzt: "100"
+        event: owner manually changed BID value from 30 to 100.
+      - event_at: "2026-05-28 12:20:25 +05:00"
+        bid_kzt: "30"
+        event: owner manually decreased BID to 30 because conversion/performance benchmarks were weak despite 8.5/10 score.
+
+promos:
+  - promo_id: "202353"
+    name: Bonus_promo_LINE31_26.05.2026_14_18_40
+    status: "listed_active_but_customer_effect_blocked_pending_readback"
+    type_label: recommended_products
+    bonus_percent: 5
+    bonus_kzt: 845
+    url: https://marketing.kaspi.kz/bonuses/products/promotions/202353
+    edit_url: https://marketing.kaspi.kz/bonuses/products/promotions/202353/edit
+    evidence_json: runs/kaspi_marketing_promos/20260526_142254_line31_seller_bonus_readonly/PROMO_READ_SUMMARY.json
+    current_eligibility_context: "blocked_by_20260630_price24990_14_day_rule"
+    owner_event_at: "2026-05-26 14:18:40 +05:00"
+    owner_event: owner started LINE31 seller-bonus promo for four LINE31 colors.
+  - promo_id: "220083"
+    name: LINE31_olive-green_bonus_9pct_19.06.2026_12_45_49
+    status: "listed_active_but_customer_effect_blocked_pending_readback"
+    type_label: recommended_products
+    color_label: olive_green
+    product_scope: olive_green_only
+    grouped_offer_indirect_effect: true
+    bonus_percent: 9
+    bonus_kzt: 1521
+    price_kzt: 16900
+    price_context_current_pricelist_price_kzt: 24990
+    price_context_source: "owner_reported_active_upload_20260630_190829_fresh_readback_pending"
+    bonus_amount_needs_post_price_change_promo_readback: true
+    current_eligibility_context: "blocked_by_20260630_price24990_14_day_rule"
+    product_score: "8.9/10"
+    product_status: active
+    url: https://marketing.kaspi.kz/bonuses/products/promotions/220083
+    evidence_json: runs/kaspi_marketing_manual_decisions/20260619_124549_line31_olive_green_bonus_9pct_owner_decision/PROMO_READ_SUMMARY.json
+    owner_event_at: "2026-06-19 12:45:49 +05:00"
+    owner_event: owner started a 9% seller-bonus promo for LINE31 Olive Green only to bootstrap sales volume from large Olive Green stock and improve organic/snowball effects across the grouped LINE31 offer family.
+  - promo_id: ""
+    name: LINE31_batch_bonus_6pct_23.06.2026_12_54_50
+    status: "owner_reported_listed_active_but_customer_effect_blocked_pending_readback"
+    type_label: recommended_products
+    color_label: all_line31_except_olive_green
+    product_scope: all_line31_color_offers_except_olive_green
+    excluded_color_labels:
+      - olive_green
+    grouped_offer_indirect_effect: true
+    bonus_percent: 6
+    price_context_current_pricelist_price_kzt: 24990
+    price_context_source: "owner_reported_active_upload_20260630_190829_fresh_readback_pending"
+    current_eligibility_context: "blocked_by_20260630_price24990_14_day_rule"
+    intended_minimum_review_window_days: 7
+    owner_account_label: OnlyFeedStore
+    surface: seller_bonus
+    evidence_json: runs/kaspi_marketing_manual_decisions/20260623_125450_line31_batch_bonus_6pct_owner_decision/OWNER_DECISION.json
+    owner_event_at: "2026-06-23 12:54:50 +05:00"
+    owner_event: owner manually created a temporary 6% LINE31 batch seller-bonus promo covering all LINE31 color product offers except Olive Green, which remains under the separate 9% Olive Green promo, to increase exposure and sales volume before a full evaluation after at least 7 days.
+
+recommendation_policy:
+  minimum_snapshots_for_recommendation: 4
+  live_writes_allowed: false
+  write_approval_required: OWNER_APPROVAL_REQUIRED_FOR_ANY_WRITE

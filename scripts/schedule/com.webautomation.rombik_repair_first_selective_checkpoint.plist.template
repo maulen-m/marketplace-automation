@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webautomation.rombik_repair_first_selective_checkpoint</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO_ROOT__ &amp;&amp; set -a &amp;&amp; source __REPO_ROOT__/.env &amp;&amp; set +a &amp;&amp; __REPO_ROOT__/.venv/bin/python -m web_auto --env-file __ENV_FILE__ --json scheduled-checkpoint run --config config/schedules/rombik_repair_first_selective_price_test.yaml --due --mode live-readonly --run-root runs/scheduled_checkpoints/rombik_repair_first_selective_price_test --max-jobs 1</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO_ROOT__</string>
+
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/rombik_repair_first_selective_price_test/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__REPO_ROOT__/runs/scheduled_checkpoints/rombik_repair_first_selective_price_test/logs/stderr.log</string>
+</dict>
+</plist>

@@ -85,6 +85,39 @@ from .acmewear_bundle_activation import (
     BundleActivationError,
     build_acmewear_bundle_activation_pack,
 )
+from .acmewear_express_selfpickup_sidecar import (
+    DEFAULT_ON_DEMAND_LABEL_APPROVAL_POLICY,
+    DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+    DEFAULT_RUN_ROOT as DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT,
+    DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV,
+    DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+    DEFAULT_TELEGRAM_LABEL_LEDGER_CSV,
+    DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+    TELEGRAM_ALERT_CHAT_ID_ENV_ALIASES,
+    TELEGRAM_BOT_TOKEN_ENV_ALIASES,
+    TELEGRAM_PRINT_CHAT_ID_ENV_ALIASES,
+    WAYBILL_TELEGRAM_BOT_TOKEN_ENV,
+    KaspiOrderFetchError,
+    acmewear_kaspi_token_env_candidates,
+    resolve_present_env_alias,
+    resolve_present_acmewear_kaspi_token_env,
+    run_express_assembly_review,
+    run_sidecar_init,
+    run_operator_queue_review,
+    run_operational_readiness_review,
+    run_pickup_completion_api_execute,
+    run_pickup_completion_review,
+    run_prepare_express_label,
+    run_manual_sidecar_intake,
+    run_sidecar_row_update,
+    run_selfpickup_sample_scan,
+    run_shift_packet_review,
+    run_telegram_label_from_pdf,
+    run_telegram_alerts_from_queue,
+    run_sidecar_build_from_file,
+    run_sidecar_fetch_once,
+    run_sidecar_watch_loop,
+)
 from .scheduled_checkpoints import (
     DEFAULT_CONFIG_PATH as DEFAULT_SCHEDULED_CHECKPOINT_CONFIG_PATH,
     DEFAULT_RUN_ROOT as DEFAULT_SCHEDULED_CHECKPOINT_RUN_ROOT,
@@ -130,7 +163,11 @@ from .kaspi_pricelist_safe_patch import (
     build_safe_active_patch,
     verify_safe_active_upload,
 )
-from .kaspi_pricelist_upload import resolve_upload_file_paths, run_kaspi_pricelist_upload
+from .kaspi_pricelist_upload import (
+    resolve_upload_file_paths,
+    run_kaspi_pricelist_history_detail,
+    run_kaspi_pricelist_upload,
+)
 from .kaspi_snapshot_config import SnapshotConfigError, load_kaspi_snapshot_config
 from .kaspi_variant_refresh import run_daily_variant_refresh
 from .repricer_competitors import run_repricer_competitors, run_repricer_competitors_api
@@ -146,6 +183,9 @@ from .repricer_unified_truth import (
 )
 
 
+ALMATY_TZ = ZoneInfo("Asia/Almaty")
+
+
 def _setup_logging(verbose: bool, quiet: bool) -> None:
     level = logging.INFO
     if verbose:
@@ -153,6 +193,43 @@ def _setup_logging(verbose: bool, quiet: bool) -> None:
     if quiet:
         level = logging.WARNING
     logging.basicConfig(level=level, format="%(message)s")
+
+
+def _resolve_acmewear_express_token_from_env(token_env: str) -> tuple[str, str, tuple[str, ...]]:
+    candidates = acmewear_kaspi_token_env_candidates(token_env)
+    effective_env = resolve_present_acmewear_kaspi_token_env(os.environ, token_env)
+    token = os.environ.get(effective_env, "") if effective_env else ""
+    return token, effective_env, candidates
+
+
+def _resolve_env_alias_from_env(
+    requested_env: str,
+    aliases: tuple[str, ...],
+    default_env: str,
+) -> tuple[str, str]:
+    effective_env = resolve_present_env_alias(os.environ, requested_env, aliases, default_env)
+    value = os.environ.get(effective_env, "") if effective_env else ""
+    return value, effective_env
+
+
+def _resolve_created_bounds_with_lookback(
+    *,
+    created_from: str,
+    created_to: str,
+    lookback_hours: int,
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    """Fill missing Kaspi order creation bounds from a dynamic local lookback."""
+    if lookback_hours < 1:
+        raise ValueError("lookback_hours must be >= 1")
+    if created_from and created_to:
+        return created_from, created_to
+    now_value = now or datetime.now(ALMATY_TZ)
+    if now_value.tzinfo is None:
+        now_value = now_value.replace(tzinfo=ALMATY_TZ)
+    resolved_to = created_to or now_value.isoformat(timespec="seconds")
+    resolved_from = created_from or (now_value - timedelta(hours=lookback_hours)).isoformat(timespec="seconds")
+    return resolved_from, resolved_to
 
 
 def _add_global_flags(parser: argparse.ArgumentParser) -> None:
@@ -330,6 +407,35 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--api", action="store_true", help="Use API mode (no UI modals)")
     run_parser.add_argument("--api-verify", action="store_true", help="Verify remaining targets after API write")
     run_parser.add_argument("--verify", action="store_true", help="Verify dumping enabled after API write")
+    run_parser.add_argument(
+        "--competition-scope-map",
+        help="Optional audit CSV that maps exact Repricer rows to resolved product scope and floor policy",
+    )
+    run_parser.add_argument(
+        "--only-competitor-action",
+        action="append",
+        help="Limit Repricer competitor API changes to one or more actions, comma-separated or repeated",
+    )
+    run_parser.add_argument(
+        "--only-competitor-reason",
+        action="append",
+        help="Limit Repricer competitor API changes to one or more reasons, comma-separated or repeated",
+    )
+    run_parser.add_argument(
+        "--only-row-id",
+        action="append",
+        help="Limit Repricer competitor API changes to exact Repricer row id(s), comma-separated or repeated",
+    )
+    run_parser.add_argument(
+        "--only-merchant-sku",
+        action="append",
+        help="Limit Repricer competitor API changes to exact merchant SKU(s), comma-separated or repeated",
+    )
+    run_parser.add_argument(
+        "--only-competitor-mid",
+        action="append",
+        help="Limit Repricer competitor API changes to exact competitor merchant id(s), comma-separated or repeated",
+    )
 
     validate_parser = subparsers.add_parser("validate-config", help="Validate a config file")
     validate_parser.add_argument("--config", required=True, help="Config file path")
@@ -580,6 +686,27 @@ def main(argv: list[str] | None = None) -> int:
     upload_parser.add_argument("--headless", action="store_true", help="Run headless")
     upload_parser.add_argument("--headed", action="store_true", help="Run headful")
 
+    history_detail_parser = pricelist_subparsers.add_parser(
+        "history-detail",
+        help="Read one Kaspi pricelist upload history detail page without mutating merchant state",
+    )
+    history_detail_parser.add_argument("--store", default="STORE-B", help="Target store name")
+    history_detail_parser.add_argument("--run-dir", help="Run directory for artifacts")
+    history_detail_parser.add_argument("--detail-ref", required=True, help="History detail id, href, or full detail URL")
+    history_detail_parser.add_argument(
+        "--detail-filter",
+        choices=["all", "unrecognized", "restricted", "errors", "warnings"],
+        default="",
+        help="Optional read-only result filter to click before saving the detail page",
+    )
+    history_detail_parser.add_argument(
+        "--download-result-excel",
+        action="store_true",
+        help="Download the read-only row-level result workbook from the history detail page",
+    )
+    history_detail_parser.add_argument("--headless", action="store_true", help="Run headless")
+    history_detail_parser.add_argument("--headed", action="store_true", help="Run headful")
+
     safe_patch_parser = pricelist_subparsers.add_parser(
         "safe-active-patch",
         help="Build a full ACTIVE-state pricelist patch with full-sale-surface preservation guards",
@@ -592,6 +719,8 @@ def main(argv: list[str] | None = None) -> int:
     safe_patch_parser.add_argument("--expected-active-before", type=int, help="Fail unless source ACTIVE row count matches")
     safe_patch_parser.add_argument("--expected-active-after", type=int, help="Fail unless output ACTIVE row count matches")
     safe_patch_parser.add_argument("--allow-activate-from-archive", action="store_true", help="Allow target rows to be appended from ARCHIVE into full ACTIVE output")
+    safe_patch_parser.add_argument("--restriction-ledger", help="Optional launchability ledger; blocks rows classified as platform-restricted/risk")
+    safe_patch_parser.add_argument("--restriction-probe-approval", help="Optional owner approval JSON allowing exact restricted SKUs as deliberate restriction probes")
     safe_patch_parser.add_argument("--apply", action="store_true", help="Upload the generated full ACTIVE workbook after all guards pass")
     safe_patch_parser.add_argument("--confirm", help=f"Required phrase for --apply: {SAFE_ACTIVE_CONFIRM_PHRASE}")
     safe_patch_parser.add_argument("--verify-after-upload", action="store_true", help="Redownload ACTIVE/ARCHIVE and verify the full ACTIVE state after upload")
@@ -663,6 +792,531 @@ def main(argv: list[str] | None = None) -> int:
         "--image-moderation-cleared",
         action="store_true",
         help="Mark image moderation as live-verified in the review summary",
+    )
+
+    acmewear_express_parser = subparsers.add_parser(
+        "acmewear-express-sidecar",
+        help="ACMEWEAR PP2 Express/self-pickup sidecar helpers",
+    )
+    acmewear_express_subparsers = acmewear_express_parser.add_subparsers(
+        dest="acmewear_express_command",
+        required=True,
+    )
+    acmewear_express_init = acmewear_express_subparsers.add_parser(
+        "init-sidecar",
+        help="Create or validate the repo-local ACMEWEAR PP2 Express/self-pickup sidecar CSV",
+    )
+    acmewear_express_init.add_argument(
+        "--sidecar-csv",
+        default="data/acmewear_express_selfpickup_sidecar.csv",
+        help="Repo-local sidecar CSV to create or validate",
+    )
+    acmewear_express_init.add_argument("--run-dir", help="Run directory for init review artifacts")
+    acmewear_express_init.add_argument(
+        "--schema-csv",
+        default="",
+        help="Optional path to write a generated schema copy; stable schema is config/schemas/acmewear_express_selfpickup_sidecar_v1.csv",
+    )
+    acmewear_express_build = acmewear_express_subparsers.add_parser(
+        "build",
+        help="Build repo-local sidecar rows and Telegram alert queue from redacted order JSON/JSONL",
+    )
+    acmewear_express_build.add_argument("--input-json", required=True, help="Redacted/minimized order JSON or JSONL input")
+    acmewear_express_build.add_argument("--run-dir", help="Run directory for sidecar review artifacts")
+    acmewear_express_build.add_argument("--sidecar-csv", help="Optional repo-local sidecar CSV to merge with")
+    acmewear_express_build.add_argument(
+        "--update-sidecar",
+        action="store_true",
+        help="Persist merged rows into --sidecar-csv; otherwise review-only artifacts are written",
+    )
+    acmewear_express_build.add_argument(
+        "--persist-actionable-only",
+        action="store_true",
+        help="With --update-sidecar, persist only high-confidence Express/self-pickup rows; review artifacts still include all rows",
+    )
+    acmewear_express_build.add_argument("--detected-at", default="", help="Fixed detected_at timestamp for reproducible runs")
+    acmewear_express_build.add_argument("--local-ref-prefix", default="order", help="Local reference prefix for generated rows")
+    acmewear_express_manual = acmewear_express_subparsers.add_parser(
+        "manual-intake",
+        help="Manually add/review one Express or PP2 self-pickup row in the local sidecar without external writes",
+    )
+    acmewear_express_manual.add_argument("--delivery-kind", required=True, choices=["EXPRESS_DELIVERY", "SELLER_SELF_PICKUP"])
+    acmewear_express_manual.add_argument("--local-ref", required=True, help="Stable non-PII local reference for the order")
+    acmewear_express_manual.add_argument("--order-hash", default="", help="sha256:... order hash; raw order ids are rejected")
+    acmewear_express_manual.add_argument(
+        "--order-ref-env",
+        default="",
+        help="Optional env var containing raw order ref to hash in-memory only; raw value is never persisted",
+    )
+    acmewear_express_manual.add_argument("--run-dir", help="Run directory for manual-intake artifacts")
+    acmewear_express_manual.add_argument("--sidecar-csv", help="Repo-local sidecar CSV to merge with")
+    acmewear_express_manual.add_argument(
+        "--update-sidecar",
+        action="store_true",
+        help="Persist merged rows into --sidecar-csv; otherwise review-only artifacts are written",
+    )
+    acmewear_express_manual.add_argument("--detected-at", default="", help="Fixed detected_at timestamp for reproducible runs")
+    acmewear_express_manual.add_argument("--created-at", default="", help="Order creation timestamp when known")
+    acmewear_express_manual.add_argument("--delivery-slot-label", default="", help="Express slot label, for example '12:00 - 14:00'")
+    acmewear_express_manual.add_argument("--courier-planning-at", default="", help="Express courier planning timestamp when known")
+    acmewear_express_manual.add_argument("--sku-key", default="", help="Canonical SKU key when known")
+    acmewear_express_manual.add_argument("--merchant-article", default="", help="Kaspi merchant article when known")
+    acmewear_express_manual.add_argument("--ordered-size", default="", help="Ordered platform/display size")
+    acmewear_express_manual.add_argument("--height-cm", default="", help="Customer height, if already confirmed")
+    acmewear_express_manual.add_argument("--weight-kg", default="", help="Customer weight, if already confirmed")
+    acmewear_express_manual.add_argument("--my-size", default="", help="Resolved MY_SIZE from normal size rules")
+    acmewear_express_manual.add_argument("--owner-size-override", default="", help="Owner-approved final size override")
+    acmewear_express_manual.add_argument("--size-source", default="", help="Size source note, for example 'owner_telegram_call'")
+    acmewear_express_manual.add_argument("--waybill-present", action="store_true", help="Already-present waybill was observed")
+    acmewear_express_manual.add_argument("--cropped-label-path", default="", help="Repo-local cropped label path, if already produced")
+    acmewear_express_manual.add_argument("--cropped-label-sha256", default="", help="sha256:... hash of cropped label PDF")
+    acmewear_express_manual.add_argument("--telegram-alert-status", default="", help="Optional existing alert status to carry forward")
+    acmewear_express_manual.add_argument("--telegram-label-status", default="", help="Optional existing label status to carry forward")
+    acmewear_express_manual.add_argument("--printed-status", default="", help="Optional existing print status to carry forward")
+    acmewear_express_manual.add_argument("--close-status", default="OPEN", help="OPEN, CLOSED, CANCELLED, or MANUAL_ONLY")
+    acmewear_express_manual.add_argument(
+        "--build-shift-packet",
+        action="store_true",
+        help="After repo-local sidecar update, build a warehouse shift packet from the durable sidecar",
+    )
+    acmewear_express_manual.add_argument(
+        "--shift-run-root",
+        default="runs/acmewear_express_selfpickup_sidecar",
+        help="Run root used by the generated shift-packet readiness matrix",
+    )
+    acmewear_express_update = acmewear_express_subparsers.add_parser(
+        "update-row",
+        help="Patch operator-known facts onto one existing local sidecar row without losing API evidence",
+    )
+    acmewear_express_update.add_argument("--sidecar-csv", required=True, help="Repo-local sidecar CSV to update")
+    acmewear_express_update.add_argument("--run-dir", help="Run directory for update artifacts")
+    acmewear_express_update.add_argument("--order-hash", default="", help="sha256:... order hash selector")
+    acmewear_express_update.add_argument("--local-ref", default="", help="Local non-PII row selector")
+    acmewear_express_update.add_argument("--sidecar-idempotency-key", default="", help="Exact sidecar idempotency key selector")
+    acmewear_express_update.add_argument("--ordered-size", default="", help="Ordered/display size to record when confirmed")
+    acmewear_express_update.add_argument("--height-cm", default="", help="Customer height, if already confirmed")
+    acmewear_express_update.add_argument("--weight-kg", default="", help="Customer weight, if already confirmed")
+    acmewear_express_update.add_argument("--my-size", default="", help="Resolved MY_SIZE from normal size rules")
+    acmewear_express_update.add_argument("--owner-size-override", default="", help="Owner-approved final size override")
+    acmewear_express_update.add_argument("--size-source", default="", help="Size source note, for example 'owner_call'")
+    acmewear_express_update.add_argument("--cropped-label-path", default="", help="Repo-local cropped label path")
+    acmewear_express_update.add_argument("--cropped-label-sha256", default="", help="sha256:... hash of cropped label PDF")
+    acmewear_express_update.add_argument("--telegram-alert-status", default="", help="Alert status to record")
+    acmewear_express_update.add_argument("--telegram-label-status", default="", help="Label-send status to record")
+    acmewear_express_update.add_argument("--printed-status", default="", help="Print status to record")
+    acmewear_express_update.add_argument("--close-status", default="", help="OPEN, CLOSED, CANCELLED, or MANUAL_ONLY")
+    acmewear_express_update.add_argument(
+        "--build-shift-packet",
+        action="store_true",
+        help="After repo-local row update, build a warehouse shift packet from the durable sidecar",
+    )
+    acmewear_express_update.add_argument(
+        "--shift-run-root",
+        default="runs/acmewear_express_selfpickup_sidecar",
+        help="Run root used by the generated shift-packet readiness matrix",
+    )
+    acmewear_express_fetch = acmewear_express_subparsers.add_parser(
+        "fetch-once",
+        help="GET-only Kaspi order-list fetch, minimize to sidecar artifacts, and never persist raw payloads",
+    )
+    acmewear_express_fetch.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Environment variable containing the ACMEWEAR Kaspi API token; current default accepts legacy ACMEWEAR_KASPI_API_TOKEN as an alias",
+    )
+    acmewear_express_fetch.add_argument("--run-dir", help="Run directory for sidecar review artifacts")
+    acmewear_express_fetch.add_argument("--sidecar-csv", help="Optional repo-local sidecar CSV to merge with")
+    acmewear_express_fetch.add_argument(
+        "--update-sidecar",
+        action="store_true",
+        help="Persist merged rows into --sidecar-csv; otherwise review-only artifacts are written",
+    )
+    acmewear_express_fetch.add_argument(
+        "--persist-actionable-only",
+        action="store_true",
+        help="With --update-sidecar, persist only high-confidence Express/self-pickup rows; review artifacts still include all rows",
+    )
+    acmewear_express_fetch.add_argument("--detected-at", default="", help="Fixed detected_at timestamp for reproducible runs")
+    acmewear_express_fetch.add_argument("--local-ref-prefix", default="api", help="Local reference prefix for generated rows")
+    acmewear_express_fetch.add_argument("--state", action="append", dest="states", help="Order state filter; repeatable")
+    acmewear_express_fetch.add_argument("--status", action="append", dest="statuses", help="Order status filter; repeatable")
+    acmewear_express_fetch.add_argument("--delivery-type", action="append", dest="delivery_types", help="Delivery type filter; repeatable")
+    acmewear_express_fetch.add_argument("--created-from", default="", help="Creation date lower bound; ISO datetime/date or epoch ms")
+    acmewear_express_fetch.add_argument("--created-to", default="", help="Creation date upper bound; ISO datetime/date or epoch ms")
+    acmewear_express_fetch.add_argument(
+        "--lookback-hours",
+        type=int,
+        default=None,
+        help="Optional dynamic lookback used only when one or both created bounds are omitted",
+    )
+    acmewear_express_fetch.add_argument("--page-size", type=int, default=100, help="Orders per page, max 100")
+    acmewear_express_fetch.add_argument("--max-pages", type=int, default=5, help="Maximum pages per filter combination")
+    acmewear_express_fetch.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_watch = acmewear_express_subparsers.add_parser(
+        "watch",
+        help="Repeat GET-only order-list fetches and write a repo-local sidecar heartbeat",
+    )
+    acmewear_express_watch.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Environment variable containing the ACMEWEAR Kaspi API token; current default accepts legacy ACMEWEAR_KASPI_API_TOKEN as an alias",
+    )
+    acmewear_express_watch.add_argument("--run-dir", help="Run directory for watch artifacts")
+    acmewear_express_watch.add_argument("--sidecar-csv", help="Optional repo-local sidecar CSV to merge with")
+    acmewear_express_watch.add_argument(
+        "--update-sidecar",
+        action="store_true",
+        help="Persist merged rows into --sidecar-csv; otherwise review-only artifacts are written",
+    )
+    acmewear_express_watch.add_argument(
+        "--persist-actionable-only",
+        action="store_true",
+        help="With --update-sidecar, persist only high-confidence Express/self-pickup rows; review artifacts still include all rows",
+    )
+    acmewear_express_watch.add_argument("--detected-at", default="", help="Fixed detected_at timestamp for reproducible runs")
+    acmewear_express_watch.add_argument("--local-ref-prefix", default="watch", help="Local reference prefix for generated rows")
+    acmewear_express_watch.add_argument("--state", action="append", dest="states", help="Order state filter; repeatable")
+    acmewear_express_watch.add_argument("--status", action="append", dest="statuses", help="Order status filter; repeatable")
+    acmewear_express_watch.add_argument("--delivery-type", action="append", dest="delivery_types", help="Delivery type filter; repeatable")
+    acmewear_express_watch.add_argument("--created-from", default="", help="Creation date lower bound; ISO datetime/date or epoch ms")
+    acmewear_express_watch.add_argument("--created-to", default="", help="Creation date upper bound; ISO datetime/date or epoch ms")
+    acmewear_express_watch.add_argument("--lookback-hours", type=int, default=24, help="Dynamic lookback when created bounds are omitted")
+    acmewear_express_watch.add_argument("--cycles", type=int, default=1, help="Number of fetch cycles to run")
+    acmewear_express_watch.add_argument("--interval-seconds", type=int, default=0, help="Delay between cycles")
+    acmewear_express_watch.add_argument("--page-size", type=int, default=100, help="Orders per page, max 100")
+    acmewear_express_watch.add_argument("--max-pages", type=int, default=5, help="Maximum pages per filter combination")
+    acmewear_express_watch.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_selfpickup_scan = acmewear_express_subparsers.add_parser(
+        "selfpickup-scan",
+        help="Read a minimized sidecar CSV and prove whether any true PP2 seller self-pickup sample exists",
+    )
+    acmewear_express_selfpickup_scan.add_argument(
+        "--input-csv",
+        required=True,
+        help="Minimized incoming_sidecar_rows.csv or durable sidecar CSV",
+    )
+    acmewear_express_selfpickup_scan.add_argument("--run-dir", help="Run directory for self-pickup sample scan artifacts")
+    acmewear_express_telegram = acmewear_express_subparsers.add_parser(
+        "telegram-alert",
+        help="Dry-run or explicitly send Telegram alerts from an ACMEWEAR Express alert queue",
+    )
+    acmewear_express_telegram.add_argument("--alert-queue-csv", required=True, help="telegram_alert_queue_review.csv path")
+    acmewear_express_telegram.add_argument("--ledger-csv", required=True, help="Persistent Telegram alert ledger CSV path")
+    acmewear_express_telegram.add_argument("--run-dir", help="Run directory for Telegram alert artifacts")
+    acmewear_express_telegram.add_argument(
+        "--send",
+        action="store_true",
+        help="Actually call Telegram sendMessage; default is dry-run artifact generation only",
+    )
+    acmewear_express_telegram.add_argument(
+        "--bot-token-env",
+        default=DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+        help="Env var containing Telegram bot token for --send; default also accepts generic AB Telegram token aliases",
+    )
+    acmewear_express_telegram.add_argument(
+        "--chat-id-env",
+        default=DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV,
+        help="Env var containing Telegram chat id for --send; default also accepts generic AB Telegram chat aliases",
+    )
+    acmewear_express_telegram.add_argument("--chat-config-ref", default="ACMEWEAR_EXPRESS_TELEGRAM_CHAT")
+    acmewear_express_telegram.add_argument("--max-alerts", type=int, default=0, help="Optional maximum rows to process")
+    acmewear_express_telegram.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_prepare_label = acmewear_express_subparsers.add_parser(
+        "prepare-label",
+        help="Fast path: fetch one active ACMEWEAR Express waybill, crop 75x120mm label, and optionally send to Telegram",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--order-code",
+        default="",
+        help="Optional raw Kaspi order code; used in memory only and never written to artifacts",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--order-hash",
+        default="",
+        help="Optional sha256:... order hash selector for the current active queue",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--owner-size",
+        default="",
+        help="Optional owner-selected final size to include in the Telegram caption, for example 2XL",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--require-size",
+        action="store_true",
+        help="Block label preparation unless owner size or MY_SIZE is already present; default keeps size optional",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--send-telegram",
+        action="store_true",
+        help="Send the cropped label to the standing-approved AB waybill Telegram group; default is dry-run",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--force-resend",
+        action="store_true",
+        help="Allow a new Telegram send even if this order hash already has a SENT label ledger row",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--standing-approval",
+        default=str(DEFAULT_ON_DEMAND_LABEL_APPROVAL_POLICY),
+        help="Persistent owner approval policy JSON for this on-demand label lane",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--ledger-csv",
+        default=str(DEFAULT_TELEGRAM_LABEL_LEDGER_CSV),
+        help="Persistent ignored Telegram label ledger CSV",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Env var containing ACMEWEAR Kaspi API token; aliases are accepted",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--bot-token-env",
+        default=WAYBILL_TELEGRAM_BOT_TOKEN_ENV,
+        help="Env var containing Telegram waybill bot token for --send-telegram",
+    )
+    acmewear_express_prepare_label.add_argument(
+        "--chat-id-env",
+        default=DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+        help="Env var containing Telegram waybill chat id for --send-telegram",
+    )
+    acmewear_express_prepare_label.add_argument("--chat-config-ref", default="ACMEWEAR_EXPRESS_TELEGRAM_PRINT_CHAT")
+    acmewear_express_prepare_label.add_argument("--run-dir", help="Run directory for prepare-label artifacts")
+    acmewear_express_prepare_label.add_argument("--state", action="append", dest="states", help="Order state filter; repeatable")
+    acmewear_express_prepare_label.add_argument("--created-from", default="", help="Creation date lower bound; ISO datetime/date or epoch ms")
+    acmewear_express_prepare_label.add_argument("--created-to", default="", help="Creation date upper bound; ISO datetime/date or epoch ms")
+    acmewear_express_prepare_label.add_argument("--lookback-hours", type=int, default=96, help="Dynamic lookback for current active queue")
+    acmewear_express_prepare_label.add_argument("--page-size", type=int, default=100, help="Orders per page, max 100")
+    acmewear_express_prepare_label.add_argument("--max-pages", type=int, default=5, help="Maximum pages per state")
+    acmewear_express_prepare_label.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_label = acmewear_express_subparsers.add_parser(
+        "telegram-label",
+        help="Dry-run or explicitly send an already-cropped PP2 Express product-label PDF to Telegram",
+    )
+    acmewear_express_label.add_argument("--cropped-label-pdf", required=True, help="Already-cropped 75x120mm product-label PDF")
+    acmewear_express_label.add_argument("--order-hash", required=True, help="sha256:... order hash; raw order ids are rejected")
+    acmewear_express_label.add_argument("--local-ref", required=True, help="Local non-PII reference for this label send")
+    acmewear_express_label.add_argument("--ledger-csv", required=True, help="Persistent Telegram send ledger CSV path")
+    acmewear_express_label.add_argument("--run-dir", help="Run directory for Telegram label artifacts")
+    acmewear_express_label.add_argument(
+        "--send",
+        action="store_true",
+        help="Actually call Telegram sendDocument; default is dry-run artifact generation only",
+    )
+    acmewear_express_label.add_argument(
+        "--bot-token-env",
+        default=WAYBILL_TELEGRAM_BOT_TOKEN_ENV,
+        help="Env var containing Telegram bot token for label --send; defaults to the AB waybill Telegram bot and still accepts configured aliases",
+    )
+    acmewear_express_label.add_argument(
+        "--chat-id-env",
+        default=DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+        help="Env var containing Telegram print-chat id for --send; default also accepts generic AB waybill chat aliases",
+    )
+    acmewear_express_label.add_argument("--chat-config-ref", default="ACMEWEAR_EXPRESS_TELEGRAM_PRINT_CHAT")
+    acmewear_express_label.add_argument("--sidecar-idempotency-key", default="", help="Optional sidecar row key for ledger join")
+    acmewear_express_label.add_argument("--caption", default="ACMEWEAR PP2 product label")
+    acmewear_express_label.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_pickup = acmewear_express_subparsers.add_parser(
+        "pickup-completion-review",
+        help="Review whether one PP2 seller self-pickup sidecar row is ready for manual/API pickup completion",
+    )
+    acmewear_express_pickup.add_argument("--sidecar-csv", required=True, help="Repo-local sidecar CSV")
+    acmewear_express_pickup.add_argument("--run-dir", help="Run directory for pickup completion review artifacts")
+    acmewear_express_pickup.add_argument("--order-hash", default="", help="sha256:... order hash selector")
+    acmewear_express_pickup.add_argument("--local-ref", default="", help="Local non-PII row selector")
+    acmewear_express_pickup.add_argument("--sidecar-idempotency-key", default="", help="Exact sidecar idempotency key selector")
+    acmewear_express_pickup.add_argument(
+        "--security-code-env",
+        default="ACMEWEAR_PICKUP_SECURITY_CODE",
+        help="Env var containing the pickup security code; raw value is hashed and never persisted",
+    )
+    acmewear_express_pickup.add_argument(
+        "--security-code-sha256",
+        default="",
+        help="Precomputed sha256:... pickup security code hash; use instead of env when available",
+    )
+    acmewear_express_pickup.add_argument(
+        "--customer-arrived",
+        action="store_true",
+        help="Operator confirms customer is physically present at PP2",
+    )
+    acmewear_express_pickup.add_argument(
+        "--manual-handoff-confirmed",
+        action="store_true",
+        help="Operator confirms the sized product was handed to customer",
+    )
+    acmewear_express_pickup.add_argument("--ledger-csv", help="Optional repo-local pickup completion review ledger")
+    acmewear_express_pickup.add_argument("--write-ledger", action="store_true", help="Persist the review row to --ledger-csv")
+    acmewear_express_pickup.add_argument(
+        "--build-api-plan",
+        action="store_true",
+        help="Also write a redacted Kaspi pickup-completion POST request plan; never executes it",
+    )
+    acmewear_express_pickup.add_argument(
+        "--owner-approval-ref",
+        default="",
+        help="Exact owner approval reference required before a future live API pilot",
+    )
+    acmewear_express_pickup.add_argument(
+        "--order-id-env",
+        default="ACMEWEAR_PICKUP_ORDER_ID",
+        help="Env var containing raw Kaspi order id for future live API pilot; raw value is never persisted",
+    )
+    acmewear_express_pickup.add_argument(
+        "--order-code-env",
+        default="ACMEWEAR_PICKUP_ORDER_CODE",
+        help="Env var containing raw Kaspi order code for future live API pilot; raw value is never persisted",
+    )
+    acmewear_express_pickup_execute = acmewear_express_subparsers.add_parser(
+        "pickup-completion-execute",
+        help="Dry-run or explicitly execute one owner-approved Kaspi seller-pickup completion API step from a reviewed plan",
+    )
+    acmewear_express_pickup_execute.add_argument("--api-plan", required=True, help="Reviewed pickup_completion_api_request_plan.json")
+    acmewear_express_pickup_execute.add_argument(
+        "--step",
+        required=True,
+        choices=("send_customer_code", "complete_with_security_code"),
+        help="Two-step Kaspi seller-pickup completion action to prepare or execute",
+    )
+    acmewear_express_pickup_execute.add_argument("--run-dir", help="Run directory for execution artifacts")
+    acmewear_express_pickup_execute.add_argument(
+        "--owner-approval-ref",
+        default="",
+        help="Exact non-secret owner approval reference; must match the reviewed API plan",
+    )
+    acmewear_express_pickup_execute.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Env var containing the ACMEWEAR Kaspi API token; aliases include KASPI_TOKEN_ACMEWEAR and ACMEWEAR_KASPI_API_TOKEN",
+    )
+    acmewear_express_pickup_execute.add_argument(
+        "--order-id-env",
+        default="ACMEWEAR_PICKUP_ORDER_ID",
+        help="Env var containing raw Kaspi order id; raw value is never persisted",
+    )
+    acmewear_express_pickup_execute.add_argument(
+        "--order-code-env",
+        default="ACMEWEAR_PICKUP_ORDER_CODE",
+        help="Env var containing raw Kaspi order code; raw value is never persisted",
+    )
+    acmewear_express_pickup_execute.add_argument(
+        "--security-code-env",
+        default="ACMEWEAR_PICKUP_SECURITY_CODE",
+        help="Env var containing raw customer pickup security code for complete_with_security_code; raw value is never persisted",
+    )
+    acmewear_express_pickup_execute.add_argument(
+        "--execute",
+        action="store_true",
+        help="Actually POST to Kaspi; default is dry-run/no network",
+    )
+    acmewear_express_pickup_execute.add_argument("--timeout-seconds", type=int, default=20, help="HTTP timeout in seconds")
+    acmewear_express_assembly = acmewear_express_subparsers.add_parser(
+        "express-assembly-review",
+        help="Review whether one PP2 Express row is ready for manual/API assembly without mutating Kaspi",
+    )
+    acmewear_express_assembly.add_argument("--sidecar-csv", required=True, help="Repo-local sidecar CSV")
+    acmewear_express_assembly.add_argument("--run-dir", help="Run directory for Express assembly review artifacts")
+    acmewear_express_assembly.add_argument("--order-hash", default="", help="sha256:... order hash selector")
+    acmewear_express_assembly.add_argument("--local-ref", default="", help="Local non-PII row selector")
+    acmewear_express_assembly.add_argument("--sidecar-idempotency-key", default="", help="Exact sidecar idempotency key selector")
+    acmewear_express_assembly.add_argument(
+        "--label-printed",
+        action="store_true",
+        help="Operator confirms the 75x120 product label is printed/attached",
+    )
+    acmewear_express_assembly.add_argument(
+        "--operator-physically-ready",
+        action="store_true",
+        help="Operator confirms they are physically at PP2 and ready for courier pickup flow",
+    )
+    acmewear_express_assembly.add_argument(
+        "--owner-assembly-approval-ref",
+        default="",
+        help="Non-secret approval/event reference for this review; required for READY status",
+    )
+    acmewear_express_assembly.add_argument("--ledger-csv", help="Optional repo-local Express assembly review ledger")
+    acmewear_express_assembly.add_argument("--write-ledger", action="store_true", help="Persist the review row to --ledger-csv")
+    acmewear_express_operator = acmewear_express_subparsers.add_parser(
+        "operator-queue",
+        help="Build a manual operator action queue from local PP2 Express/self-pickup sidecar rows",
+    )
+    acmewear_express_operator.add_argument("--sidecar-csv", required=True, help="Repo-local sidecar CSV")
+    acmewear_express_operator.add_argument("--run-dir", help="Run directory for operator queue artifacts")
+    acmewear_express_shift = acmewear_express_subparsers.add_parser(
+        "shift-packet",
+        help="Build one warehouse shift packet combining operator queue and automation readiness",
+    )
+    acmewear_express_shift.add_argument(
+        "--sidecar-csv",
+        default="data/acmewear_express_selfpickup_sidecar.csv",
+        help="Repo-local sidecar CSV to summarize",
+    )
+    acmewear_express_shift.add_argument("--run-dir", help="Run directory for shift packet artifacts")
+    acmewear_express_shift.add_argument(
+        "--run-root",
+        default=str(DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT),
+        help="Root to discover latest Agent 1-5 closeouts",
+    )
+    acmewear_express_shift.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Env var expected to contain the ACMEWEAR Kaspi API token; current default accepts legacy ACMEWEAR_KASPI_API_TOKEN as an alias; value is never persisted",
+    )
+    acmewear_express_shift.add_argument(
+        "--telegram-bot-token-env",
+        default=DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+        help="Env var expected to contain Telegram bot token; default also accepts generic AB Telegram token aliases; value is never persisted",
+    )
+    acmewear_express_shift.add_argument(
+        "--telegram-alert-chat-id-env",
+        default=DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV,
+        help="Env var expected to contain Telegram alert chat id; default also accepts generic AB Telegram chat aliases; value is never persisted",
+    )
+    acmewear_express_shift.add_argument(
+        "--telegram-print-chat-id-env",
+        default=DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+        help="Env var expected to contain Telegram print chat id; default also accepts generic AB waybill chat aliases; value is never persisted",
+    )
+    acmewear_express_readiness = acmewear_express_subparsers.add_parser(
+        "readiness",
+        help="Build a local go/no-go matrix for ACMEWEAR PP2 Express/self-pickup automation gates",
+    )
+    acmewear_express_readiness.add_argument("--run-dir", help="Run directory for readiness artifacts")
+    acmewear_express_readiness.add_argument(
+        "--run-root",
+        default=str(DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT),
+        help="Root to discover latest Agent 1-5 closeouts",
+    )
+    acmewear_express_readiness.add_argument(
+        "--sidecar-csv",
+        default="data/acmewear_express_selfpickup_sidecar.csv",
+        help="Repo-local sidecar CSV to summarize",
+    )
+    acmewear_express_readiness.add_argument("--agent1-closeout", help="Explicit Agent 1 live fetch/watch closeout")
+    acmewear_express_readiness.add_argument("--agent2-closeout", help="Explicit Agent 2 AB/Google handoff closeout")
+    acmewear_express_readiness.add_argument("--agent3-closeout", help="Explicit Agent 3 Telegram config closeout")
+    acmewear_express_readiness.add_argument("--agent4-closeout", help="Explicit Agent 4 pickup completion closeout")
+    acmewear_express_readiness.add_argument("--agent5-closeout", help="Explicit Agent 5 go/no-go closeout")
+    acmewear_express_readiness.add_argument(
+        "--token-env",
+        default=DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV,
+        help="Env var expected to contain the ACMEWEAR Kaspi API token; current default accepts legacy ACMEWEAR_KASPI_API_TOKEN as an alias; value is never persisted",
+    )
+    acmewear_express_readiness.add_argument(
+        "--telegram-bot-token-env",
+        default=DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+        help="Env var expected to contain Telegram bot token; default also accepts generic AB Telegram token aliases; value is never persisted",
+    )
+    acmewear_express_readiness.add_argument(
+        "--telegram-alert-chat-id-env",
+        default=DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV,
+        help="Env var expected to contain Telegram alert chat id; default also accepts generic AB Telegram chat aliases; value is never persisted",
+    )
+    acmewear_express_readiness.add_argument(
+        "--telegram-print-chat-id-env",
+        default=DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+        help="Env var expected to contain Telegram print chat id; default also accepts generic AB waybill chat aliases; value is never persisted",
     )
 
     marketing_parser = subparsers.add_parser("kaspi-marketing", help="Kaspi marketing campaign operations")
@@ -743,7 +1397,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     marketing_directapi.add_argument("--plan-file", required=True, help="YAML/JSON control plan path")
     marketing_directapi.add_argument("--dry-run", action="store_true", help="Resolve and write artifacts without live writes")
-    marketing_directapi.add_argument("--confirm", action="store_true", help="Future live apply mode; currently blocked unless implemented")
+    marketing_directapi.add_argument("--confirm", action="store_true", help="Confirmed live apply mode for supported exact operations")
+    marketing_directapi.add_argument("--headless", action="store_true", help="Run browser-backed live apply headlessly")
     marketing_directapi.add_argument(
         "--run-root",
         default=str(DEFAULT_DIRECTAPI_CONTROL_RUN_ROOT),
@@ -1475,6 +2130,12 @@ def main(argv: list[str] | None = None) -> int:
                     profile_dir=args.profile_dir,
                     storage_state=args.storage_state,
                     api_verify=args.api_verify,
+                    competition_scope_map_path=args.competition_scope_map,
+                    only_competitor_actions=args.only_competitor_action,
+                    only_competitor_reasons=args.only_competitor_reason,
+                    only_row_ids=args.only_row_id,
+                    only_merchant_skus=args.only_merchant_sku,
+                    only_competitor_mids=args.only_competitor_mid,
                 )
             else:
                 result = run_repricer_competitors(
@@ -1824,6 +2485,8 @@ def main(argv: list[str] | None = None) -> int:
                     run_root=Path(args.run_root),
                     timestamp=args.timestamp,
                     env=os.environ,
+                    env_file=Path(args.env_file) if args.env_file else None,
+                    headless=bool(args.headless),
                 )
             except (DirectAPIControlPlanError, FileExistsError) as exc:
                 logging.error(str(exc))
@@ -2865,6 +3528,29 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0 if summary.get("status") == "success" else 4
 
+        if args.pricelist_command == "history-detail":
+            run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"]) / "history_detail"
+            summary = run_kaspi_pricelist_history_detail(
+                store_name=creds["store_name"],
+                email=creds["email"],
+                password=creds["password"],
+                detail_ref=args.detail_ref,
+                run_dir=run_dir,
+                headless=headless,
+                detail_filter=args.detail_filter,
+                download_result_excel=args.download_result_excel,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "Kaspi pricelist history detail: store=%s status=%s run_dir=%s",
+                    summary.get("store_name"),
+                    summary.get("status"),
+                    summary.get("run_dir"),
+                )
+            return 0 if summary.get("status") == "success" else 4
+
         if args.pricelist_command == "safe-active-patch":
             run_dir = Path(args.run_dir) if args.run_dir else default_run_dir(creds["store_name"])
             if args.active_path and args.archive_path:
@@ -2899,6 +3585,8 @@ def main(argv: list[str] | None = None) -> int:
                     expected_active_before=args.expected_active_before,
                     expected_active_after=args.expected_active_after,
                     allow_activate_from_archive=args.allow_activate_from_archive,
+                    restriction_ledger_path=Path(args.restriction_ledger) if args.restriction_ledger else None,
+                    restriction_probe_approval_path=Path(args.restriction_probe_approval) if args.restriction_probe_approval else None,
                 )
             except SafeActivePatchError as exc:
                 payload = {"status": "blocked", "error": str(exc), "run_dir": str(run_dir)}
@@ -2958,6 +3646,9 @@ def main(argv: list[str] | None = None) -> int:
                                 summary["status"] = "failed"
                         else:
                             summary["status"] = "failed"
+            _write_json_file(run_dir / "safe_active_patch_command_summary.json", summary)
+            if args.apply:
+                _write_json_file(run_dir / "safe_active_patch_apply_summary.json", summary)
             if args.json:
                 print(json.dumps(summary, ensure_ascii=False, indent=2))
             else:
@@ -3129,6 +3820,1025 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         logging.error("Unknown acmewear-bundles command")
+        return 2
+
+    if args.command == "acmewear-express-sidecar":
+        if args.acmewear_express_command == "init-sidecar":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_sidecar_init"
+            )
+            try:
+                summary = run_sidecar_init(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                    schema_csv=Path(args.schema_csv) if args.schema_csv else None,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express sidecar init blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express sidecar init: action=%s path=%s",
+                    summary.get("action"),
+                    summary.get("sidecar_csv"),
+                )
+            return 0
+
+        if args.acmewear_express_command == "build":
+            if args.update_sidecar and not args.sidecar_csv:
+                payload = {
+                    "status": "blocked",
+                    "error": "--update-sidecar requires --sidecar-csv",
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT / datetime.now().strftime("%Y%m%d_%H%M%S")
+            )
+            try:
+                summary = run_sidecar_build_from_file(
+                    input_path=Path(args.input_json),
+                    run_dir=run_dir,
+                    detected_at=args.detected_at or None,
+                    sidecar_csv=Path(args.sidecar_csv) if args.sidecar_csv else None,
+                    update_sidecar=bool(args.update_sidecar),
+                    persist_actionable_only=bool(args.persist_actionable_only),
+                    local_ref_prefix=str(args.local_ref_prefix or "order"),
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express sidecar build blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express sidecar build: mode=%s incoming=%s alerts=%s run_dir=%s",
+                    summary.get("mode"),
+                    summary.get("incoming_sidecar_rows"),
+                    summary.get("alert_queue_rows"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "manual-intake":
+            if args.update_sidecar and not args.sidecar_csv:
+                payload = {
+                    "status": "blocked",
+                    "error": "--update-sidecar requires --sidecar-csv",
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_manual_intake"
+            )
+            order_ref_text = ""
+            if args.order_ref_env:
+                order_ref_text = os.environ.get(str(args.order_ref_env), "")
+                if not order_ref_text:
+                    payload = {
+                        "status": "blocked",
+                        "error": f"Missing order ref env var: {args.order_ref_env}",
+                        "run_dir": str(run_dir),
+                        "external_writes": {
+                            "kaspi_order_mutation": False,
+                            "telegram_send": False,
+                            "print_job": False,
+                            "autonomous_business_write": False,
+                        },
+                    }
+                    if args.json:
+                        print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    else:
+                        logging.error(payload["error"])
+                    return 2
+            try:
+                summary = run_manual_sidecar_intake(
+                    run_dir=run_dir,
+                    sidecar_csv=Path(args.sidecar_csv) if args.sidecar_csv else None,
+                    update_sidecar=bool(args.update_sidecar),
+                    delivery_kind=str(args.delivery_kind),
+                    local_ref=str(args.local_ref),
+                    order_hash=str(args.order_hash or ""),
+                    order_ref_text=order_ref_text,
+                    detected_at=args.detected_at or None,
+                    created_at=str(args.created_at or ""),
+                    delivery_slot_label=str(args.delivery_slot_label or ""),
+                    courier_planning_at=str(args.courier_planning_at or ""),
+                    sku_key=str(args.sku_key or ""),
+                    merchant_article=str(args.merchant_article or ""),
+                    ordered_size=str(args.ordered_size or ""),
+                    height_cm=str(args.height_cm or ""),
+                    weight_kg=str(args.weight_kg or ""),
+                    my_size=str(args.my_size or ""),
+                    owner_size_override=str(args.owner_size_override or ""),
+                    size_source=str(args.size_source or ""),
+                    waybill_present=bool(args.waybill_present),
+                    cropped_label_path=str(args.cropped_label_path or ""),
+                    cropped_label_sha256=str(args.cropped_label_sha256 or ""),
+                    telegram_alert_status=str(args.telegram_alert_status or ""),
+                    telegram_label_status=str(args.telegram_label_status or ""),
+                    printed_status=str(args.printed_status or ""),
+                    close_status=str(args.close_status or "OPEN"),
+                    build_shift_packet=bool(args.build_shift_packet),
+                    shift_run_root=Path(args.shift_run_root),
+                    env=os.environ,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express manual intake blocked: %s", exc)
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express manual intake: mode=%s local_ref=%s operator_rows=%s run_dir=%s",
+                    summary.get("mode"),
+                    summary.get("local_ref"),
+                    summary.get("operator_queue_rows"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "update-row":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_sidecar_row_update"
+            )
+            try:
+                summary = run_sidecar_row_update(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                    order_hash=str(args.order_hash or ""),
+                    local_ref=str(args.local_ref or ""),
+                    sidecar_idempotency_key=str(args.sidecar_idempotency_key or ""),
+                    ordered_size=str(args.ordered_size or ""),
+                    height_cm=str(args.height_cm or ""),
+                    weight_kg=str(args.weight_kg or ""),
+                    my_size=str(args.my_size or ""),
+                    owner_size_override=str(args.owner_size_override or ""),
+                    size_source=str(args.size_source or ""),
+                    cropped_label_path=str(args.cropped_label_path or ""),
+                    cropped_label_sha256=str(args.cropped_label_sha256 or ""),
+                    telegram_alert_status=str(args.telegram_alert_status or ""),
+                    telegram_label_status=str(args.telegram_label_status or ""),
+                    printed_status=str(args.printed_status or ""),
+                    close_status=str(args.close_status or ""),
+                    build_shift_packet=bool(args.build_shift_packet),
+                    shift_run_root=Path(args.shift_run_root),
+                    env=os.environ,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express sidecar row update blocked: %s", exc)
+                return 2
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express sidecar row update: local_ref=%s state=%s blockers=%s run_dir=%s",
+                    summary.get("local_ref"),
+                    summary.get("sidecar_state"),
+                    summary.get("blockers"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "fetch-once":
+            if args.update_sidecar and not args.sidecar_csv:
+                payload = {
+                    "status": "blocked",
+                    "error": "--update-sidecar requires --sidecar-csv",
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            token_env = str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV)
+            token, effective_token_env, token_env_candidates = _resolve_acmewear_express_token_from_env(token_env)
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_fetch_once"
+            )
+            if not token:
+                payload = {
+                    "status": "blocked",
+                    "error": f"Missing token env var; checked: {', '.join(token_env_candidates)}",
+                    "requested_token_env": token_env,
+                    "effective_token_env": effective_token_env,
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            created_from = str(args.created_from or "")
+            created_to = str(args.created_to or "")
+            if args.lookback_hours is not None:
+                try:
+                    created_from, created_to = _resolve_created_bounds_with_lookback(
+                        created_from=created_from,
+                        created_to=created_to,
+                        lookback_hours=int(args.lookback_hours),
+                    )
+                except ValueError as exc:
+                    payload = {
+                        "status": "blocked",
+                        "error": str(exc),
+                        "run_dir": str(run_dir),
+                        "external_writes": {
+                            "kaspi_order_mutation": False,
+                            "telegram_send": False,
+                            "print_job": False,
+                            "autonomous_business_write": False,
+                        },
+                    }
+                    if args.json:
+                        print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    else:
+                        logging.error(payload["error"])
+                    return 2
+            try:
+                summary = run_sidecar_fetch_once(
+                    token=token,
+                    run_dir=run_dir,
+                    detected_at=args.detected_at or None,
+                    sidecar_csv=Path(args.sidecar_csv) if args.sidecar_csv else None,
+                    update_sidecar=bool(args.update_sidecar),
+                    persist_actionable_only=bool(args.persist_actionable_only),
+                    local_ref_prefix=str(args.local_ref_prefix or "api"),
+                    states=args.states or None,
+                    statuses=args.statuses or None,
+                    delivery_types=args.delivery_types or None,
+                    created_from=created_from,
+                    created_to=created_to,
+                    page_size=int(args.page_size),
+                    max_pages=int(args.max_pages),
+                    timeout_seconds=int(args.timeout_seconds),
+                )
+            except KaspiOrderFetchError as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express sidecar fetch blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express sidecar fetch: mode=%s source_rows=%s alerts=%s run_dir=%s",
+                    summary.get("mode"),
+                    summary.get("source_rows"),
+                    summary.get("alert_queue_rows"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "watch":
+            if args.update_sidecar and not args.sidecar_csv:
+                payload = {
+                    "status": "blocked",
+                    "error": "--update-sidecar requires --sidecar-csv",
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            token_env = str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV)
+            token, effective_token_env, token_env_candidates = _resolve_acmewear_express_token_from_env(token_env)
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_watch"
+            )
+            if not token:
+                run_dir.mkdir(parents=True, exist_ok=True)
+                payload = {
+                    "schema_version": "acmewear_express_selfpickup_watch.v1",
+                    "status": "blocked",
+                    "error": f"Missing token env var; checked: {', '.join(token_env_candidates)}",
+                    "requested_token_env": token_env,
+                    "effective_token_env": effective_token_env,
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                heartbeat_path = run_dir / "watch_heartbeat.json"
+                heartbeat_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                payload["heartbeat_path"] = str(heartbeat_path)
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            try:
+                summary = run_sidecar_watch_loop(
+                    token=token,
+                    run_dir=run_dir,
+                    detected_at=args.detected_at or None,
+                    sidecar_csv=Path(args.sidecar_csv) if args.sidecar_csv else None,
+                    update_sidecar=bool(args.update_sidecar),
+                    persist_actionable_only=bool(args.persist_actionable_only),
+                    local_ref_prefix=str(args.local_ref_prefix or "watch"),
+                    states=args.states or None,
+                    statuses=args.statuses or None,
+                    delivery_types=args.delivery_types or None,
+                    created_from=str(args.created_from or ""),
+                    created_to=str(args.created_to or ""),
+                    lookback_hours=int(args.lookback_hours),
+                    cycles=int(args.cycles),
+                    interval_seconds=int(args.interval_seconds),
+                    page_size=int(args.page_size),
+                    max_pages=int(args.max_pages),
+                    timeout_seconds=int(args.timeout_seconds),
+                )
+            except KaspiOrderFetchError as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "heartbeat_path": str(run_dir / "watch_heartbeat.json"),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express sidecar watch blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express sidecar watch: cycles=%s heartbeat=%s run_dir=%s",
+                    summary.get("cycles_completed"),
+                    summary.get("heartbeat_path"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "selfpickup-scan":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_selfpickup_sample_scan"
+            )
+            try:
+                summary = run_selfpickup_sample_scan(
+                    input_csv=Path(args.input_csv),
+                    run_dir=run_dir,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR self-pickup sample scan blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR self-pickup sample scan: gate=%s proven=%s report=%s",
+                    summary.get("gate"),
+                    summary.get("proven_seller_selfpickup_rows"),
+                    summary.get("selfpickup_sample_scan_report_path"),
+                )
+            return 0
+
+        if args.acmewear_express_command == "telegram-alert":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_telegram_alert"
+            )
+            bot_token_env = str(args.bot_token_env or DEFAULT_TELEGRAM_BOT_TOKEN_ENV)
+            chat_id_env = str(args.chat_id_env or DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV)
+            bot_token, effective_bot_token_env = _resolve_env_alias_from_env(
+                bot_token_env,
+                TELEGRAM_BOT_TOKEN_ENV_ALIASES,
+                DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+            )
+            chat_id, effective_chat_id_env = _resolve_env_alias_from_env(
+                chat_id_env,
+                TELEGRAM_ALERT_CHAT_ID_ENV_ALIASES,
+                DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV,
+            )
+            try:
+                summary = run_telegram_alerts_from_queue(
+                    alert_queue_csv=Path(args.alert_queue_csv),
+                    ledger_csv=Path(args.ledger_csv),
+                    run_dir=run_dir,
+                    send=bool(args.send),
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    chat_config_ref=str(args.chat_config_ref or f"{effective_bot_token_env}+{effective_chat_id_env}"),
+                    timeout_seconds=int(args.timeout_seconds),
+                    max_alerts=int(args.max_alerts) if int(args.max_alerts or 0) > 0 else None,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express Telegram alert blocked: %s", exc)
+                return 2 if "requires bot token and chat id" in str(exc) else 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express Telegram alert: mode=%s sent=%s skipped=%s run_dir=%s",
+                    summary.get("send_mode"),
+                    summary.get("sent_rows"),
+                    summary.get("skipped_duplicate_rows"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "prepare-label":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_prepare_label"
+            )
+            token_env = str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV)
+            token, effective_token_env, token_env_candidates = _resolve_acmewear_express_token_from_env(token_env)
+            bot_token_env = str(args.bot_token_env or WAYBILL_TELEGRAM_BOT_TOKEN_ENV)
+            chat_id_env = str(args.chat_id_env or DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV)
+            bot_token, effective_bot_token_env = _resolve_env_alias_from_env(
+                bot_token_env,
+                TELEGRAM_BOT_TOKEN_ENV_ALIASES,
+                DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+            )
+            chat_id, effective_chat_id_env = _resolve_env_alias_from_env(
+                chat_id_env,
+                TELEGRAM_PRINT_CHAT_ID_ENV_ALIASES,
+                DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+            )
+            if not token:
+                payload = {
+                    "schema_version": "acmewear_express_prepare_label.v1",
+                    "status": "blocked",
+                    "gate": "YELLOW_KASPI_TOKEN_MISSING",
+                    "error": f"Missing token env var; checked: {', '.join(token_env_candidates)}",
+                    "requested_token_env": token_env,
+                    "effective_token_env": effective_token_env,
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                run_dir.mkdir(parents=True, exist_ok=True)
+                summary_path = run_dir / "prepare_label_summary.json"
+                summary_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                payload["summary_path"] = str(summary_path)
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error(payload["error"])
+                return 2
+            try:
+                summary = run_prepare_express_label(
+                    token=token,
+                    run_dir=run_dir,
+                    send_telegram=bool(args.send_telegram),
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    chat_config_ref=str(args.chat_config_ref or f"{effective_bot_token_env}+{effective_chat_id_env}"),
+                    order_code=str(args.order_code or ""),
+                    order_hash=str(args.order_hash or ""),
+                    owner_size_override=str(args.owner_size or ""),
+                    size_optional=not bool(args.require_size),
+                    force_resend=bool(args.force_resend),
+                    approval_policy_path=Path(args.standing_approval),
+                    ledger_csv=Path(args.ledger_csv),
+                    lookback_hours=int(args.lookback_hours),
+                    states=args.states or None,
+                    created_from=str(args.created_from or ""),
+                    created_to=str(args.created_to or ""),
+                    page_size=int(args.page_size),
+                    max_pages=int(args.max_pages),
+                    timeout_seconds=int(args.timeout_seconds),
+                    repo_root=Path.cwd(),
+                )
+            except (OSError, ValueError, RuntimeError, KaspiOrderFetchError) as exc:
+                payload = {
+                    "schema_version": "acmewear_express_prepare_label.v1",
+                    "status": "blocked",
+                    "gate": "YELLOW_PREPARE_LABEL_EXCEPTION",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express prepare-label blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express prepare-label: gate=%s order=%s telegram=%s run_dir=%s",
+                    summary.get("gate"),
+                    summary.get("order_hash_prefix"),
+                    summary.get("telegram_message_id") or summary.get("telegram_send_summary", {}).get("send_mode"),
+                    run_dir,
+                )
+            return 0 if str(summary.get("gate", "")).startswith("GREEN") else 4
+
+        if args.acmewear_express_command == "telegram-label":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_telegram_label"
+            )
+            bot_token_env = str(args.bot_token_env or WAYBILL_TELEGRAM_BOT_TOKEN_ENV)
+            chat_id_env = str(args.chat_id_env or DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV)
+            bot_token, effective_bot_token_env = _resolve_env_alias_from_env(
+                bot_token_env,
+                TELEGRAM_BOT_TOKEN_ENV_ALIASES,
+                DEFAULT_TELEGRAM_BOT_TOKEN_ENV,
+            )
+            chat_id, effective_chat_id_env = _resolve_env_alias_from_env(
+                chat_id_env,
+                TELEGRAM_PRINT_CHAT_ID_ENV_ALIASES,
+                DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV,
+            )
+            try:
+                summary = run_telegram_label_from_pdf(
+                    cropped_label_pdf=Path(args.cropped_label_pdf),
+                    order_hash=str(args.order_hash or ""),
+                    local_ref=str(args.local_ref or ""),
+                    ledger_csv=Path(args.ledger_csv),
+                    run_dir=run_dir,
+                    send=bool(args.send),
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    chat_config_ref=str(args.chat_config_ref or f"{effective_bot_token_env}+{effective_chat_id_env}"),
+                    sidecar_idempotency_key=str(args.sidecar_idempotency_key or ""),
+                    caption=str(args.caption or "ACMEWEAR PP2 product label"),
+                    timeout_seconds=int(args.timeout_seconds),
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express Telegram label blocked: %s", exc)
+                return 2 if "requires bot token and chat id" in str(exc) else 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express Telegram label: mode=%s sent=%s skipped=%s run_dir=%s",
+                    summary.get("send_mode"),
+                    summary.get("sent_rows"),
+                    summary.get("skipped_duplicate_rows"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "pickup-completion-review":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_pickup_completion_review"
+            )
+            security_code_env = str(args.security_code_env or "ACMEWEAR_PICKUP_SECURITY_CODE")
+            security_code = os.environ.get(security_code_env, "")
+            try:
+                summary = run_pickup_completion_review(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                    order_hash=str(args.order_hash or ""),
+                    local_ref=str(args.local_ref or ""),
+                    sidecar_idempotency_key=str(args.sidecar_idempotency_key or ""),
+                    security_code=security_code,
+                    security_code_sha256=str(args.security_code_sha256 or ""),
+                    customer_arrived=bool(args.customer_arrived),
+                    manual_handoff_confirmed=bool(args.manual_handoff_confirmed),
+                    ledger_csv=Path(args.ledger_csv) if args.ledger_csv else None,
+                    write_ledger=bool(args.write_ledger),
+                    build_api_plan=bool(args.build_api_plan),
+                    owner_approval_ref=str(args.owner_approval_ref or ""),
+                    order_id_env=str(args.order_id_env or "ACMEWEAR_PICKUP_ORDER_ID"),
+                    order_code_env=str(args.order_code_env or "ACMEWEAR_PICKUP_ORDER_CODE"),
+                    security_code_env=security_code_env,
+                    env=os.environ,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express pickup completion review blocked: %s", exc)
+                return 2 if "requires --order-hash" in str(exc) or "--write-ledger requires" in str(exc) else 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR pickup completion review: status=%s blockers=%s run_dir=%s",
+                    summary.get("review_status"),
+                    summary.get("blockers"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "pickup-completion-execute":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_pickup_completion_api_execute"
+            )
+            try:
+                summary = run_pickup_completion_api_execute(
+                    api_plan_path=Path(args.api_plan),
+                    run_dir=run_dir,
+                    step=str(args.step or ""),
+                    owner_approval_ref=str(args.owner_approval_ref or ""),
+                    token_env=str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV),
+                    order_id_env=str(args.order_id_env or "ACMEWEAR_PICKUP_ORDER_ID"),
+                    order_code_env=str(args.order_code_env or "ACMEWEAR_PICKUP_ORDER_CODE"),
+                    security_code_env=str(args.security_code_env or "ACMEWEAR_PICKUP_SECURITY_CODE"),
+                    execute=bool(args.execute),
+                    timeout_seconds=int(args.timeout_seconds),
+                    env=os.environ,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR pickup completion API execution blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR pickup completion API execution: status=%s step=%s dry_run=%s run_dir=%s",
+                    summary.get("status"),
+                    summary.get("step"),
+                    summary.get("dry_run"),
+                    run_dir,
+                )
+            return 0 if summary.get("status") not in {"BLOCKED", "LIVE_EXECUTED_HTTP_ERROR", "LIVE_EXECUTION_URL_ERROR"} else 4
+
+        if args.acmewear_express_command == "express-assembly-review":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_express_assembly_review"
+            )
+            try:
+                summary = run_express_assembly_review(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                    order_hash=str(args.order_hash or ""),
+                    local_ref=str(args.local_ref or ""),
+                    sidecar_idempotency_key=str(args.sidecar_idempotency_key or ""),
+                    label_printed=bool(args.label_printed),
+                    operator_physically_ready=bool(args.operator_physically_ready),
+                    owner_assembly_approval_ref=str(args.owner_assembly_approval_ref or ""),
+                    ledger_csv=Path(args.ledger_csv) if args.ledger_csv else None,
+                    write_ledger=bool(args.write_ledger),
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express assembly review blocked: %s", exc)
+                return 2 if "requires --order-hash" in str(exc) or "--write-ledger requires" in str(exc) else 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express assembly review: status=%s blockers=%s run_dir=%s",
+                    summary.get("review_status"),
+                    summary.get("blockers"),
+                    run_dir,
+                )
+            return 0
+
+        if args.acmewear_express_command == "operator-queue":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_operator_queue"
+            )
+            try:
+                summary = run_operator_queue_review(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express operator queue blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express operator queue: rows=%s report=%s",
+                    summary.get("operator_queue_rows"),
+                    summary.get("operator_queue_report_path"),
+                )
+            return 0
+
+        if args.acmewear_express_command == "shift-packet":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_shift_packet"
+            )
+            try:
+                summary = run_shift_packet_review(
+                    sidecar_csv=Path(args.sidecar_csv),
+                    run_dir=run_dir,
+                    run_root=Path(args.run_root),
+                    env=os.environ,
+                    token_env=str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV),
+                    telegram_bot_token_env=str(args.telegram_bot_token_env or DEFAULT_TELEGRAM_BOT_TOKEN_ENV),
+                    telegram_alert_chat_id_env=str(args.telegram_alert_chat_id_env or DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV),
+                    telegram_print_chat_id_env=str(args.telegram_print_chat_id_env or DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV),
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                payload = {
+                    "status": "blocked",
+                    "error": str(exc),
+                    "run_dir": str(run_dir),
+                    "external_writes": {
+                        "kaspi_order_mutation": False,
+                        "telegram_send": False,
+                        "print_job": False,
+                        "autonomous_business_write": False,
+                    },
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                else:
+                    logging.error("ACMEWEAR Express shift packet blocked: %s", exc)
+                return 4
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express shift packet: gate=%s queue=%s report=%s",
+                    summary.get("gate"),
+                    summary.get("operator_queue_rows"),
+                    summary.get("shift_packet_report_path"),
+                )
+            return 0
+
+        if args.acmewear_express_command == "readiness":
+            run_dir = (
+                Path(args.run_dir)
+                if args.run_dir
+                else DEFAULT_ACMEWEAR_EXPRESS_SIDECAR_RUN_ROOT
+                / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_readiness"
+            )
+            summary = run_operational_readiness_review(
+                run_dir=run_dir,
+                run_root=Path(args.run_root),
+                sidecar_csv=Path(args.sidecar_csv) if args.sidecar_csv else None,
+                agent1_closeout=Path(args.agent1_closeout) if args.agent1_closeout else None,
+                agent2_closeout=Path(args.agent2_closeout) if args.agent2_closeout else None,
+                agent3_closeout=Path(args.agent3_closeout) if args.agent3_closeout else None,
+                agent4_closeout=Path(args.agent4_closeout) if args.agent4_closeout else None,
+                agent5_closeout=Path(args.agent5_closeout) if args.agent5_closeout else None,
+                token_env=str(args.token_env or DEFAULT_ACMEWEAR_KASPI_TOKEN_ENV),
+                telegram_bot_token_env=str(args.telegram_bot_token_env or DEFAULT_TELEGRAM_BOT_TOKEN_ENV),
+                telegram_alert_chat_id_env=str(args.telegram_alert_chat_id_env or DEFAULT_TELEGRAM_ALERT_CHAT_ID_ENV),
+                telegram_print_chat_id_env=str(args.telegram_print_chat_id_env or DEFAULT_TELEGRAM_PRINT_CHAT_ID_ENV),
+                env=os.environ,
+            )
+            if args.json:
+                print(json.dumps(summary, ensure_ascii=False, indent=2))
+            else:
+                logging.info(
+                    "ACMEWEAR Express readiness: gate=%s matrix=%s report=%s",
+                    summary.get("gate"),
+                    summary.get("readiness_matrix_path"),
+                    summary.get("readiness_report_path"),
+                )
+            return 0
+
+        logging.error("Unknown acmewear-express-sidecar command")
         return 2
 
     if args.command == "snapshot":

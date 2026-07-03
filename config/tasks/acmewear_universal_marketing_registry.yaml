@@ -1,0 +1,104 @@
+schema_version: web_auto.acmewear_universal_marketing_registry.v1
+store:
+  name: ACMEWEAR
+  merchant_id: "759051"
+  store_code: "30137883"
+  timezone: Asia/Almaty
+
+mode: read_only
+live_discovery:
+  enabled: true
+  owner: acmewear_universal_marketing_ops_fetch
+  sanitized_inventory_path: runs/acmewear_universal_marketing_ops_fetch/latest/exports/live_campaign_inventory.json
+  note: The collector merges repo-configured campaigns, latest DB active rows, and any sanitized live campaign inventory artifact; no cookies, tokens, headers, storageState, or sessionId values are stored.
+
+tiers:
+  A:
+    label: urgent_strategy_products
+    cadence: 6h_or_24h
+    description: Urgent strategy campaigns and active price-ladder proof lanes that need near-term read-only evidence.
+  B:
+    label: active_internal_campaigns
+    cadence: 24h
+    description: Active internal campaigns and parent-family operating lanes monitored from repo-recorded sources.
+  C:
+    label: paused_archived_history
+    cadence: weekly
+    description: Paused, hold, archive, or historical campaigns retained for source-map continuity.
+
+guardrails:
+  external_behavior: read_only
+  live_writes_allowed: false
+  forbidden_writes:
+    - Autonomous_business
+    - Kaspi price
+    - Kaspi stock
+    - Kaspi listing state
+    - Kaspi campaign bid
+    - Kaspi campaign budget
+    - Kaspi campaign state
+    - Kaspi product state
+    - Kaspi seller-bonus promo
+    - Meta/Facebook
+    - Repricer
+    - CRM
+    - scheduler install/update
+    - secrets/cookies/storageState/tokens
+  allowed_outputs:
+    - repo-local registry rows
+    - repo-local test/cache artifacts
+
+tier_detection:
+  paused_or_history_terms:
+    - paused
+    - hold_readonly
+    - archive
+    - archived
+    - history
+
+seed_sources:
+  - source_id: line61_line51_daily_ops_fetch
+    path: config/schedules/line61_line51_daily_ops_fetch.yaml
+    source_type: daily_ops_fetch
+    tier: B
+    inclusion_reason: repo_recorded_daily_ops_fetch_scope
+  - source_id: acmewear_capital_release_marketing_scope
+    path: config/tasks/acmewear_capital_release_marketing_scope.yaml
+    source_type: capital_release_scope
+    tier: B
+    inclusion_reason: repo_recorded_capital_release_scope
+  - source_id: line31_marketing_scope
+    path: config/tasks/line31_marketing_scope.yaml
+    source_type: line31_scope
+    tier: A
+    inclusion_reason: repo_recorded_line31_strategy_scope
+  - source_id: line61_line51_checkpoints
+    path: config/schedules/line61_line51_checkpoints.yaml
+    source_type: scheduled_checkpoint
+    tier: B
+    inclusion_reason: repo_recorded_line61_line51_checkpoint_scope
+  - source_id: acmewear_capital_release_fetch_6h
+    path: config/schedules/acmewear_capital_release_fetch_6h.yaml
+    source_type: scheduled_checkpoint
+    tier: B
+    inclusion_reason: repo_recorded_capital_release_fetch_schedule
+  - source_id: suit31_ls_8990_price_ladder
+    path: config/schedules/suit31_ls_8990_price_ladder.yaml
+    source_type: price_ladder_schedule
+    tier: A
+    inclusion_reason: repo_recorded_child_price_ladder_schedule
+  - source_id: suit31_ls_8490_price_ladder
+    path: config/schedules/suit31_ls_8490_price_ladder.yaml
+    source_type: price_ladder_schedule
+    tier: A
+    inclusion_reason: repo_recorded_child_price_ladder_schedule
+  - source_id: suit31_ls_7990_price_ladder
+    path: config/schedules/suit31_ls_7990_price_ladder.yaml
+    source_type: price_ladder_schedule
+    tier: A
+    inclusion_reason: repo_recorded_child_price_ladder_schedule
+  - source_id: suit21_ls_6990_suit31_ts_7990_price_ladder
+    path: config/schedules/suit21_ls_6990_suit31_ts_7990_price_ladder.yaml
+    source_type: price_ladder_schedule
+    tier: A
+    inclusion_reason: repo_recorded_child_price_ladder_schedule

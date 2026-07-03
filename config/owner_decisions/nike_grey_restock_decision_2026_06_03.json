@@ -1,0 +1,38 @@
+{
+  "schema_version": "owner_restock_decision.v1",
+  "decision_id": "OWNER_NIKE_GREY_RESTOCK_2026_06_03",
+  "status": "OWNER_APPROVED",
+  "effective_at_almaty": "2026-06-03T16:24:30+05:00",
+  "owner_approval_phrase": "OWNER APPROVES NIKE_GREY_RESTOCK_2026_06_03_EFFECTIVE_2026-06-03T16:24:30+05:00: CL_NEW-CLO_MEN_NIKE-SHIRT_GREY is fully in stock across all canonical sizes. Activate sellable Kaspi offers for Universal and STORE-B from fresh ACTIVE/ARCHIVE merchant downloads using guarded full-ACTIVE safe-active-patch uploads, preserve every non-target active offer unchanged, keep Nike-shirt Repricer competitive settings with min_price=1884 and max_price=4990, and verify target rows after Repricer Kaspi import/update.",
+  "canonical_sku_key": "CL_NEW-CLO_MEN_NIKE-SHIRT_GREY",
+  "public_seed_url": "https://kaspi.kz/shop/p/rashgard-30203092-627506878-seryi-48-146535073/",
+  "public_grey_product_codes_from_seed_configurator": [
+    "146535072",
+    "146535073",
+    "146535075",
+    "146535065"
+  ],
+  "canonical_sizes": [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL"
+  ],
+  "stock_authority": "Owner stated all Nike-grey T-shirt sizes are fully in stock on 2026-06-03.",
+  "force_off_override": "This owner-approved Nike-grey restock exempts CL_NEW-CLO_MEN_NIKE-SHIRT_GREY from the generic SHIRT_GREY force-zero rule only; preserve the force-zero rule for non-Nike-grey shirt rows.",
+  "repricer_competitive_settings": {
+    "min_price": 1884,
+    "max_price": 4990,
+    "dumping": true
+  },
+  "verification_requirements": [
+    "fresh_kaspi_active_archive_downloads",
+    "full_active_safe_patch_non_target_preservation",
+    "target_rows_active_in_kaspi_after_upload",
+    "repricer_kaspi_import_update_after_wait",
+    "repricer_target_rows_dumping_enabled_min1884_max4990",
+    "regression"
+  ]
+}

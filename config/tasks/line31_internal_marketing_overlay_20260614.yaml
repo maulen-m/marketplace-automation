@@ -1,0 +1,118 @@
+schema_version: web_auto.line31_internal_marketing_overlay.v1
+store: ACMEWEAR
+merchant_id: "759051"
+store_code: "30137883"
+timezone: Asia/Almaty
+prepared_at: "2026-06-13 20:00:00 +05:00"
+last_updated_local: "2026-06-22 12:28:45 +05"
+launch_allowed_now: false
+not_before_at: "2026-06-14 20:30:00 +05:00"
+
+purpose: >
+  Prep-only gate for LINE31 Kaspi internal marketing as a separate cash-flow
+  overlay after the ads orchestrator closes the LINE31 deep-link +72h read.
+  This config authorizes no current live write.
+
+price_context:
+  previous_required_price_kzt: 16900
+  current_required_price_kzt: 24990
+  verified_at_local: "2026-06-22 12:28:45 +05"
+  source: "fresh ACMEWEAR Kaspi ACTIVE/ARCHIVE pricelist readback"
+  evidence: "runs/kaspi_pricelist_ops/20260622_120720_acmewear_family_price_change_live/ACMEWEAR_FAMILY_PRICE_CHANGE_LIVE_CLOSEOUT.md"
+
+orchestrator_dependency:
+  name: line31_deep_link_plus72h_read
+  owner: ads_orchestrator
+  required_status: CLOSED
+  status_at_prep: NOT_VERIFIED_NOT_DUE
+  evidence_required_after_not_before: true
+
+budget_policy:
+  total_daily_cap_min_kzt: 10000
+  total_daily_cap_max_kzt: 15000
+  freeze_after_launch_hours: 72
+  change_policy: emergency_stop_only
+
+target_order:
+  - route_id: line31_po1o_olive_cardamom
+    priority: 1
+    label: LINE31 Olive/Cardamom Green PO-1O
+    candidate_master_code: "20887378b"
+    candidate_card_id: "162585876"
+    public_card_url: https://kaspi.kz/shop/p/acmewear-of-line31-st-sb-xl-162585876/
+    sku_family_hint: CL_OF_ARC_WM_LINE31_B-C-005_CARDAMOM-GREEN_J-C-005_CARDAMOM-GREEN_L-C-015_OLIVE-GREEN
+    known_stock_readback_hint:
+      source: runs/kaspi_pricelist_ops/20260611_211542_acmewear/line31_po1o_olive_activation_readback/line31_po1o_olive_cardamom_fresh_readback.csv
+      active_sizes:
+        - S
+        - M
+        - L
+        - XL
+        - 2XL
+      disabled_sizes:
+        - 3XL
+      previous_required_price_kzt: 16900
+      required_price_kzt: 24990
+    suggested_daily_budget_kzt: 5000
+    launch_strategy: resume_existing_paused_if_safe_else_minimum_new_campaign_after_gates
+    identity_status_at_prep: CANDIDATE_HINT_ONLY_REQUIRES_FRESH_READ
+  - route_id: line31_iws_mixed
+    priority: 2
+    label: LINE31 IWS Mixed
+    candidate_master_code: "20970889b"
+    candidate_card_id: "163252823"
+    public_card_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-line31-st-sb-xl-belyi-chernyi-46-163252823/
+    sku_family_hint: CL_OF_ARC_WM_LINE31_B-C-011_IVORY_J-C-026_WHITE_L-C-023_STARRY-BLACK
+    suggested_daily_budget_kzt: 5000
+    launch_strategy: resume_existing_paused_if_safe_else_minimum_new_campaign_after_gates
+    identity_status_at_prep: CANDIDATE_HINT_ONLY_REQUIRES_FRESH_READ
+  - route_id: line31_starry_black
+    priority: 3
+    label: LINE31 Starry Black
+    candidate_master_code: "20754945b"
+    candidate_card_id: "161761349"
+    public_card_url: https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-of-line31-st-sb-2xl-chernyi-2xl-161761349/
+    known_existing_campaign_id: "2695637"
+    known_existing_campaign_name: LINE31_ST_25.3.26_01_05_00
+    known_product_sku: "20754945b"
+    sku_family_hint: CL_OF_ARC_WM_LINE31_C-023_STARRY-BLACK
+    suggested_daily_budget_kzt_min: 3000
+    suggested_daily_budget_kzt_max: 5000
+    launch_strategy: prefer_resume_existing_campaign_after_fresh_preflight
+    identity_status_at_prep: PRIOR_CAMPAIGN_KNOWN_REQUIRES_FRESH_READ
+
+fresh_prewrite_gates:
+  - id: not_before_time
+    requirement: current_almaty_time_after_2026_06_14_203000
+  - id: orchestrator_closed
+    requirement: ads_orchestrator_line31_deep_link_plus72h_read_closed
+  - id: marketing_read
+    requirement: live_readonly_fetch_existing_line31_campaigns_status_products_bids_budgets_spend_views_clicks_orders
+  - id: offer_identity
+    requirement: exact_shortlink_free_offer_card_identity_for_each_target
+  - id: buy_box_price_stock
+    requirement: buy_box_acmewear_price_24990_active_sizes_match_stock_olive_3xl_disabled_if_zero
+
+allowed_writes_after_gates:
+  - resume_existing_paused_line31_internal_marketing_campaign
+  - create_minimum_line31_campaign_object_only_if_no_safe_paused_object_exists
+  - set_line31_internal_kaspi_marketing_budget_bid_within_cap
+
+forbidden_writes:
+  - Meta
+  - CRM
+  - web_deploy
+  - stock
+  - price
+  - Telegram
+  - Repricer
+  - Autonomous_business
+
+reporting_note: "Kaspi internal marketing is a cash-flow overlay and must be annotated as active background in Meta/LINE31 reads."
+
+session_guard:
+  never_store_shortlink_session_values: true
+  forbidden_session_key_names:
+    - sid
+    - auth_session
+    - marketing_session

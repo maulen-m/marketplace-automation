@@ -1,0 +1,209 @@
+schema_version: web_auto.acmewear_capital_release_marketing_scope.v1
+store: ACMEWEAR
+merchant_id: "759051"
+store_code: "30137883"
+timezone: Asia/Almaty
+live_writes_allowed: false
+write_approval_required: OWNER_APPROVAL_REQUIRED_FOR_ANY_WRITE
+
+purpose: >
+  Read-only six-hour monitoring scope for ACMEWEAR capital-release experiments:
+  Line61 parent lanes, LINE51 parent lanes, active child-bundle campaigns, and
+  the Rush31 long-sleeve 3-in-1 stock route if/when a campaign is discovered.
+
+campaigns:
+  - campaign_id: "2545773"
+    route_id: line61_parent_st
+    product_family: LINE61
+    lane: parent_sport_suit
+    product_sku: "19796919b"
+    merchant_sku_hint: CL_NEW-CLO2_MEN_SUIT-61_BLACK_K-O
+    current_owner_context: "BID160/cap40000/price19990 after owner manual BID change at 2026-06-23 18:51:02 +05"
+    daily_view_target_min: 12000
+    daily_view_target_max: 25000
+    zero_order_spend_watch_kzt: 6000
+  - campaign_id: "2629982"
+    route_id: line61_parent_trm
+    product_family: LINE61
+    lane: parent_thermal
+    product_sku: "19819350b"
+    merchant_sku_hint: CL_NEW-CLO2_MEN_SUIT-61_BLACK_K-O_TRM
+    current_owner_context: "BID100/cap25000/price19990 after owner manual BID change at 2026-06-23 18:51:02 +05"
+    daily_view_target_min: 800
+    daily_view_target_max: 3000
+    zero_order_spend_watch_kzt: 2500
+  - campaign_id: "2380614"
+    route_id: line51_g1_original_sport_suit
+    product_family: LINE51
+    lane: group_1_original_sport_suit
+    product_sku: "19102598b"
+    merchant_sku_hint: CL_OC_MEN_LINE51_WHITE
+    current_owner_context: "BID160/cap15000/price16990; owner reports underexposed despite higher BID; seller-bonus promo 132069 manually increased from 6% to 12% at owner-report timestamp 2026-07-01 12:55:57 +05"
+    daily_view_target_min: 20000
+    daily_view_target_max: 35000
+    zero_order_spend_watch_kzt: 7000
+  - campaign_id: "2626530"
+    route_id: line51_g2_ko_sport_suit
+    product_family: LINE51
+    lane: group_2_ko_sport_suit
+    product_sku: "20386415b"
+    merchant_sku_hint: CL_OC_MEN_LINE51_WHITE_K-O_ST
+    current_owner_context: "BID100/cap6000/price16990 active K-O ST route after owner manual BID change at 2026-06-23 18:51:02 +05"
+    daily_view_target_min: 0
+    daily_view_target_max: 0
+    zero_order_spend_watch_kzt: 0
+  - campaign_id: "2690256"
+    route_id: line51_g3_ko_thermal_set
+    product_family: LINE51
+    lane: group_3_ko_thermal_set
+    product_sku: "20397237b"
+    merchant_sku_hint: CL_OC_MEN_LINE51_WHITE_K-O_TRM
+    current_owner_context: "OFF-ACTIVE after owner-approved 2026-06-22 21:04 +05 ACTIVE pricelist removal; do not treat as active sellable demand surface unless future fresh ACTIVE readback proves reactivation"
+    daily_view_target_min: 0
+    daily_view_target_max: 0
+    zero_order_spend_watch_kzt: 0
+  - campaign_id: "2794142"
+    route_id: child_suit31_ls_st
+    product_family: LINE61_CHILD
+    lane: LINE61|SUIT-31-LS|ST
+    product_sku: "21282790b"
+    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth; owner launched seller-bonus promo 228200 / Line61_subchild_ls31_ls21_bonuses_9% at 2026-06-30 21:04:28 +05"
+  - campaign_id: "2794144"
+    route_id: child_suit21_ls_st
+    product_family: LINE61_CHILD
+    lane: LINE61|SUIT-21-LS|ST
+    product_sku: "21282795b"
+    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth"
+  - campaign_id: "2794146"
+    route_id: child_suit21_ts_st
+    product_family: LINE61_CHILD
+    lane: LINE61|SUIT-21-TS|ST
+    product_sku: "21282801b"
+    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth"
+  - campaign_id: "2794148"
+    route_id: child_beli21_ts_st
+    product_family: LINE51_CHILD
+    lane: LINE51|LINE-21-TS|ST
+    product_sku: "21282806b"
+    current_owner_context: "Child bundle active; LINE51 4XL owner-truth out-of-stock"
+  - campaign_id: "2794149"
+    route_id: child_suit31_ts_st
+    product_family: LINE61_CHILD
+    lane: LINE61|SUIT-31-TS|ST
+    product_sku: "21282813b"
+    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth"
+  - campaign_id: "2794150"
+    route_id: child_beli21_ls_st
+    product_family: LINE51_CHILD
+    lane: LINE51|LINE-21-LS|ST
+    product_sku: "21282818b"
+    current_owner_context: "Child bundle active; LINE51 4XL owner-truth out-of-stock"
+  - campaign_id: "2794152"
+    route_id: child_beli31_ts_st
+    product_family: LINE51_CHILD
+    lane: LINE51|LINE-31-TS|ST
+    product_sku: "21282822b"
+    current_owner_context: "Child bundle active; LINE51 4XL owner-truth out-of-stock"
+  - campaign_id: "2794153"
+    route_id: child_beli31_ls_st
+    product_family: LINE51_CHILD
+    lane: LINE51|LINE-31-LS|ST
+    product_sku: "21282826b"
+    current_owner_context: "Child bundle active; LINE51 4XL owner-truth out-of-stock"
+
+stock_truth:
+  line61_owner_stock_event:
+    event_at: "2026-05-25 17:10:38 +05:00"
+    sizes_counted_before_shipping:
+      L: 151
+      XL: 100
+      2XL: 24
+      3XL: 25
+    sales_off_event_at: "2026-05-25 18:16:35 +05:00"
+    sales_off_sizes:
+      - 2XL
+      - 3XL
+    note: "Owner removed Line61 over-probable/low-stock 2XL and 3XL from parent and sub-bundles."
+  line51_owner_stock_event:
+    event_at: "2026-05-27 owner prompt"
+    out_of_stock_sizes:
+      - 4XL
+
+  rush31_inbound_truth:
+    sku_key: CL_NC_MEN_RUSH-31_BLACK
+    inbound_workbook: ~/Documents/useful tables/Main crm spreadsheets/main tables/Purchase_orders/vibe_code_PO/Inbound_calendar_V10.002.xlsx
+    arrival_context: "PO-6.0b arrived 2026-03-02 according to workbook log"
+    initial_units: 300
+    size_split:
+      S: 60
+      M: 30
+      L: 50
+      XL: 70
+      2XL: 50
+      3XL: 30
+      4XL: 10
+    note: "Treat as independent long-sleeve 3-in-1/Rush31 stock route unless sales-depletion evidence proves otherwise."
+
+promos:
+  - promo_id: "228200"
+    name: "Line61_subchild_ls31_ls21_bonuses_9%"
+    promo_name: "Line61_subchild_ls31_ls21_bonuses_9%"
+    status: active_owner_reported
+    surface: seller_bonus
+    type_label: recommended_products
+    bonus_percent: 9
+    bonus_kzt: 629.1
+    price_kzt: 6990
+    product_score: "7.1/10"
+    product_status: active
+    product_scope: "BLK LS31 product offer; owner wording also names LS31/LS21 bonus set"
+    campaign_id: "2794142"
+    product_sku: "21282790b"
+    merchant_sku: "SUIT-31-LS-ST-XL-50"
+    sku_key: "SUIT-31-LS"
+    url: "https://marketing.kaspi.kz/bonuses/products/promotions/228200"
+    evidence_json: "runs/kaspi_marketing_manual_decisions/20260630_210428_line61_subchild_ls31_ls21_bonus9_owner_decision/BASELINE_SUMMARY.json"
+    live_capture_text: "runs/kaspi_marketing_manual_decisions/20260630_210428_line61_subchild_ls31_ls21_bonus9_owner_decision/20260630_210428_line31_fetch/seller_bonus_live/promo_228200_detail_text.txt"
+    live_capture_screenshot: "runs/kaspi_marketing_manual_decisions/20260630_210428_line61_subchild_ls31_ls21_bonus9_owner_decision/20260630_210428_line31_fetch/seller_bonus_live/promo_228200_detail.png"
+    owner_event_at: "2026-06-30 21:04:28 +05:00"
+    owner_event: "owner manually launched a 9% seller-bonus promo from sell price for the BLK LS31 product offer to help sell off massive stock and later compare economic and financial health"
+    cash_flow_overlay_note: "Seller-bonus spend must be tracked separately from CPC ad spend, API order truth, buyout/final sales, stock movement, and true COGS."
+    note: "Owner truth says LINE51 4XL is the only current out-of-stock size; reconcile against fresh pricelist before any write."
+  - promo_id: "132069"
+    name: "Line51_K-OG_ST_5%"
+    promo_name: "Line51_K-OG_ST_5%"
+    status: owner_reported_active_bonus12
+    surface: seller_bonus
+    type_label: recommended_products
+    product_family: LINE51
+    product_scope: "Line51 black-white original sport-suit product group"
+    campaign_id: "2380614"
+    route_id: line51_g1_original_sport_suit
+    product_sku: "19102598b"
+    merchant_sku_hint: CL_OC_MEN_LINE51_WHITE
+    price_kzt: 16990
+    previous_bonus_percent: 6
+    previous_bonus_kzt: 1019.4
+    previous_projected_views_multiplier: 1.5
+    bonus_percent: 12
+    bonus_kzt: 2039
+    projected_views_multiplier: 2.5
+    intermediate_bonus_percent: 9
+    intermediate_bonus_kzt: 1529
+    intermediate_projected_views_multiplier: 2.0
+    url: "https://marketing.kaspi.kz/bonuses/products/promotions/132069?startDate=2026-06-30&endDate=2026-06-30"
+    product_group_url: "https://kaspi.kz/shop/p/sportivnyi-kostjum-acmewear-acmewear-01-chernyi-belyi-m-134547494/?hasVariants=true"
+    evidence_json: "runs/kaspi_marketing_manual_decisions/20260701_125557_line51_kog_bonus12_owner_decision/OWNER_DECISION.json"
+    evidence_md: "runs/kaspi_marketing_manual_decisions/20260701_125557_line51_kog_bonus12_owner_decision/OWNER_DECISION.md"
+    evidence_screenshot: "runs/kaspi_marketing_manual_decisions/20260701_125557_line51_kog_bonus12_owner_decision/evidence/owner_bonus12_modal.png"
+    stable_record: "Docs/experiments/line51/line51_kog_bonus12_owner_decision_20260701_125557.md"
+    owner_event_at: "2026-07-01 12:55:57 +05:00"
+    owner_event_timestamp_note: "Owner did not provide a separate exact mutation timestamp; use this report/record timestamp as analysis split until fresh platform evidence provides a better boundary."
+    owner_event: "owner manually increased seller-bonus promo 132069 from 6% to 12% because Kaspi projected 2.5x views versus 1.5x at 6%, and Line51 has large frozen stock to liquidate."
+    cash_flow_overlay_note: "Seller-bonus spend must be tracked separately from CPC ad spend, API order truth, buyout/final sales, stock movement, and true COGS."
+    note: "Promo name still says 5%; do not infer current bonus percent from name. Treat Kaspi projected multiplier as forecast context, not realized performance."
+
+economics_policy:
+  minimum_after_ads_profit_over_cogs_pct: 35
+  cogs_formula: "base_cost + delivery_cost"
+  gift_note: "Free CNY build-back gift bag must be included as offer cost/context for Line61, LINE51, and child bundle scenarios."

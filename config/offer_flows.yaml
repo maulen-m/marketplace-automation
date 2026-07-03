@@ -95,17 +95,20 @@ flows:
     goal: existing-card-onboarding
     artifact_state: reviewed-offer-upload-workbook
     owner_surface: Web_automation
-    stores: [UNIVERSAL, STORE-B, ACMEWEAR]
+    stores: [UNIVERSAL, STORE-B]
     write_surface: existing-card-ui
     priority: 30
     summary: >
       Use this flow when the public Kaspi card already exists and rows are normalized in an
       `offer upload` workbook that must be applied through the seller cabinet card-attach flow.
+      For LINE51 clearance/fixed-price onboarding this flow is Universal and STORE-B only;
+      ACMEWEAR/OnlyFeed requires a separate owner-approved contract.
     primary_entrypoint: python3 -m web_auto.kaspi_offer_ui_upload
     command_examples:
       - python3 -m web_auto.kaspi_offer_ui_upload --list-windows --json
-      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores <stores> --dry-run --json
-      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores <stores> --window-map <map> --confirm --json
+      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores UNIVERSAL,STOREB --dry-run --json
+      - python3 -m web_auto.kaspi_offer_ui_upload --workbook <xlsx> --stores UNIVERSAL,STOREB --window-map <map> --confirm --step-screenshots --json
+      - python3 -m web_auto.kaspi_offer_ui_upload_playwright --workbook <xlsx> --store UNIVERSAL --dry-run --headless --json
     dry_run_supported: true
     confirm_required: true
     verify_required: true
@@ -115,15 +118,24 @@ flows:
       - Workbook contains a valid `offer upload` sheet
       - Merchant window mapping is correct for the target store
       - Dry-run validation passes before any confirm run
+      - Product code or exact code route is used when available instead of pasting public URL search into article fields
+      - Seller article/name come from internal merchant semantics, not public URL or random numeric fallback
+      - Barcode is intentionally left blank unless a separate owner-approved contract requires it
     success_checks:
       - Row summary is green or failed rows are explicitly reviewed
-      - Live offer-page verification confirms commercial values
+      - Success modal is captured and any promised publication window is honored
+      - Fresh ACTIVE/ARCHIVE readback verifies exact SKU state, price, and warehouse stock values
     stoplines:
       - Merchant header does not match the intended store
       - Workbook rows are missing required fields
+      - Public marketplace URL appears in seller article or seller offer-name fields
+      - Exact-code page has size-like options but the requested size is absent
+      - Row is absent after the promised publication window
       - Live page contradicts nominal success and requires direct repair
     fallback_flow_ids: []
     docs_refs:
+      - Docs/offer_ops/KASPI_EXISTING_CARD_UI_UPLOAD_SPEC.md
+      - config/tasks/kaspi_existing_card_ui_upload_contract.yaml
       - Docs/sessions/2026-03-28_ACMEWEAR_Offer_Recovery_and_Chrome_Autoconnect_Report.md
       - Docs/offer_ops/RECOVERY_PLAYBOOK.md
     skill_refs:
@@ -310,12 +322,14 @@ flows:
     goal: existing-card-onboarding
     artifact_state: reviewed-offer-upload-workbook
     owner_surface: Web_automation
-    stores: [UNIVERSAL, STORE-B, ACMEWEAR]
+    stores: [UNIVERSAL, STORE-B]
     write_surface: existing-card-ui
     priority: 80
     summary: >
       Placeholder fallback for cases where the everyday Chrome attach path is blocked and a fully
       Playwright-driven merchant login flow is safer or more durable for workbook-based onboarding.
+      It inherits the exact-code, barcode-blank, publication-window, and fresh-readback rules from
+      the existing-card UI upload spec.
     primary_entrypoint: python3 -m web_auto.kaspi_offer_ui_upload_playwright
     command_examples:
       - python3 -m web_auto.kaspi_offer_ui_upload_playwright --help
@@ -336,6 +350,8 @@ flows:
     fallback_flow_ids:
       - kaspi-existing-card-ui-upload
     docs_refs:
+      - Docs/offer_ops/KASPI_EXISTING_CARD_UI_UPLOAD_SPEC.md
+      - config/tasks/kaspi_existing_card_ui_upload_contract.yaml
       - Docs/sessions/2026-03-28_ACMEWEAR_Offer_Recovery_and_Chrome_Autoconnect_Report.md
     skill_refs:
       - kaspi-offer-ui-upload-master

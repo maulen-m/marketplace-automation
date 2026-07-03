@@ -1,0 +1,34 @@
+schema_version: web_auto.kaspi_marketing_directapi_controls.v1
+store: ACMEWEAR
+merchant_id: "759051"
+store_code: "30137883"
+target_date: "2026-05-08"
+actions:
+  - action_id: example_bid
+    operation: product_bid
+    campaign_id: "2629982"
+    sku: "19819350b"
+    expected_current_bid: 120
+    new_bid: 130
+  - action_id: example_budget
+    operation: campaign_budget
+    campaign_id: "2380614"
+    expected_current_budget: 9000
+    new_daily_budget: 12000
+  - action_id: example_product_status
+    operation: product_status
+    campaign_id: "2695637"
+    sku: "20754945b"
+    expected_current_product_status: Paused
+    target_product_status: Active
+  - action_id: example_campaign_resume
+    operation: campaign_resume
+    campaign_id: "2695637"
+    expected_current_campaign_state: Paused
+  - action_id: example_campaign_suspend
+    operation: campaign_suspend
+    campaign_id: "2794142"
+    expected_current_campaign_state: Enabled
+    target_campaign_state: Paused
+    expected_product_sku: "21282790b"
+    expected_merchant_sku: "SUIT-31-LS-ST-XL-50"

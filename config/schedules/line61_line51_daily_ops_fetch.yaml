@@ -1,0 +1,70 @@
+schema_version: web_auto.daily_ops_fetch.v1
+timezone: Asia/Almaty
+label: com.webautomation.line61_line51_daily_ops_fetch
+cadence_seconds: 86400
+run_root: runs/line61_line51_daily_ops_fetch
+mode: read_only
+store:
+  name: ACMEWEAR
+  marketing_merchant_id: "759051"
+  marketing_store_code: "30137883"
+sources:
+  marketing:
+    db_path: data/kaspi_marketing.sqlite
+    campaigns:
+      - family: LINE61
+        lane: suit_st
+        campaign_id: "2545773"
+        campaign_product_sku: "19796919b"
+        merchant_sku_prefix: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+      - family: LINE61
+        lane: suit_trm
+        campaign_id: "2629982"
+        campaign_product_sku: "19819350b"
+        merchant_sku_prefix: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+      - family: LINE51
+        lane: group_1_original
+        campaign_id: "2380614"
+        campaign_product_sku: "19102598b"
+        merchant_sku_prefix: CL_OC_MEN_LINE51_WHITE
+      - family: LINE51
+        lane: group_2_ko_st
+        campaign_id: "2626530"
+        campaign_product_sku: "20386415b"
+        merchant_sku_prefix: CL_OC_MEN_LINE51_WHITE
+      - family: LINE51
+        lane: group_3_ko_trm
+        campaign_id: "2690256"
+        campaign_product_sku: "20397237b"
+        merchant_sku_prefix: CL_OC_MEN_LINE51_WHITE
+  pricelist:
+    download_store: ACMEWEAR
+    offer_sku_prefixes:
+      - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+      - CL_OC_MEN_LINE51_WHITE
+  autonomous_business_readonly:
+    db_path: ~/Docs/Autonomous_business/db/app.db
+    store_code: ACMEWEAR
+    sku_keys:
+      - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+      - CL_OC_MEN_LINE51_WHITE
+guardrails:
+  forbidden_writes:
+    - ~/Docs/Autonomous_business/**
+    - Kaspi price
+    - Kaspi stock
+    - Kaspi listing state
+    - Kaspi campaign bid
+    - Kaspi campaign budget
+    - Kaspi campaign state
+    - Meta/Facebook
+    - Repricer
+    - CRM
+    - scheduler mutation from daily run
+    - secrets/cookies/storageState/tokens
+  daily_run_may_write_only:
+    - runs/line61_line51_daily_ops_fetch/**
+    - data/kaspi_marketing.sqlite
+notes:
+  - The daily run fetches, exports, and reports. It never recommends or executes a live write.
+  - The generated CODEX_5_5_HIGH_REVIEW_PROMPT.md is a review prompt for a model/agent, not an automatic paid model invocation.

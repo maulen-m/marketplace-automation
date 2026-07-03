@@ -1,0 +1,113 @@
+schema_version: web_auto.kaspi_existing_card_ui_upload_contract.v1
+task_id: kaspi_existing_card_ui_upload_contract
+status: active
+owner_surface: Web_automation
+
+docs:
+  primary_spec: Docs/offer_ops/KASPI_EXISTING_CARD_UI_UPLOAD_SPEC.md
+  flow_registry: config/offer_flows.yaml
+
+default_allowed_stores:
+  UNIVERSAL: "30000001"
+  STOREB: "30000002"
+
+forbidden_store_aliases:
+  - ACMEWEAR
+  - ONLYFEED
+  - ONLY-FIT
+  - ONLY-FEED
+
+forbidden_merchant_ids:
+  - "30137883"
+
+workbook:
+  sheet_name: offer upload
+  required_columns:
+    - upload_enabled
+    - store_code
+    - merchant_id
+    - variant_url
+    - expected_kaspi_heading
+    - size_rus
+    - merchant_sku_article
+    - merchant_offer_name
+    - price_kzt
+    - stock_pp1
+    - stock_pp2
+  recommended_columns:
+    - product_code
+    - resolved_sku_id
+    - resolved_sku_key
+    - repricer_protection_prefix
+    - strategy_tag
+    - notes
+  optional_columns:
+    - barcode
+
+identity_rules:
+  prefer_product_code_for_search: true
+  exact_code_entry_url_template: "https://kaspi.kz/mc/#/add-product/v2/link-catalog?code={product_code}&brand="
+  forbid_marketplace_url_in_article: true
+  forbid_marketplace_url_in_offer_name: true
+  require_semantic_merchant_article: true
+  semantic_article_sources:
+    - resolved_sku_id
+    - resolved_sku_key
+  verify_before_continue:
+    - merchant_id
+    - product_code
+    - expected_kaspi_heading
+    - size_rus_when_size_chips_exist
+  no_size_chip_direct_code_rule: allow_only_when_heading_and_code_match_and_remaining_options_are_not_size_like
+
+ui_rules:
+  step_screenshots_required_for_first_run_or_logic_change: true
+  screenshot_points:
+    - before_product_selection
+    - after_identity_verification
+    - before_price_stock_save
+    - success_modal_or_failure_state
+  barcode_policy: leave_empty_by_default
+  barcode_allowed_only_with_explicit_contract: true
+  price_stock_mapping: label_context_not_slot_position
+  pp2_policy: fill_only_when_second_labeled_stock_input_exists
+  computer_use_policy: last_resort
+
+verification:
+  success_modal_is_not_final: true
+  wait_until_publication_time_from_success_modal: true
+  final_authority: fresh_active_archive_pricelist_readback
+  required_readback_fields:
+    - merchant_sku_article
+    - state
+    - price_kzt
+    - stock_pp1
+    - stock_pp2
+    - stock_pp3
+    - stock_pp4
+    - stock_pp5
+    - merchant_id
+  upload_history_is_supporting_evidence_only: true
+
+repair_rules:
+  row_absent_before_publication_window: wait_and_retry_readback
+  row_absent_after_publication_window: classify_ui_creation_failed
+  row_archive_or_wrong_price_after_publication_window: use_safe_active_patch_after_fresh_download
+  wrong_store_or_wrong_public_card: stop_and_write_incident
+  safe_active_patch_confirmation: FULL_ACTIVE_STATE
+
+repricer:
+  fixed_price_protection_prefix_required_when_manual_strategy: true
+  immediate_price_control_requires_owner_approval: true
+  example_protected_prefixes:
+    - CL_OC_MEN_LINE51_WHITE_KO_CLEAR
+
+completion_gate:
+  green_requires:
+    - dry_run_passed
+    - approved_store_merchant_ids_matched
+    - exact_product_identity_verified
+    - barcode_policy_followed
+    - publication_window_honored
+    - fresh_active_archive_readback_verified
+    - failures_or_repairs_listed_with_evidence

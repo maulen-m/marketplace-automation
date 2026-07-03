@@ -1,0 +1,195 @@
+schema_version: web_auto.scheduled_checkpoints.v1
+timezone: Asia/Almaty
+run_root: runs/scheduled_checkpoints/suit31_ls_8990_price_ladder
+
+jobs:
+  - job_id: suit31_ls_8990_24h_fetch_20260611_2205
+    title: SUIT-31-LS 8990 step 24h read-only fetch
+    scheduled_at: "2026-06-11 22:05:00"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review 24h received-order and ad-spend evidence; no automatic price, bid, stock, Repricer, or campaign write is authorized.
+    commands:
+      - id: suit31_ls_8990_24h_marketing_fetch
+        description: Fetch campaign 2794142 daily Marketing snapshot into the shared experiment DB.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date
+          - "2026-06-11"
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_24h_fetch_20260611_2205
+          - --db-path
+          - data/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_24h_marketing_fetch','live_writes_allowed':False}))"
+      - id: suit31_ls_8990_24h_price_readback
+        description: Download ACMEWEAR current ACTIVE/ARCHIVE pricelists for price readback.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - ACMEWEAR
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_24h_fetch_20260611_2205/pricelist_readback
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_24h_price_readback','live_writes_allowed':False}))"
+
+  - job_id: suit31_ls_8990_48h_fetch_20260612_2205
+    title: SUIT-31-LS 8990 step 48h read-only fetch
+    scheduled_at: "2026-06-12 22:05:00"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review 48h received-order and ad-spend evidence; no automatic price, bid, stock, Repricer, or campaign write is authorized.
+    commands:
+      - id: suit31_ls_8990_48h_marketing_fetch
+        description: Fetch campaign 2794142 daily Marketing snapshot into the shared experiment DB.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date
+          - "2026-06-12"
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_48h_fetch_20260612_2205
+          - --db-path
+          - data/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_48h_marketing_fetch','live_writes_allowed':False}))"
+      - id: suit31_ls_8990_48h_price_readback
+        description: Download ACMEWEAR current ACTIVE/ARCHIVE pricelists for price readback.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - ACMEWEAR
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_48h_fetch_20260612_2205/pricelist_readback
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_48h_price_readback','live_writes_allowed':False}))"
+
+  - job_id: suit31_ls_8990_72h_fetch_20260613_2205
+    title: SUIT-31-LS 8990 step 72h read-only fetch
+    scheduled_at: "2026-06-13 22:05:00"
+    max_lag_minutes: 720
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review 72h closeout report before approving the 8490 step; no automatic price, bid, stock, Repricer, or campaign write is authorized.
+    commands:
+      - id: suit31_ls_8990_72h_marketing_fetch
+        description: Fetch campaign 2794142 daily Marketing snapshot into the shared experiment DB.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-id
+          - "2794142"
+          - --date
+          - "2026-06-13"
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_72h_fetch_20260613_2205
+          - --db-path
+          - data/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_72h_marketing_fetch','live_writes_allowed':False}))"
+      - id: suit31_ls_8990_72h_price_readback
+        description: Download ACMEWEAR current ACTIVE/ARCHIVE pricelists for price readback.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - --env-file
+          - ../Autonomous_business/.env
+          - kaspi-pricelist
+          - download
+          - --store
+          - ACMEWEAR
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_72h_fetch_20260613_2205/pricelist_readback
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_72h_price_readback','live_writes_allowed':False}))"
+      - id: suit31_ls_8990_72h_experiment_report
+        description: Build the 72h experiment report from logged event, Marketing DB, and Autonomous Business order truth.
+        read_only: true
+        timeout_seconds: 600
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - build-experiment-report
+          - --event-id
+          - "20260610_220220_acmewear_2794142_price_upload_price_ade4280e"
+          - --db-path
+          - data/kaspi_marketing.sqlite
+          - --ledger-path
+          - data/marketing_experiment_change_log.csv
+          - --run-dir
+          - runs/kaspi_marketing_experiments/suit31_ls_8990_72h_report_20260613_2205
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','job':'suit31_ls_8990_72h_experiment_report','live_writes_allowed':False}))"
+

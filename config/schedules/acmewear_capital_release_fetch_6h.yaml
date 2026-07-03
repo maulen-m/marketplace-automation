@@ -1,0 +1,136 @@
+schema_version: web_auto.scheduled_checkpoints.v1
+timezone: Asia/Almaty
+run_root: runs/scheduled_checkpoints/acmewear_capital_release_fetch_6h
+
+jobs:
+  - job_id: acmewear_capital_release_fetch_20260527_1900
+    title: ACMEWEAR parent child Rush31 read-only fetch 1 of 4
+    scheduled_at: "2026-05-27 19:00:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review read-only campaign snapshot; no automatic bid, budget, state, stock, price, promo, Repricer, CRM, Meta, scheduler, or database write is authorized.
+    commands:
+      - id: acmewear_capital_release_campaign_fetch_20260527_1900
+        description: Fetch/read current Kaspi Marketing campaign snapshot for parent and child ACMEWEAR lanes.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-ids
+          - "2545773,2629982,2380614,2626530,2690256,2794142,2794144,2794146,2794148,2794149,2794150,2794152,2794153"
+          - --date
+          - "2026-05-27"
+          - --run-dir
+          - runs/kaspi_marketing_capital_release_fetch/20260527_1900
+          - --db-path
+          - runs/kaspi_marketing_capital_release_fetch/20260527_1900/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','scope':'acmewear_capital_release','job':'20260527_1900','live_writes_allowed':False}))"
+
+  - job_id: acmewear_capital_release_fetch_20260528_0100
+    title: ACMEWEAR parent child Rush31 read-only fetch 2 of 4
+    scheduled_at: "2026-05-28 01:00:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review read-only campaign snapshot; no automatic bid, budget, state, stock, price, promo, Repricer, CRM, Meta, scheduler, or database write is authorized.
+    commands:
+      - id: acmewear_capital_release_campaign_fetch_20260528_0100
+        description: Fetch/read current Kaspi Marketing campaign snapshot for parent and child ACMEWEAR lanes.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-ids
+          - "2545773,2629982,2380614,2626530,2690256,2794142,2794144,2794146,2794148,2794149,2794150,2794152,2794153"
+          - --date
+          - "2026-05-28"
+          - --run-dir
+          - runs/kaspi_marketing_capital_release_fetch/20260528_0100
+          - --db-path
+          - runs/kaspi_marketing_capital_release_fetch/20260528_0100/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','scope':'acmewear_capital_release','job':'20260528_0100','live_writes_allowed':False}))"
+
+  - job_id: acmewear_capital_release_fetch_20260528_0700
+    title: ACMEWEAR parent child Rush31 read-only fetch 3 of 4
+    scheduled_at: "2026-05-28 07:00:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review read-only campaign snapshot; no automatic bid, budget, state, stock, price, promo, Repricer, CRM, Meta, scheduler, or database write is authorized.
+    commands:
+      - id: acmewear_capital_release_campaign_fetch_20260528_0700
+        description: Fetch/read current Kaspi Marketing campaign snapshot for parent and child ACMEWEAR lanes.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-ids
+          - "2545773,2629982,2380614,2626530,2690256,2794142,2794144,2794146,2794148,2794149,2794150,2794152,2794153"
+          - --date
+          - "2026-05-28"
+          - --run-dir
+          - runs/kaspi_marketing_capital_release_fetch/20260528_0700
+          - --db-path
+          - runs/kaspi_marketing_capital_release_fetch/20260528_0700/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','scope':'acmewear_capital_release','job':'20260528_0700','live_writes_allowed':False}))"
+
+  - job_id: acmewear_capital_release_fetch_20260528_1300
+    title: ACMEWEAR parent child Rush31 read-only fetch 4 of 4
+    scheduled_at: "2026-05-28 13:00:00"
+    max_lag_minutes: 360
+    owner_approval_required_for_live_writes: true
+    next_owner_action: Review read-only campaign snapshot; no automatic bid, budget, state, stock, price, promo, Repricer, CRM, Meta, scheduler, or database write is authorized.
+    commands:
+      - id: acmewear_capital_release_campaign_fetch_20260528_1300
+        description: Fetch/read current Kaspi Marketing campaign snapshot for parent and child ACMEWEAR lanes.
+        read_only: true
+        timeout_seconds: 1800
+        allow_modes: ["dry-live", "live-readonly"]
+        argv:
+          - ./web-auto
+          - --json
+          - kaspi-marketing
+          - fetch-campaigns
+          - --store
+          - ACMEWEAR
+          - --campaign-ids
+          - "2545773,2629982,2380614,2626530,2690256,2794142,2794144,2794146,2794148,2794149,2794150,2794152,2794153"
+          - --date
+          - "2026-05-28"
+          - --run-dir
+          - runs/kaspi_marketing_capital_release_fetch/20260528_1300
+          - --db-path
+          - runs/kaspi_marketing_capital_release_fetch/20260528_1300/kaspi_marketing.sqlite
+          - --headless
+        dry_live_argv:
+          - python3
+          - -c
+          - "import json; print(json.dumps({'status':'planned','scope':'acmewear_capital_release','job':'20260528_1300','live_writes_allowed':False}))"

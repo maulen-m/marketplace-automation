@@ -55,6 +55,7 @@ class TaskConfig:
 class DumpingConfig:
     task_id: str
     accounts: list[Account]
+    protected_merchant_sku_prefixes: list[str]
     run: RunConfig
 
 
@@ -76,6 +77,7 @@ class MinPriceSyncConfig:
     external_skip_line52_locked_9990_store_ids: list[int]
     external_fix_max_below_target: bool
     external_fix_live_price_below_target: bool
+    protected_merchant_sku_prefixes: list[str]
     line52_pricing_profile: Line52PricingProfile
     run: RunConfig
 
@@ -131,6 +133,31 @@ def _load_run(raw: dict[str, Any]) -> RunConfig:
         checkpoint_path=str(run_raw.get("checkpoint_path", "data/checkpoints/repricer_competitors.json")),
         artifacts_dir=str(run_raw.get("artifacts_dir", "runs/repricer_competitors")),
     )
+
+
+def _load_protected_merchant_sku_prefixes(raw: dict[str, Any]) -> list[str]:
+    values: list[Any] = []
+    direct = raw.get("protected_merchant_sku_prefixes")
+    if direct is not None:
+        if not isinstance(direct, list):
+            raise ConfigError("protected_merchant_sku_prefixes must be a list when provided")
+        values.extend(direct)
+
+    protection_raw = raw.get("repricer_protection") or {}
+    if not isinstance(protection_raw, dict):
+        raise ConfigError("repricer_protection must be a mapping when provided")
+    nested = protection_raw.get("fixed_price_protected_merchant_sku_prefixes")
+    if nested is not None:
+        if not isinstance(nested, list):
+            raise ConfigError("repricer_protection.fixed_price_protected_merchant_sku_prefixes must be a list")
+        values.extend(nested)
+
+    out: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in out:
+            out.append(text)
+    return out
 
 
 def _load_line52_pricing_profile(raw: dict[str, Any]) -> Line52PricingProfile:
@@ -257,6 +284,7 @@ def load_dumping_config(path: str | Path) -> DumpingConfig:
     return DumpingConfig(
         task_id=task_id,
         accounts=accounts,
+        protected_merchant_sku_prefixes=_load_protected_merchant_sku_prefixes(raw),
         run=run,
     )
 
@@ -329,6 +357,7 @@ def load_min_price_sync_config(path: str | Path) -> MinPriceSyncConfig:
         external_skip_line52_locked_9990_store_ids=external_skip_line52_locked_9990_store_ids,
         external_fix_max_below_target=external_fix_max_below_target,
         external_fix_live_price_below_target=external_fix_live_price_below_target,
+        protected_merchant_sku_prefixes=_load_protected_merchant_sku_prefixes(raw),
         line52_pricing_profile=line52_pricing_profile,
         run=run,
     )

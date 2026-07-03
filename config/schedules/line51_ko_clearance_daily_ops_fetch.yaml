@@ -1,0 +1,43 @@
+schema_version: web_auto.daily_ops_fetch.v1
+timezone: Asia/Almaty
+label: com.webautomation.line51_ko_clearance_daily_ops_fetch
+cadence_seconds: 86400
+run_root: runs/line51_ko_clearance
+mode: read_only
+task_config: config/tasks/line51_ko_clearance_20260618.yaml
+sources:
+  autonomous_business_readonly:
+    db_path: ~/Docs/Autonomous_business/db/app.db
+    sku_key: CL_OC_MEN_LINE51_WHITE
+    sku_ids:
+      - CL_OC_MEN_LINE51_WHITE_S
+      - CL_OC_MEN_LINE51_WHITE_M
+      - CL_OC_MEN_LINE51_WHITE_L
+  public_kaspi_readonly:
+    city_ids:
+      - "710000000"
+      - "750000000"
+    product_codes:
+      - "132549028"
+      - "132549029"
+      - "132549030"
+guardrails:
+  forbidden_writes:
+    - ~/Docs/Autonomous_business/**
+    - Kaspi seller cabinet
+    - Kaspi price
+    - Kaspi stock
+    - Kaspi listing state
+    - Kaspi campaign bid
+    - Kaspi campaign budget
+    - Kaspi campaign state
+    - Repricer
+    - CRM
+    - scheduler installation
+    - secrets/cookies/storageState/tokens
+  daily_run_may_write_only:
+    - runs/line51_ko_clearance/**
+notes:
+  - This scheduled surface is a read-only observer/packet refresher, not an installed LaunchAgent.
+  - The owner decision is a temporary override until the main refactor provides conflict-free source-of-truth data.
+  - Parallel offer activation agents should read the latest run summary before making LINE51 KO clearance stock decisions.

@@ -467,3 +467,16 @@ forbidden_actions_observed:
   ads_change: false
   repricer_write: false
   autonomous_business_write: false
+
+current_live_overrides_20260622:
+  - owner_group: group_3
+    lane_id: line51_ko_thermal_set
+    status: removed_from_active_live_verified
+    owner_decision_at_local: "2026-06-22 21:04:18 +05"
+    verified_at_local: "2026-06-22 21:21:28 +05"
+    active_row_count: 0
+    archive_row_count: 10
+    uploaded_active_rows: 97
+    upload_history_id: 6a395d2f388fe85c626cf6d4
+    evidence_path: runs/kaspi_pricelist_ops/20260622_210303_acmewear_line51_trm_line31_esp2xl_off/CLOSEOUT.md
+    note: "This is a current override. The May baseline mapping above is preserved as historical evidence only."

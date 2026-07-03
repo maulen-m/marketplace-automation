@@ -1,0 +1,100 @@
+schema_version: web_auto.line51_ko_clearance.v1
+task_id: line51_ko_clearance_universal_storeb_20260618
+timezone: Asia/Almaty
+mode: packet_build_and_guarded_live_execution
+owner_decision_path: ~/Docs/Autonomous_business/config/owner_decisions/line51_ko_clearance_universal_storeb_2026_06_18.json
+temporary_override_only: true
+superseded_by: main_refactor_single_source_of_truth_when_merged
+
+autonomous_business:
+  db_path: ~/Docs/Autonomous_business/db/app.db
+  stock_confidence_csv: ~/Docs/Autonomous_business/exports/current/stock_truth_confidence/stock_truth_confidence_latest.csv
+  sku_key: CL_OC_MEN_LINE51_WHITE
+  cogs_kzt: 4680
+
+kaspi_public:
+  expected_heading: "Комплект черный, белый"
+  category: thermal_underwear_set
+  target_city_ids:
+    - "710000000"
+    - "750000000"
+  offer_view_url: https://kaspi.kz/yml/offer-view/offers
+
+stores:
+  - store_code: UNIVERSAL
+    store_label: Universal
+    merchant_id: 30000001
+  - store_code: STOREB
+    store_label: STORE-B
+    merchant_id: 30000002
+
+sizes:
+  - size: S
+    size_rus: "42"
+    product_code: "132549028"
+    sku_id: CL_OC_MEN_LINE51_WHITE_S
+    variant_url: https://kaspi.kz/shop/p/komplekt-0-beli-chernyi-belyi-s-132549028/
+    merchant_sku_article: CL_OC_MEN_LINE51_WHITE_KO_CLEAR_S_132549028
+    merchant_offer_name: "Комплект_ACMEWEAR_LINE51_KO_CLEAR_черный-белый_S_132549028"
+    price_kzt: 9990
+    visible_stock_pp1: 5
+    visible_stock_pp2: 0
+  - size: M
+    size_rus: "44"
+    product_code: "132549029"
+    sku_id: CL_OC_MEN_LINE51_WHITE_M
+    variant_url: https://kaspi.kz/shop/p/komplekt-1-beli-chernyi-belyi-m-132549029/
+    merchant_sku_article: CL_OC_MEN_LINE51_WHITE_KO_CLEAR_M_132549029
+    merchant_offer_name: "Комплект_ACMEWEAR_LINE51_KO_CLEAR_черный-белый_M_132549029"
+    price_kzt: 9990
+    visible_stock_pp1: 7
+    visible_stock_pp2: 0
+  - size: L
+    size_rus: "46"
+    product_code: "132549030"
+    sku_id: CL_OC_MEN_LINE51_WHITE_L
+    variant_url: https://kaspi.kz/shop/p/komplekt-2-beli-chernyi-belyi-l-132549030/
+    merchant_sku_article: CL_OC_MEN_LINE51_WHITE_KO_CLEAR_L_132549030
+    merchant_offer_name: "Комплект_ACMEWEAR_LINE51_KO_CLEAR_черный-белый_L_132549030"
+    price_kzt: 9990
+    visible_stock_pp1: 10
+    visible_stock_pp2: 0
+
+pricing:
+  fixed_price_only: true
+  single_price_kzt: 9990
+  candidate_prices_kzt:
+    - 9990
+    - 10990
+    - 11990
+  commission_rate: 0.125
+  vat_rate: 0.04
+  delivery_fee_kzt: 1507
+  min_profit_on_cogs_pct: 0.2
+  initial_allocated_ads_per_unit_kzt: 0
+  review_cadence_hours: 72
+
+repricer_protection:
+  fixed_price_protected_merchant_sku_prefixes:
+    - CL_OC_MEN_LINE51_WHITE_KO_CLEAR
+  required_policy: no_dumping_no_min_current_max_price_writes
+
+output:
+  run_root: runs/line51_ko_clearance
+  workbook_filename: line51_ko_clearance_offer_upload.xlsx
+
+guardrails:
+  forbidden_writes_without_confirm:
+    - Kaspi seller cabinet offer creation
+    - Kaspi price
+    - Kaspi stock
+    - Repricer dumping
+    - Repricer min/current/max price
+    - Autonomous_business db/app.db
+    - paid marketing campaign creation
+  dry_run_required_before_live_ui: true
+  live_ui_requires_window_map: true
+  post_live_required_readbacks:
+    - Kaspi merchant offer row visible for each store and merchant_sku_article
+    - public offer-view or merchant readback confirms price and stock
+    - Repricer row absent or protected from dumping/price writes

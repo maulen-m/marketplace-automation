@@ -1,0 +1,33 @@
+schema_version: web_auto.universal_storeb_watchdog.v1
+timezone: Asia/Almaty
+env_file: .env
+env_files:
+  - .env
+  - ~/Docs/Autonomous_business/.env
+
+stores:
+  - store_name: UNIVERSAL
+    store_id: 30000001
+  - store_name: STORE-B
+    store_id: 30000002
+
+source_ledgers:
+  agent1_output_dirs:
+    - runs/universal_storeb_full_reactivation/20260618_163112/agent1_fresh_target_ledger
+    - runs/universal_storeb_reactivation/20260617_142000_final_goal/agent1_fresh_target_ledger
+  target_reconciliation_csv: runs/universal_storeb_reactivation/20260617_142000_final_goal/agent1_fresh_target_ledger/fresh_target_reconciliation.csv
+  activation_ledger_csv: runs/universal_storeb_reactivation/20260617_142000_final_goal/agent1_fresh_target_ledger/owner_decision_live_write_ledger.csv
+  blocked_or_skipped_rows_csv: runs/universal_storeb_reactivation/20260617_142000_final_goal/agent1_fresh_target_ledger/blocked_or_skipped_rows.csv
+
+fresh_pricelist_paths_json: runs/universal_storeb_reactivation/20260617_142000_final_goal/agent1_fresh_target_ledger/fresh_pricelist_paths.json
+
+repricer:
+  source_config: config/tasks/repricer_competitors.yaml
+  sqlite_path: runs/universal_storeb_reactivation/20260617_142000_final_goal/agent3_repricer_safety/repricer_export_after_scoped_final.sqlite
+
+report:
+  run_root: runs/universal_storeb_reactivation_watchdog
+
+auto_correction:
+  enabled: false
+  note: "Read-only/reporting only. Any correction requires a separate owner-approved lane."
