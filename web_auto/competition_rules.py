@@ -5,6 +5,10 @@ import re
 from typing import Any
 from inventory.size_text_extraction import extract_size_from_offer_text, extract_size_from_url
 
+# Owner decision 2026-07-03: any competitor delivery more than 7 days out is
+# treated as pre-order competition and ignored globally for both stores.
+GLOBAL_LONG_DELIVERY_DAYS_THRESHOLD = 8
+GLOBAL_LONG_DELIVERY_IGNORE_REASON = "global_long_delivery_8plus_days"
 COMPETITION_SCOPE_DELIVERY_DAYS_THRESHOLD = 10
 LINE52_PROBABLE_3XL_FLOOR_KZT = 8845
 LINE52_PUBLIC_SIZE_FLOOR_OVERRIDES_KZT: dict[str, int] = {}
@@ -338,14 +342,16 @@ def scoped_competitor_ignore_reason(
     delivery_days: int | None,
     competitive_floor_kzt: int | None,
 ) -> str:
-    if not scope:
-        return ""
     if delivery_days is not None:
         try:
+            if int(delivery_days) >= GLOBAL_LONG_DELIVERY_DAYS_THRESHOLD:
+                return GLOBAL_LONG_DELIVERY_IGNORE_REASON
             if int(delivery_days) >= COMPETITION_SCOPE_DELIVERY_DAYS_THRESHOLD:
                 return "competition_scope_long_delivery_10plus_days"
         except Exception:
             pass
+    if not scope:
+        return ""
     if competitive_floor_kzt is None or competitor_price_kzt is None:
         return ""
     try:

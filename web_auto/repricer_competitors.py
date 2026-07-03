@@ -19,6 +19,7 @@ from playwright.sync_api import sync_playwright
 from .checkpoint import Checkpoint, Progress, load_checkpoint, progress_key, save_checkpoint
 from .config import TaskConfig
 from .competition_rules import (
+    GLOBAL_LONG_DELIVERY_IGNORE_REASON,
     classify_competition_scope,
     competition_floor_kzt,
     effective_competition_floor_kzt,
@@ -49,6 +50,10 @@ KASPI_ACCEPT = "application/json, text/plain, */*"
 KASPI_ACCEPT_LANGUAGE = "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"
 DEFAULT_FLOOR_MAP_PATH = Path(__file__).resolve().parents[1] / "exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v7.csv"
 DELIVERY_DAYS_CACHE_TTL_HOURS = 24
+LONG_DELIVERY_IGNORE_REASONS = {
+    GLOBAL_LONG_DELIVERY_IGNORE_REASON,
+    "competition_scope_long_delivery_10plus_days",
+}
 SCOPE_MAP_STORE_IDS = {
     "UNIVERSAL": 30000001,
     "STORE-B": 30000002,
@@ -1593,7 +1598,7 @@ def run_repricer_competitors_api(
                             delivery_days_by_mid: dict[str, int] = {}
                             row_link = row.get("link")
                             cache_key = _canonical_offer_link(row_link)
-                            if competition_scope and cache_key:
+                            if cache_key and competitors:
                                 delivery_days_by_mid, req_count = _resolve_delivery_days_by_mid_for_offer(
                                     request_context=context.request,
                                     offer_link=str(row_link or ""),
@@ -1640,7 +1645,7 @@ def run_repricer_competitors_api(
                                     continue
                                 if mid is None:
                                     continue
-                                if reason == "competition_scope_long_delivery_10plus_days":
+                                if reason in LONG_DELIVERY_IGNORE_REASONS:
                                     summary["delivery_days_ignored"] += 1
                                     store_summary["delivery_days_ignored"] += 1
                                 if action == "set_false" and reason == "stale_ignore_valid_competitor":
@@ -1810,7 +1815,7 @@ def run_repricer_competitors_api(
                                 delivery_days_by_mid: dict[str, int] = {}
                                 row_link = row.get("link")
                                 cache_key = _canonical_offer_link(row_link)
-                                if competition_scope and cache_key:
+                                if cache_key and competitors:
                                     delivery_days_by_mid, req_count = _resolve_delivery_days_by_mid_for_offer(
                                         request_context=context.request,
                                         offer_link=str(row_link or ""),
@@ -1854,7 +1859,7 @@ def run_repricer_competitors_api(
                                         continue
                                     if not _competitor_mid_allowed(mid, allowed_competitor_mids):
                                         continue
-                                    if reason == "competition_scope_long_delivery_10plus_days":
+                                    if reason in LONG_DELIVERY_IGNORE_REASONS:
                                         summary["delivery_days_ignored"] += 1
                                         store_summary["delivery_days_ignored"] += 1
                                     record_action(

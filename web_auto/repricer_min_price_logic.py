@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .competition_rules import GLOBAL_LONG_DELIVERY_DAYS_THRESHOLD
 from .repricer_competitors import _is_line52_offer_row, _parse_competitor_price_value
 
 
@@ -20,6 +21,7 @@ def extract_external_competitor_floor(
     *,
     store_id: int,
     exclude_not_competitors: bool,
+    delivery_days_by_mid: dict[str, int] | None = None,
 ) -> int | None:
     if not isinstance(row, dict):
         return None
@@ -35,6 +37,7 @@ def extract_external_competitor_floor(
             ignored_mids = {str(x) for x in not_competitors if x is not None}
 
     store_mid = str(store_id)
+    days_by_mid = delivery_days_by_mid or {}
     out: int | None = None
     for comp in competitors:
         if not isinstance(comp, dict):
@@ -45,6 +48,12 @@ def extract_external_competitor_floor(
             if mid_str == store_mid:
                 continue
             if mid_str in ignored_mids:
+                continue
+            try:
+                delivery_days = int(days_by_mid[mid_str])
+            except Exception:
+                delivery_days = None
+            if delivery_days is not None and delivery_days >= GLOBAL_LONG_DELIVERY_DAYS_THRESHOLD:
                 continue
 
         price_int = parse_price_int(comp.get("price"))

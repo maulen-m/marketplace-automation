@@ -23,7 +23,13 @@ from .repricer_competitors import (
     _get_bot_token,
     _get_datatable_params,
     _get_records_total,
+    _resolve_delivery_days_by_mid_for_offer,
     _wait_table_ready,
+)
+from .delivery_days_cache import (
+    DEFAULT_DELIVERY_DAYS_CACHE_PATH,
+    load_delivery_days_cache,
+    save_delivery_days_cache,
 )
 from .repricer_min_price_logic import (
     compute_external_anchor_target,
@@ -111,6 +117,9 @@ def run_repricer_min_price_sync_api(
     effective_storage_state = storage_state or run_cfg.storage_state_path
 
     checkpoint = load_checkpoint(effective_checkpoint, f"{config.task_id}_api")
+    delivery_days_cache_payload = load_delivery_days_cache(DEFAULT_DELIVERY_DAYS_CACHE_PATH)
+    delivery_days_cache_dirty = False
+    delivery_days_cache_by_link: dict[str, dict[str, int]] = {}
 
     summary: dict[str, Any] = {
         "task_id": config.task_id,
@@ -140,6 +149,8 @@ def run_repricer_min_price_sync_api(
         "api_sets_succeeded": 0,
         "missing_matches": 0,
         "external_floor_found": 0,
+        "external_long_delivery_ignored_rows": 0,
+        "kaspi_delivery_requests": 0,
         "external_line52_locked_skipped": 0,
         "protected_rows_skipped": 0,
         "errors": 0,
@@ -472,6 +483,8 @@ def run_repricer_min_price_sync_api(
                         "api_sets_succeeded": 0,
                         "missing_matches": 0,
                         "external_floor_found": 0,
+                        "external_long_delivery_ignored_rows": 0,
+                        "kaspi_delivery_requests": 0,
                         "external_line52_locked_skipped": 0,
                         "protected_rows_skipped": 0,
                         "errors": 0,
@@ -595,11 +608,32 @@ def run_repricer_min_price_sync_api(
                             need_max_update = False
                             need_live_price_update = False
                             if config.pricing_mode == "external_competitor_anchor":
-                                external_floor = extract_external_competitor_floor(
+                                delivery_days_by_mid: dict[str, int] = {}
+                                if link and row.get("competitors"):
+                                    delivery_days_by_mid, req_count = _resolve_delivery_days_by_mid_for_offer(
+                                        request_context=target_context.request,
+                                        offer_link=str(row.get("link") or ""),
+                                        in_run_cache=delivery_days_cache_by_link,
+                                        persistent_cache=delivery_days_cache_payload,
+                                    )
+                                    if req_count > 0:
+                                        delivery_days_cache_dirty = True
+                                        summary["kaspi_delivery_requests"] += int(req_count)
+                                        store_summary["kaspi_delivery_requests"] += int(req_count)
+                                before_floor = extract_external_competitor_floor(
                                     row,
                                     store_id=store_id,
                                     exclude_not_competitors=config.external_exclude_not_competitors,
                                 )
+                                external_floor = extract_external_competitor_floor(
+                                    row,
+                                    store_id=store_id,
+                                    exclude_not_competitors=config.external_exclude_not_competitors,
+                                    delivery_days_by_mid=delivery_days_by_mid,
+                                )
+                                if before_floor is not None and external_floor != before_floor:
+                                    summary["external_long_delivery_ignored_rows"] += 1
+                                    store_summary["external_long_delivery_ignored_rows"] += 1
                                 if external_floor is None:
                                     summary["missing_matches"] += 1
                                     store_summary["missing_matches"] += 1
@@ -872,10 +906,23 @@ def run_repricer_min_price_sync_api(
 
                                 source_min: int | None = None
                                 if config.pricing_mode == "external_competitor_anchor":
+                                    delivery_days_by_mid: dict[str, int] = {}
+                                    if link and row.get("competitors"):
+                                        delivery_days_by_mid, req_count = _resolve_delivery_days_by_mid_for_offer(
+                                            request_context=target_context.request,
+                                            offer_link=str(row.get("link") or ""),
+                                            in_run_cache=delivery_days_cache_by_link,
+                                            persistent_cache=delivery_days_cache_payload,
+                                        )
+                                        if req_count > 0:
+                                            delivery_days_cache_dirty = True
+                                            summary["kaspi_delivery_requests"] += int(req_count)
+                                            store_summary["kaspi_delivery_requests"] += int(req_count)
                                     external_floor = extract_external_competitor_floor(
                                         row,
                                         store_id=store_id,
                                         exclude_not_competitors=config.external_exclude_not_competitors,
+                                        delivery_days_by_mid=delivery_days_by_mid,
                                     )
                                     if external_floor is None:
                                         continue
@@ -944,6 +991,9 @@ def run_repricer_min_price_sync_api(
         write_price_write_vintage_log(vintage_path, price_write_vintage_rows)
         summary["price_write_vintage_logged_rows"] = len(price_write_vintage_rows)
         summary["price_write_vintage_log_csv"] = str(vintage_path)
+
+    if delivery_days_cache_dirty:
+        save_delivery_days_cache(DEFAULT_DELIVERY_DAYS_CACHE_PATH, delivery_days_cache_payload)
 
     summary_path = run_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
