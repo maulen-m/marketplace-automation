@@ -9,8 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from openpyxl import load_workbook
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
+from .kaspi_forbidden_cards import OWNER_DECISION_LABEL, forbidden_saleable_row_details
 from .kaspi_merchant_common import (
     login_kaspi_merchant,
     merchant_browser_launch_kwargs,
@@ -98,6 +100,50 @@ def resolve_upload_file_paths(
     if not ordered:
         raise ValueError("at least one upload file is required")
     return ordered
+
+
+def _load_pricelist_rows_for_guard(path: Path) -> list[dict[str, Any]]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        if "Лист1" not in wb.sheetnames:
+            raise ValueError(f"missing sheet Лист1 in {path}")
+        ws = wb["Лист1"]
+        headers = [str(cell.value or "").strip() for cell in ws[1]]
+        rows: list[dict[str, Any]] = []
+        for row_number, values in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            record = {header: values[idx] if idx < len(values) else "" for idx, header in enumerate(headers) if header}
+            if not any(str(value or "").strip() for value in record.values()):
+                continue
+            record["_row_number"] = row_number
+            rows.append(record)
+        return rows
+    finally:
+        wb.close()
+
+
+def validate_pricelist_upload_files(file_paths: list[Path]) -> dict[str, Any]:
+    violations: list[dict[str, str]] = []
+    scanned_files: list[str] = []
+    for file_path in file_paths:
+        path = Path(file_path)
+        scanned_files.append(str(path))
+        rows = _load_pricelist_rows_for_guard(path)
+        for detail in forbidden_saleable_row_details(rows):
+            detail = dict(detail)
+            detail["file"] = str(path)
+            violations.append(detail)
+    return {
+        "status": "ok" if not violations else "blocked",
+        "owner_decision": OWNER_DECISION_LABEL,
+        "scanned_files": scanned_files,
+        "forbidden_saleable_rows_count": int(len(violations)),
+        "forbidden_saleable_rows": violations,
+        "error": (
+            f"{OWNER_DECISION_LABEL}: upload file would set forbidden Kaspi offer cards saleable"
+            if violations
+            else ""
+        ),
+    }
 
 
 def should_extend_history_poll_deadline(row: HistoryRow | None, *, already_extended: bool) -> bool:
@@ -327,7 +373,19 @@ def run_kaspi_pricelist_upload(
     processing_grace_seconds: int = 900,
 ) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
-    summary: dict[str, Any] = {"run_dir": str(run_dir), "uploads": [], "status": "unknown"}
+    guard = validate_pricelist_upload_files(file_paths)
+    summary: dict[str, Any] = {
+        "run_dir": str(run_dir),
+        "uploads": [],
+        "status": "unknown",
+        "forbidden_card_guard": guard,
+    }
+    if guard.get("status") != "ok":
+        summary["status"] = "blocked"
+        summary["store_name"] = normalize_store_name(store_name)
+        summary["error"] = guard.get("error", "")
+        (run_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        return summary
     with sync_playwright() as p:
         browser = p.chromium.launch(**merchant_browser_launch_kwargs(headless=headless))
         page = browser.new_page(viewport={"width": 1440, "height": 1400})

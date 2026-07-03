@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 from openpyxl import load_workbook
 
+from .kaspi_forbidden_cards import OWNER_DECISION_LABEL, forbidden_saleable_row_details
 from .kaspi_merchant_common import normalize_store_name
 from .kaspi_pricelist_ops import (
     TEMPLATE_COLUMNS,
@@ -321,6 +322,12 @@ def build_safe_active_patch(
         errors.append(f"output would remove baseline ACTIVE SKU rows: {', '.join(missing_original_active[:20])}")
     if expected_active_after is not None and len(final_rows) != expected_active_after:
         errors.append(f"expected ACTIVE after {expected_active_after}, got {len(final_rows)}")
+    forbidden_saleable_rows = forbidden_saleable_row_details(final_rows)
+    if forbidden_saleable_rows:
+        errors.append(
+            f"{OWNER_DECISION_LABEL}: output would set forbidden Kaspi offer cards saleable: "
+            + ", ".join(row["row_label"] for row in forbidden_saleable_rows[:20])
+        )
 
     active_output = output_dir / f"{prefix_value}_FULL_ACTIVE_UPLOAD.xlsx"
     restore_output = output_dir / f"{prefix_value}_RESTORE_BASELINE_ACTIVE.xlsx"
@@ -365,6 +372,8 @@ def build_safe_active_patch(
         "restricted_update_skus": sorted(restricted_update_skus),
         "restricted_update_details": sorted(restricted_update_details, key=lambda row: row["SKU"]),
         "restriction_probe_override_skus": sorted(restriction_probe_override_skus),
+        "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
+        "forbidden_saleable_rows": forbidden_saleable_rows,
         "errors": errors,
         "active_output": str(active_output) if status == "ready" else "",
         "restore_output": str(restore_output),

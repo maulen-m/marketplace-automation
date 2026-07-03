@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 from openpyxl import load_workbook
 
+from .kaspi_forbidden_cards import OWNER_DECISION_ID, OWNER_DECISION_LABEL, forbidden_saleable_row_details
 from .kaspi_merchant_common import normalize_store_name
 
 
@@ -490,6 +491,22 @@ def emit_outputs(
         final_active = pd.DataFrame(columns=TEMPLATE_COLUMNS)
     if final_archive.empty:
         final_archive = pd.DataFrame(columns=TEMPLATE_COLUMNS)
+    forbidden_saleable_rows = forbidden_saleable_row_details(final_active.to_dict("records"))
+    if forbidden_saleable_rows:
+        forbidden_review_rows = pd.DataFrame(
+            [
+                {
+                    "SKU": row["row_label"],
+                    "review_bucket": "forbidden_kaspi_offer_card_owner_decision",
+                    "intent_review_reason": row["reason"],
+                    "owner_decision": row["owner_decision"],
+                    "match_type": row["match_type"],
+                    "match_value": row["match_value"],
+                }
+                for row in forbidden_saleable_rows
+            ]
+        )
+        review_rows = pd.concat([review_rows, forbidden_review_rows], ignore_index=True, sort=False)
 
     active_out = output_dir / f"{prefix_value}_ACTIVE.xlsx"
     archive_out = output_dir / f"{prefix_value}_ARCHIVE.xlsx"
@@ -497,8 +514,9 @@ def emit_outputs(
     snapshot_out = output_dir / f"{prefix_value}_snapshot.xlsx"
     summary_out = output_dir / f"{prefix_value}_summary.json"
 
-    _write_workbook_atomic(active_out, final_active, snapshot.active_l2)
-    _write_workbook_atomic(archive_out, final_archive, snapshot.archive_l2)
+    if not forbidden_saleable_rows:
+        _write_workbook_atomic(active_out, final_active, snapshot.active_l2)
+        _write_workbook_atomic(archive_out, final_archive, snapshot.archive_l2)
     with pd.ExcelWriter(review_out, engine="openpyxl") as writer:
         pd.DataFrame(columns=TEMPLATE_COLUMNS).to_excel(writer, sheet_name="Лист1", index=False)
         review_rows.to_excel(writer, sheet_name="review_rows", index=False)
@@ -518,8 +536,11 @@ def emit_outputs(
         "repair_rows": int((mutated_df["intent_action"] == "repair_active_stock_units").sum()),
         "already_numeric_rows": int((mutated_df["intent_action"] == "active_stock_units_already_numeric").sum()),
         "blocked_rows": int((mutated_df["intent_action"] == "blocked_no_active_warehouse_pattern").sum()),
-        "active_output": str(active_out),
-        "archive_output": str(archive_out),
+        "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
+        "forbidden_saleable_rows": forbidden_saleable_rows,
+        "forbidden_owner_decision": OWNER_DECISION_LABEL if forbidden_saleable_rows else "",
+        "active_output": str(active_out) if not forbidden_saleable_rows else "",
+        "archive_output": str(archive_out) if not forbidden_saleable_rows else "",
         "review_output": str(review_out),
         "snapshot_output": str(snapshot_out),
     }
@@ -588,6 +609,14 @@ def plan_append_missing_active_rows(
 
     for _, row in source_active.iterrows():
         if str(row.get("stock_positive_current", "") or "").strip().lower() != "yes":
+            continue
+        forbidden_details = forbidden_saleable_row_details([row.to_dict() if hasattr(row, "to_dict") else row])
+        if forbidden_details:
+            review = row.to_dict()
+            review["review_bucket"] = "forbidden_kaspi_offer_card_owner_decision"
+            review["intent_review_reason"] = forbidden_details[0]["reason"]
+            review["owner_decision"] = forbidden_details[0]["owner_decision"]
+            review_rows.append(review)
             continue
         url_norm = str(row.get("url_norm", "") or "").strip()
         sku_norm = str(row.get("sku_norm", "") or "").strip()
@@ -665,9 +694,30 @@ def emit_append_missing_active_outputs(
         final_active = pd.DataFrame(columns=TEMPLATE_COLUMNS)
     if final_archive.empty:
         final_archive = pd.DataFrame(columns=TEMPLATE_COLUMNS)
+    forbidden_saleable_rows = forbidden_saleable_row_details(final_active.to_dict("records"))
+    if forbidden_saleable_rows:
+        forbidden_review_rows = pd.DataFrame(
+            [
+                {
+                    "SKU": row["row_label"],
+                    "review_bucket": "forbidden_kaspi_offer_card_owner_decision",
+                    "intent_review_reason": row["reason"],
+                    "owner_decision": row["owner_decision"],
+                    "match_type": row["match_type"],
+                    "match_value": row["match_value"],
+                }
+                for row in forbidden_saleable_rows
+            ]
+        )
+        plan["review_rows"] = pd.concat([plan["review_rows"], forbidden_review_rows], ignore_index=True, sort=False)
+    forbidden_review_blocked = (
+        "owner_decision" in plan["review_rows"].columns
+        and plan["review_rows"]["owner_decision"].astype(str).eq(OWNER_DECISION_ID).any()
+    )
 
-    _write_workbook_atomic(active_out, final_active, target_snapshot.active_l2)
-    _write_workbook_atomic(archive_out, final_archive, target_snapshot.archive_l2)
+    if not forbidden_saleable_rows and not forbidden_review_blocked:
+        _write_workbook_atomic(active_out, final_active, target_snapshot.active_l2)
+        _write_workbook_atomic(archive_out, final_archive, target_snapshot.archive_l2)
     with pd.ExcelWriter(review_out, engine="openpyxl") as writer:
         _normalize_output_df(plan["append_rows"]).to_excel(writer, sheet_name="append_candidates", index=False)
         plan["review_rows"].to_excel(writer, sheet_name="review_rows", index=False)
@@ -676,8 +726,12 @@ def emit_append_missing_active_outputs(
     summary = dict(plan["summary"])
     summary.update(
         {
-            "active_output": str(active_out),
-            "archive_output": str(archive_out),
+            "status": "blocked" if forbidden_saleable_rows or forbidden_review_blocked or not plan["review_rows"].empty else "ready",
+            "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
+            "forbidden_saleable_rows": forbidden_saleable_rows,
+            "forbidden_owner_decision": OWNER_DECISION_LABEL if forbidden_saleable_rows or forbidden_review_blocked else "",
+            "active_output": str(active_out) if not forbidden_saleable_rows and not forbidden_review_blocked else "",
+            "archive_output": str(archive_out) if not forbidden_saleable_rows and not forbidden_review_blocked else "",
             "review_output": str(review_out),
         }
     )

@@ -16,6 +16,12 @@ from zoneinfo import ZoneInfo
 
 from openpyxl import load_workbook
 
+from .kaspi_forbidden_cards import (
+    FORBIDDEN_KASPI_OFFER_PRODUCT_CODES,
+    FORBIDDEN_KASPI_OFFER_URL_FRAGMENTS,
+    forbidden_card_reason_for_row,
+)
+
 ASTANA_TZ = ZoneInfo("Asia/Almaty")
 DEFAULT_ENTRY_URL = "https://kaspi.kz/mc/#/add-product/v2"
 
@@ -63,18 +69,8 @@ ALLOWED_UPLOAD_MERCHANT_IDS_BY_STORE = {
 }
 FORBIDDEN_UPLOAD_STORE_CODES = {"ACMEWEAR"}
 FORBIDDEN_UPLOAD_MERCHANT_IDS = {"30137883"}
-FORBIDDEN_UPLOAD_PRODUCT_CODES = {
-    # Owner decision 2026-06-21: these cards are Nike black long sleeves, not sellable Nike T-shirts.
-    "110261375",
-    "120980444",
-    "120980449",
-    "132848895",
-    "152381039",
-    "157715221",
-}
-FORBIDDEN_UPLOAD_URL_FRAGMENTS = {
-    "sportivnyi-kostjum-18107200-643074",
-}
+FORBIDDEN_UPLOAD_PRODUCT_CODES = FORBIDDEN_KASPI_OFFER_PRODUCT_CODES
+FORBIDDEN_UPLOAD_URL_FRAGMENTS = FORBIDDEN_KASPI_OFFER_URL_FRAGMENTS
 
 _COLOR_ALIASES = {
     "black": {"black", "chernyi", "черный", "чёрный"},
@@ -148,18 +144,7 @@ def _is_unsafe_link_catalog_entry_url(value: Any) -> bool:
 
 
 def _forbidden_upload_product_reason(row: dict[str, Any]) -> str:
-    product_code = re.sub(r"\D", "", _norm_text(row.get("product_code")))
-    url_offer_code = _extract_offer_code_from_variant_url(row.get("variant_url"))
-    candidate_codes = {code for code in (product_code, url_offer_code) if code}
-    blocked_codes = sorted(candidate_codes & FORBIDDEN_UPLOAD_PRODUCT_CODES)
-    if blocked_codes:
-        return "forbidden Nike long sleeve product_code=" + ",".join(blocked_codes)
-
-    variant_url = _norm_text(row.get("variant_url")).lower()
-    for fragment in sorted(FORBIDDEN_UPLOAD_URL_FRAGMENTS):
-        if fragment in variant_url:
-            return f"forbidden Nike long sleeve URL fragment={fragment}"
-    return ""
+    return forbidden_card_reason_for_row(row)
 
 
 def _infer_color_token(*values: Any) -> str:
