@@ -11,8 +11,9 @@ from typing import Any
 import pandas as pd
 from openpyxl import load_workbook
 
-from .kaspi_forbidden_cards import OWNER_DECISION_ID, OWNER_DECISION_LABEL, forbidden_saleable_row_details
+from .kaspi_forbidden_cards import OWNER_DECISION_LABEL, forbidden_saleable_row_details
 from .kaspi_merchant_common import normalize_store_name
+from .kaspi_price_floors import clamp_rows_to_price_floors, write_price_floor_clamp_report
 
 
 TEMPLATE_COLUMNS = ["SKU", "model", "brand", "price", "PP1", "PP2", "PP3", "PP4", "PP5", "preorder"]
@@ -491,7 +492,40 @@ def emit_outputs(
         final_active = pd.DataFrame(columns=TEMPLATE_COLUMNS)
     if final_archive.empty:
         final_archive = pd.DataFrame(columns=TEMPLATE_COLUMNS)
-    forbidden_saleable_rows = forbidden_saleable_row_details(final_active.to_dict("records"))
+    active_floor_result = clamp_rows_to_price_floors(final_active.to_dict("records"), store_name=snapshot.store_name)
+    archive_floor_result = clamp_rows_to_price_floors(final_archive.to_dict("records"), store_name=snapshot.store_name)
+    final_active = pd.DataFrame(active_floor_result["rows"], columns=TEMPLATE_COLUMNS)
+    final_archive = pd.DataFrame(archive_floor_result["rows"], columns=TEMPLATE_COLUMNS)
+    price_floor_clamps = [
+        {"surface": "active_output", **row}
+        for row in active_floor_result["clamps"]
+    ] + [
+        {"surface": "archive_output", **row}
+        for row in archive_floor_result["clamps"]
+    ]
+    price_floor_remaining = active_floor_result["remaining_violations"] + archive_floor_result["remaining_violations"]
+    if price_floor_remaining:
+        floor_review_rows = pd.DataFrame(
+            [
+                {
+                    "SKU": row["row_label"],
+                    "review_bucket": "price_floor_guard_failed_after_clamp",
+                    "intent_review_reason": row["reason"],
+                    "sku_key": row["sku_key"],
+                    "floor": row["floor"],
+                    "price_before": row["price_before"],
+                }
+                for row in price_floor_remaining
+            ]
+        )
+        review_rows = pd.concat([review_rows, floor_review_rows], ignore_index=True, sort=False)
+    forbidden_saleable_rows = forbidden_saleable_row_details(
+        final_active.to_dict("records"),
+        store_name=snapshot.store_name,
+    )
+    forbidden_owner_labels = sorted(
+        {row.get("owner_decision_label") or OWNER_DECISION_LABEL for row in forbidden_saleable_rows}
+    )
     if forbidden_saleable_rows:
         forbidden_review_rows = pd.DataFrame(
             [
@@ -513,8 +547,10 @@ def emit_outputs(
     review_out = output_dir / f"{prefix_value}_review.xlsx"
     snapshot_out = output_dir / f"{prefix_value}_snapshot.xlsx"
     summary_out = output_dir / f"{prefix_value}_summary.json"
+    price_floor_report_out = output_dir / f"{prefix_value}_price_floor_clamps.csv"
+    write_price_floor_clamp_report(price_floor_report_out, price_floor_clamps)
 
-    if not forbidden_saleable_rows:
+    if not forbidden_saleable_rows and not price_floor_remaining:
         _write_workbook_atomic(active_out, final_active, snapshot.active_l2)
         _write_workbook_atomic(archive_out, final_archive, snapshot.archive_l2)
     with pd.ExcelWriter(review_out, engine="openpyxl") as writer:
@@ -538,9 +574,14 @@ def emit_outputs(
         "blocked_rows": int((mutated_df["intent_action"] == "blocked_no_active_warehouse_pattern").sum()),
         "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
         "forbidden_saleable_rows": forbidden_saleable_rows,
-        "forbidden_owner_decision": OWNER_DECISION_LABEL if forbidden_saleable_rows else "",
-        "active_output": str(active_out) if not forbidden_saleable_rows else "",
-        "archive_output": str(archive_out) if not forbidden_saleable_rows else "",
+        "forbidden_owner_decision": "; ".join(forbidden_owner_labels) if forbidden_saleable_rows else "",
+        "price_floor_clamp_rows_count": int(len(price_floor_clamps)),
+        "price_floor_clamp_rows": price_floor_clamps,
+        "price_floor_remaining_violations_count": int(len(price_floor_remaining)),
+        "price_floor_remaining_violations": price_floor_remaining,
+        "price_floor_clamp_report": str(price_floor_report_out),
+        "active_output": str(active_out) if not forbidden_saleable_rows and not price_floor_remaining else "",
+        "archive_output": str(archive_out) if not forbidden_saleable_rows and not price_floor_remaining else "",
         "review_output": str(review_out),
         "snapshot_output": str(snapshot_out),
     }
@@ -610,7 +651,10 @@ def plan_append_missing_active_rows(
     for _, row in source_active.iterrows():
         if str(row.get("stock_positive_current", "") or "").strip().lower() != "yes":
             continue
-        forbidden_details = forbidden_saleable_row_details([row.to_dict() if hasattr(row, "to_dict") else row])
+        forbidden_details = forbidden_saleable_row_details(
+            [row.to_dict() if hasattr(row, "to_dict") else row],
+            store_name=target_snapshot.store_name,
+        )
         if forbidden_details:
             review = row.to_dict()
             review["review_bucket"] = "forbidden_kaspi_offer_card_owner_decision"
@@ -694,7 +738,40 @@ def emit_append_missing_active_outputs(
         final_active = pd.DataFrame(columns=TEMPLATE_COLUMNS)
     if final_archive.empty:
         final_archive = pd.DataFrame(columns=TEMPLATE_COLUMNS)
-    forbidden_saleable_rows = forbidden_saleable_row_details(final_active.to_dict("records"))
+    active_floor_result = clamp_rows_to_price_floors(final_active.to_dict("records"), store_name=target_snapshot.store_name)
+    archive_floor_result = clamp_rows_to_price_floors(final_archive.to_dict("records"), store_name=target_snapshot.store_name)
+    final_active = pd.DataFrame(active_floor_result["rows"], columns=TEMPLATE_COLUMNS)
+    final_archive = pd.DataFrame(archive_floor_result["rows"], columns=TEMPLATE_COLUMNS)
+    price_floor_clamps = [
+        {"surface": "append_active_output", **row}
+        for row in active_floor_result["clamps"]
+    ] + [
+        {"surface": "append_archive_output", **row}
+        for row in archive_floor_result["clamps"]
+    ]
+    price_floor_remaining = active_floor_result["remaining_violations"] + archive_floor_result["remaining_violations"]
+    if price_floor_remaining:
+        floor_review_rows = pd.DataFrame(
+            [
+                {
+                    "SKU": row["row_label"],
+                    "review_bucket": "price_floor_guard_failed_after_clamp",
+                    "intent_review_reason": row["reason"],
+                    "sku_key": row["sku_key"],
+                    "floor": row["floor"],
+                    "price_before": row["price_before"],
+                }
+                for row in price_floor_remaining
+            ]
+        )
+        plan["review_rows"] = pd.concat([plan["review_rows"], floor_review_rows], ignore_index=True, sort=False)
+    forbidden_saleable_rows = forbidden_saleable_row_details(
+        final_active.to_dict("records"),
+        store_name=target_snapshot.store_name,
+    )
+    forbidden_owner_labels = sorted(
+        {row.get("owner_decision_label") or OWNER_DECISION_LABEL for row in forbidden_saleable_rows}
+    )
     if forbidden_saleable_rows:
         forbidden_review_rows = pd.DataFrame(
             [
@@ -712,10 +789,12 @@ def emit_append_missing_active_outputs(
         plan["review_rows"] = pd.concat([plan["review_rows"], forbidden_review_rows], ignore_index=True, sort=False)
     forbidden_review_blocked = (
         "owner_decision" in plan["review_rows"].columns
-        and plan["review_rows"]["owner_decision"].astype(str).eq(OWNER_DECISION_ID).any()
+        and plan["review_rows"]["owner_decision"].astype(str).str.strip().ne("").any()
     )
+    price_floor_report_out = output_dir / f"{prefix_value}_price_floor_clamps.csv"
+    write_price_floor_clamp_report(price_floor_report_out, price_floor_clamps)
 
-    if not forbidden_saleable_rows and not forbidden_review_blocked:
+    if not forbidden_saleable_rows and not forbidden_review_blocked and not price_floor_remaining:
         _write_workbook_atomic(active_out, final_active, target_snapshot.active_l2)
         _write_workbook_atomic(archive_out, final_archive, target_snapshot.archive_l2)
     with pd.ExcelWriter(review_out, engine="openpyxl") as writer:
@@ -726,12 +805,19 @@ def emit_append_missing_active_outputs(
     summary = dict(plan["summary"])
     summary.update(
         {
-            "status": "blocked" if forbidden_saleable_rows or forbidden_review_blocked or not plan["review_rows"].empty else "ready",
+            "status": "blocked" if forbidden_saleable_rows or forbidden_review_blocked or price_floor_remaining or not plan["review_rows"].empty else "ready",
             "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
             "forbidden_saleable_rows": forbidden_saleable_rows,
-            "forbidden_owner_decision": OWNER_DECISION_LABEL if forbidden_saleable_rows or forbidden_review_blocked else "",
-            "active_output": str(active_out) if not forbidden_saleable_rows and not forbidden_review_blocked else "",
-            "archive_output": str(archive_out) if not forbidden_saleable_rows and not forbidden_review_blocked else "",
+            "forbidden_owner_decision": "; ".join(forbidden_owner_labels)
+            if forbidden_saleable_rows
+            else (OWNER_DECISION_LABEL if forbidden_review_blocked else ""),
+            "price_floor_clamp_rows_count": int(len(price_floor_clamps)),
+            "price_floor_clamp_rows": price_floor_clamps,
+            "price_floor_remaining_violations_count": int(len(price_floor_remaining)),
+            "price_floor_remaining_violations": price_floor_remaining,
+            "price_floor_clamp_report": str(price_floor_report_out),
+            "active_output": str(active_out) if not forbidden_saleable_rows and not forbidden_review_blocked and not price_floor_remaining else "",
+            "archive_output": str(archive_out) if not forbidden_saleable_rows and not forbidden_review_blocked and not price_floor_remaining else "",
             "review_output": str(review_out),
         }
     )

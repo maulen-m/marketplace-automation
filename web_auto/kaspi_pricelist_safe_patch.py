@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 
 from .kaspi_forbidden_cards import OWNER_DECISION_LABEL, forbidden_saleable_row_details
 from .kaspi_merchant_common import normalize_store_name
+from .kaspi_price_floors import clamp_rows_to_price_floors, write_price_floor_clamp_report
 from .kaspi_pricelist_ops import (
     TEMPLATE_COLUMNS,
     _load_l2,
@@ -322,19 +323,49 @@ def build_safe_active_patch(
         errors.append(f"output would remove baseline ACTIVE SKU rows: {', '.join(missing_original_active[:20])}")
     if expected_active_after is not None and len(final_rows) != expected_active_after:
         errors.append(f"expected ACTIVE after {expected_active_after}, got {len(final_rows)}")
-    forbidden_saleable_rows = forbidden_saleable_row_details(final_rows)
-    if forbidden_saleable_rows:
+
+    active_floor_result = clamp_rows_to_price_floors(final_rows, store_name=store_norm)
+    final_rows = active_floor_result["rows"]
+    restore_floor_result = clamp_rows_to_price_floors(
+        [_row_dict(row) for _, row in active_df.iterrows()],
+        store_name=store_norm,
+    )
+    price_floor_remaining = active_floor_result["remaining_violations"] + restore_floor_result["remaining_violations"]
+    if price_floor_remaining:
         errors.append(
-            f"{OWNER_DECISION_LABEL}: output would set forbidden Kaspi offer cards saleable: "
+            "price floor guard failed after clamp: "
+            + ", ".join(row["row_label"] for row in price_floor_remaining[:20])
+        )
+    forbidden_saleable_rows = forbidden_saleable_row_details(final_rows, store_name=store_norm)
+    if forbidden_saleable_rows:
+        owner_labels = sorted(
+            {
+                row.get("owner_decision_label") or OWNER_DECISION_LABEL
+                for row in forbidden_saleable_rows
+            }
+        )
+        errors.append(
+            f"{'; '.join(owner_labels)}: output would set forbidden Kaspi offer cards saleable: "
             + ", ".join(row["row_label"] for row in forbidden_saleable_rows[:20])
         )
 
     active_output = output_dir / f"{prefix_value}_FULL_ACTIVE_UPLOAD.xlsx"
     restore_output = output_dir / f"{prefix_value}_RESTORE_BASELINE_ACTIVE.xlsx"
     preview_output = output_dir / f"{prefix_value}_safe_active_patch_preview.csv"
+    price_floor_report_output = output_dir / f"{prefix_value}_price_floor_clamps.csv"
     status = "ready" if not errors else "blocked"
 
-    _write_workbook_atomic(restore_output, active_df[TEMPLATE_COLUMNS], active_l2)
+    price_floor_clamps = [
+        {"surface": "active_upload", **row}
+        for row in active_floor_result["clamps"]
+    ] + [
+        {"surface": "restore_baseline_active", **row}
+        for row in restore_floor_result["clamps"]
+    ]
+    write_price_floor_clamp_report(price_floor_report_output, price_floor_clamps)
+
+    restore_df = pd.DataFrame(restore_floor_result["rows"], columns=TEMPLATE_COLUMNS)
+    _write_workbook_atomic(restore_output, restore_df, active_l2)
     workbook_validation: dict[str, Any] = {"restore": validate_excel_workbook(restore_output)}
     if status == "ready":
         final_df = pd.DataFrame(final_rows, columns=TEMPLATE_COLUMNS)
@@ -372,6 +403,11 @@ def build_safe_active_patch(
         "restricted_update_skus": sorted(restricted_update_skus),
         "restricted_update_details": sorted(restricted_update_details, key=lambda row: row["SKU"]),
         "restriction_probe_override_skus": sorted(restriction_probe_override_skus),
+        "price_floor_clamp_rows_count": int(len(price_floor_clamps)),
+        "price_floor_clamp_rows": price_floor_clamps,
+        "price_floor_remaining_violations_count": int(len(price_floor_remaining)),
+        "price_floor_remaining_violations": price_floor_remaining,
+        "price_floor_clamp_report": str(price_floor_report_output),
         "forbidden_saleable_rows_count": int(len(forbidden_saleable_rows)),
         "forbidden_saleable_rows": forbidden_saleable_rows,
         "errors": errors,

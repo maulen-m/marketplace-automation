@@ -21,6 +21,7 @@ from .kaspi_forbidden_cards import (
     FORBIDDEN_KASPI_OFFER_URL_FRAGMENTS,
     forbidden_card_reason_for_row,
 )
+from .kaspi_price_floors import clamp_rows_to_price_floors, write_price_floor_clamp_report
 
 ASTANA_TZ = ZoneInfo("Asia/Almaty")
 DEFAULT_ENTRY_URL = "https://kaspi.kz/mc/#/add-product/v2"
@@ -284,7 +285,41 @@ def validate_upload_rows(
 
     if not rows:
         errors.append("no active rows to upload")
-        return {"ok": False, "errors": errors, "warnings": warnings, "rows_total": 0}
+        return {
+            "ok": False,
+            "errors": errors,
+            "warnings": warnings,
+            "rows_total": 0,
+            "price_floor_clamp_rows_count": 0,
+            "price_floor_clamp_rows": [],
+            "price_floor_remaining_violations_count": 0,
+            "price_floor_remaining_violations": [],
+        }
+
+    price_floor_clamps: list[dict[str, Any]] = []
+    price_floor_remaining: list[dict[str, Any]] = []
+    for row in rows:
+        store_code = normalize_store_code(row.get("store_code"))
+        floor_result = clamp_rows_to_price_floors(
+            [row],
+            store_name=store_code,
+            price_field="price_kzt",
+            row_label_field="merchant_sku_article",
+        )
+        if floor_result["rows"]:
+            row.clear()
+            row.update(floor_result["rows"][0])
+        price_floor_clamps.extend(
+            {"surface": f"offer_ui_upload:{store_code or 'UNKNOWN'}", **item}
+            for item in floor_result["clamps"]
+        )
+        price_floor_remaining.extend(
+            {"surface": f"offer_ui_upload:{store_code or 'UNKNOWN'}", **item}
+            for item in floor_result["remaining_violations"]
+        )
+    if price_floor_remaining:
+        for row in price_floor_remaining:
+            errors.append(f"row {row.get('row_label', '?')}: {row.get('reason', 'price floor guard failed')}")
 
     by_store = Counter(normalize_store_code(r.get("store_code")) for r in rows)
     for store in required:
@@ -383,6 +418,10 @@ def validate_upload_rows(
         "warnings": warnings,
         "rows_total": len(rows),
         "rows_by_store": dict(by_store),
+        "price_floor_clamp_rows_count": len(price_floor_clamps),
+        "price_floor_clamp_rows": price_floor_clamps,
+        "price_floor_remaining_violations_count": len(price_floor_remaining),
+        "price_floor_remaining_violations": price_floor_remaining,
     }
 
 
@@ -1910,15 +1949,16 @@ def run_kaspi_offer_ui_upload(
     if not stores:
         stores = ["UNIVERSAL", "STOREB"]
 
+    run_id = datetime.now(ASTANA_TZ).strftime("%Y%m%d_%H%M%S")
+    run_dir = Path(output_root) / run_id
     rows = load_offer_upload_rows(workbook_path, store_codes=stores)
     validation = validate_upload_rows(
         rows,
         required_store_codes=stores,
         require_black_coverage=require_black_coverage,
     )
-
-    run_id = datetime.now(ASTANA_TZ).strftime("%Y%m%d_%H%M%S")
-    run_dir = Path(output_root) / run_id
+    price_floor_report = run_dir / "price_floor_clamps.csv"
+    write_price_floor_clamp_report(price_floor_report, validation.get("price_floor_clamp_rows", []))
     summary: dict[str, Any] = {
         "run_id": run_id,
         "status": "dry_run" if dry_run or not confirm else "success",
@@ -1929,6 +1969,7 @@ def run_kaspi_offer_ui_upload(
         "validation": validation,
         "run_dir": str(run_dir),
         "run_log_csv": str(run_dir / "run_log.csv"),
+        "price_floor_clamp_report": str(price_floor_report),
         "success": 0,
         "failed": 0,
         "errors": [],

@@ -6,6 +6,29 @@ timezone: Asia/Almaty
 live_writes_allowed: false
 write_approval_required: OWNER_APPROVAL_REQUIRED_FOR_ANY_WRITE
 
+owner_order_denylists:
+  - id: acmewear_ls31_ls21_blk_sale_removal_20260706
+    owner_order_at: "2026-07-06"
+    store: ACMEWEAR
+    store_code: "30137883"
+    sale_state: forbidden_active_saleability
+    article_prefixes:
+      - SUIT-31-LS-ST-
+      - SUIT-21-LS-ST-
+    product_codes:
+      - "165486887"
+      - "165487403"
+    campaign_ids:
+      - "2794142"
+      - "2794144"
+    removal_scope: "ACMEWEAR LS31 + LS21 BLK child bundles only; TS31 is report-only; LINE61 parent articles must never match."
+    owner_intent: "Remove fully from ACMEWEAR sale; future add/keep/price belongs to a separate UNIVERSAL owner-approved lane."
+    enforced_by:
+      - web_auto.kaspi_forbidden_cards
+      - web_auto.kaspi_pricelist_safe_patch
+      - web_auto.kaspi_pricelist_ops
+      - web_auto.kaspi_pricelist_upload
+
 purpose: >
   Read-only six-hour monitoring scope for ACMEWEAR capital-release experiments:
   Line61 parent lanes, LINE51 parent lanes, active child-bundle campaigns, and
@@ -67,13 +90,13 @@ campaigns:
     product_family: LINE61_CHILD
     lane: LINE61|SUIT-31-LS|ST
     product_sku: "21282790b"
-    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth; owner launched seller-bonus promo 228200 / Line61_subchild_ls31_ls21_bonuses_9% at 2026-06-30 21:04:28 +05"
+    current_owner_context: "REMOVED_FROM_ACMEWEAR_SALE by owner order 2026-07-06; block active saleability in ACMEWEAR pricelist outputs; do not infer TS31 removal or LINE61 parent removal."
   - campaign_id: "2794144"
     route_id: child_suit21_ls_st
     product_family: LINE61_CHILD
     lane: LINE61|SUIT-21-LS|ST
     product_sku: "21282795b"
-    current_owner_context: "Child bundle active; stock constrained by Line61 upper-size truth"
+    current_owner_context: "REMOVED_FROM_ACMEWEAR_SALE by owner order 2026-07-06; block active saleability in ACMEWEAR pricelist outputs; future Universal handling requires separate owner-approved lane."
   - campaign_id: "2794146"
     route_id: child_suit21_ts_st
     product_family: LINE61_CHILD
@@ -148,7 +171,7 @@ promos:
   - promo_id: "228200"
     name: "Line61_subchild_ls31_ls21_bonuses_9%"
     promo_name: "Line61_subchild_ls31_ls21_bonuses_9%"
-    status: active_owner_reported
+    status: owner_ordered_removed_from_acmewear_sale_20260706
     surface: seller_bonus
     type_label: recommended_products
     bonus_percent: 9
@@ -168,7 +191,7 @@ promos:
     owner_event_at: "2026-06-30 21:04:28 +05:00"
     owner_event: "owner manually launched a 9% seller-bonus promo from sell price for the BLK LS31 product offer to help sell off massive stock and later compare economic and financial health"
     cash_flow_overlay_note: "Seller-bonus spend must be tracked separately from CPC ad spend, API order truth, buyout/final sales, stock movement, and true COGS."
-    note: "Owner truth says LINE51 4XL is the only current out-of-stock size; reconcile against fresh pricelist before any write."
+    note: "Superseded by owner order 2026-07-06: LS31/LS21 BLK must be removed from ACMEWEAR sale; reconcile promo state externally before any future marketing interpretation."
   - promo_id: "132069"
     name: "Line51_K-OG_ST_5%"
     promo_name: "Line51_K-OG_ST_5%"

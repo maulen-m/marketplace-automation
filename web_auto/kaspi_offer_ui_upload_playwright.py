@@ -33,6 +33,7 @@ from .kaspi_offer_ui_upload import (
     normalize_store_code,
     validate_upload_rows,
 )
+from .kaspi_price_floors import write_price_floor_clamp_report
 
 ROOT = Path(__file__).resolve().parents[1]
 ASTANA_TZ = ZoneInfo("Asia/Almaty")
@@ -765,6 +766,8 @@ def run_kaspi_offer_ui_upload_playwright(
         required_store_codes=[normalized_store],
         require_black_coverage=not allow_partial_color_batch,
     )
+    price_floor_report = run_dir / "price_floor_clamps.csv"
+    write_price_floor_clamp_report(price_floor_report, validation.get("price_floor_clamp_rows", []))
     summary = {
         "run_id": run_id,
         "status": "dry_run" if dry_run else "pending",
@@ -774,6 +777,7 @@ def run_kaspi_offer_ui_upload_playwright(
         "validation": validation,
         "run_dir": str(run_dir),
         "run_log_csv": str(run_log_path),
+        "price_floor_clamp_report": str(price_floor_report),
         "success": 0,
         "failed": 0,
         "errors": [],

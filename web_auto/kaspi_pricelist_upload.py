@@ -19,6 +19,7 @@ from .kaspi_merchant_common import (
     normalize_store_name,
     resolve_store_credentials,
 )
+from .kaspi_price_floors import below_floor_details
 
 
 PRICE_LIST_URL = "https://kaspi.kz/mc/#/price-list"
@@ -121,28 +122,41 @@ def _load_pricelist_rows_for_guard(path: Path) -> list[dict[str, Any]]:
         wb.close()
 
 
-def validate_pricelist_upload_files(file_paths: list[Path]) -> dict[str, Any]:
+def validate_pricelist_upload_files(file_paths: list[Path], *, store_name: str = "") -> dict[str, Any]:
     violations: list[dict[str, str]] = []
+    floor_violations: list[dict[str, str]] = []
     scanned_files: list[str] = []
     for file_path in file_paths:
         path = Path(file_path)
         scanned_files.append(str(path))
         rows = _load_pricelist_rows_for_guard(path)
-        for detail in forbidden_saleable_row_details(rows):
+        for detail in forbidden_saleable_row_details(rows, store_name=store_name):
             detail = dict(detail)
             detail["file"] = str(path)
             violations.append(detail)
+        for detail in below_floor_details(rows, store_name=store_name):
+            detail = dict(detail)
+            detail["file"] = str(path)
+            floor_violations.append(detail)
+    status_ok = not violations and not floor_violations
+    errors = []
+    if violations:
+        owner_labels = sorted({row.get("owner_decision_label") or OWNER_DECISION_LABEL for row in violations})
+        errors.append(f"{'; '.join(owner_labels)}: upload file would set forbidden Kaspi offer cards saleable")
+    if floor_violations:
+        errors.append("kaspi price floor guard: upload file contains mapped article prices below v7 floor")
     return {
-        "status": "ok" if not violations else "blocked",
-        "owner_decision": OWNER_DECISION_LABEL,
+        "status": "ok" if status_ok else "blocked",
+        "owner_decision": "; ".join(sorted({row.get("owner_decision_label") or OWNER_DECISION_LABEL for row in violations}))
+        if violations
+        else "",
+        "store_name": normalize_store_name(store_name),
         "scanned_files": scanned_files,
         "forbidden_saleable_rows_count": int(len(violations)),
         "forbidden_saleable_rows": violations,
-        "error": (
-            f"{OWNER_DECISION_LABEL}: upload file would set forbidden Kaspi offer cards saleable"
-            if violations
-            else ""
-        ),
+        "price_floor_violations_count": int(len(floor_violations)),
+        "price_floor_violations": floor_violations,
+        "error": "; ".join(errors),
     }
 
 
@@ -373,7 +387,7 @@ def run_kaspi_pricelist_upload(
     processing_grace_seconds: int = 900,
 ) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
-    guard = validate_pricelist_upload_files(file_paths)
+    guard = validate_pricelist_upload_files(file_paths, store_name=store_name)
     summary: dict[str, Any] = {
         "run_dir": str(run_dir),
         "uploads": [],
