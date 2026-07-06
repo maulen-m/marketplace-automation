@@ -1,0 +1,117 @@
+# Doctrine: PKT-FLOOR-REBASE-5POC, owner-approved 2026-07-06.
+# Active red-line is 5% profit-on-cost sell-off floor.
+# Old 30/35% POC floors are retired; keep v7 CSV on disk for audit only.
+# Preserve existing ACMEWEAR and SUIT/LS carve-outs; do not add new carve-outs here.
+schema_version: web_auto.price_floor_article_map.v1
+owner_event: PKT-FLOOR-REBASE-5POC 2026-07-06
+floor_csv_path: exports/pricelist_snapshots/min_price_floor_5pct_by_sku_v8.csv
+
+carve_outs:
+  stores:
+    - ACMEWEAR
+  article_tokens:
+    - SUIT-31-LS
+    - SUIT31-LS
+    - SUIT31LS
+    - LS31
+    - LS31-BLK
+    - SUIT-61
+    - LINE61
+    - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+  sku_keys:
+    - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+    - SUIT-31-LS
+    - LS31-BLK
+
+article_mappings:
+  - article: LOSINA BLACK 2 S
+    sku_key: CL_NEW-CLO_MEN_LEG_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed Universal ACTIVE
+  - article: LOSINA BLACK 2XL 54
+    sku_key: CL_NEW-CLO_MEN_LEG_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed Universal ACTIVE
+  - article: LOSINA BLACK L 50
+    sku_key: CL_NEW-CLO_MEN_LEG_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed Universal ACTIVE
+  - article: LOSINA BLACK M 48
+    sku_key: CL_NEW-CLO_MEN_LEG_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed Universal ACTIVE
+  - article: LOSINA BLACK XL 52
+    sku_key: CL_NEW-CLO_MEN_LEG_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed Universal ACTIVE
+  - article: "102529963\tCL_OC_MEN_LINE52_BLACK_2XL_102529963"
+    sku_key: CL_OC_MEN_LINE52_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed STORE-B ACTIVE
+  - article: "116515378_240177069"
+    sku_key: CL_OC_MEN_LINE52_BLACK
+    source: g_price03_lift_20260703 row_plan offers_book mapping; observed STORE-B ACTIVE
+
+ambiguous_article_candidates:
+  - article_pattern: CL_NEW-CLO_KID_ROMBIK_BLACK_S_*
+    candidate_sku_keys:
+      - CL_NEW-CLO_KID_ROMBIK_BLACK
+      - CL_NEW-CLO_MEN_ROMBIK_BLACK
+    disposition: review_only
+    reason: row_plan reported prefix conflict with offers_book for S/height Rombik rows; current prices were already above both candidate floors.
+
+sku_key_aliases:
+  - alias: SUIT-31-LS
+    sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+    price_write_authority: false
+    source: mirrored from AB under_floor_leak floor_aliases; validation alias only
+  - alias: SUIT-31-TS
+    sku_key: CL_NEW-CLO2_MEN_SUIT-61_BLACK
+    price_write_authority: false
+    source: mirrored from AB under_floor_leak floor_aliases; validation alias only
+  - alias: LINE-21-TS
+    sku_key: CL_OC_MEN_LINE51_WHITE
+    price_write_authority: false
+    source: mirrored from AB under_floor_leak floor_aliases; validation alias only
+  - alias: LINE-31-TS
+    sku_key: CL_OC_MEN_LINE51_WHITE
+    price_write_authority: false
+    source: mirrored from AB under_floor_leak floor_aliases; validation alias only
+
+scoring_exception_authority:
+  schema_version: under_floor_leak.scoring_exception_authority.v1.mirrored
+  source: Autonomous_business config/validation/under_floor_leak.json read on 2026-07-03
+  entries:
+    - id: OD2_B_20260702_ACMEWEAR_LINE31_CURRENT
+      action: EXCLUDE_FROM_LEAK_SCORING
+      store_code: ACMEWEAR
+      sku_keys:
+        - CL_OF_ARC_WM_LINE31_B-C-005_CARDAMOM-GREEN_J-C-005_CARDAMOM-GREEN_L-C-015_OLIVE-GREEN
+        - CL_OF_ARC_WM_LINE31_B-C-011_IVORY_J-C-026_WHITE_L-C-023_STARRY-BLACK
+        - CL_OF_ARC_WM_LINE31_C-008_ESPRESSO
+        - CL_OF_ARC_WM_LINE31_C-010_IRIS-PURPLE
+        - CL_OF_ARC_WM_LINE31_C-011_IVORY
+        - CL_OF_ARC_WM_LINE31_C-014_MISTY-BLUE
+        - CL_OF_ARC_WM_LINE31_C-023_STARRY-BLACK
+        - CL_OF_ARC_WM_LINE31_C-025_WHALE-BLUE
+    - id: OD2_B_20260702_ACMEWEAR_LINE61_PARENT_CURRENT
+      action: EXCLUDE_FROM_LEAK_SCORING
+      store_code: ACMEWEAR
+      sku_keys:
+        - CL_NEW-CLO2_MEN_SUIT-61_BLACK
+    - id: OD2_B_20260702_ACMEWEAR_LINE61_SUBBUNDLE_TS_CURRENT
+      action: EXCLUDE_FROM_LEAK_SCORING
+      store_code: ACMEWEAR
+      sku_keys:
+        - SUIT-31-TS
+    - id: OD2_B_20260702_ACMEWEAR_LINE51_PARENT_CURRENT
+      action: EXCLUDE_FROM_LEAK_SCORING
+      store_code: ACMEWEAR
+      sku_keys:
+        - CL_OC_MEN_LINE51_WHITE
+    - id: OD2_B_20260702_ACMEWEAR_LINE51_SUBBUNDLE_TS_CURRENT
+      action: EXCLUDE_FROM_LEAK_SCORING
+      store_code: ACMEWEAR
+      sku_keys:
+        - LINE-21-TS
+        - LINE-31-TS
+    - id: OD2_B_20260702_ACMEWEAR_LS31_BLK_CARVEOUT_CURRENT
+      action: ENFORCE_FLOOR
+      store_code: ACMEWEAR
+      sku_keys:
+        - SUIT-31-LS
+        - LS31-BLK
