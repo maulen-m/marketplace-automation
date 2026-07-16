@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 from datetime import datetime
@@ -10,13 +11,19 @@ import yaml
 
 
 SCHEMA_VERSION = "web_auto.kaspi_marketing_directapi_controls.v1"
-TOOLING_STAGE = "campaign_suspend_live_gated_v1"
+TOOLING_STAGE = "product_bid_and_campaign_suspend_live_gated_v2"
 DEFAULT_RUN_ROOT = Path("runs/kaspi_marketing_directapi_controls")
 ENV_CONFIRM_GATE = "WEB_AUTO_KASPI_MARKETING_DIRECTAPI_LIVE_APPLY"
 ENV_CONFIRM_VALUE = "I_UNDERSTAND_THIS_IS_A_LIVE_KASPI_MARKETING_WRITE"
+ENV_STANDING_INSTRUMENT = "WEB_AUTO_BID_AUTOPILOT_STANDING_INSTRUMENT"
 MAX_BID_KZT = 5000
 MAX_DAILY_BUDGET_KZT = 1_000_000
 FUTURE_LIVE_APPROVAL_PHRASE_PREFIX = "OWNER APPROVES KASPI MARKETING EXACT LIVE APPLY "
+STANDING_BID_AUTOPILOT_MARKER = "STANDING BID-AUTOPILOT AUTHORITY PER BID_AUTOPILOT_SPEC_20260712"
+STANDING_BID_FLOOR_KZT = 40
+STANDING_BID_CEILING_KZT = 200
+STANDING_BID_MAX_STEP_PCT = 0.20
+STANDING_BID_MAX_ACTIONS = 3
 FAILED_CAMPAIGN_RESUME_ENDPOINT = "/advertising/products/api/v1.0/campaign/resume"
 MARKETING_API_ORIGIN = "https://marketing.kaspi.kz"
 PAUSED_CAMPAIGN_STATES = {"paused", "suspended", "suspendedbyyou", "disabled"}
@@ -467,12 +474,13 @@ def load_and_resolve_plan(plan_file: Path) -> dict[str, Any]:
         "safety": {
             "dry_run_first": True,
             "live_writes_implemented": True,
-            "live_apply_operations": ["campaign_suspend"],
+            "live_apply_operations": ["campaign_suspend", "product_bid"],
             "secrets_or_tokens_required_for_dry_run": False,
             "max_bid_kzt": MAX_BID_KZT,
             "max_daily_budget_kzt": MAX_DAILY_BUDGET_KZT,
             "failed_resume_endpoint_blocked": FAILED_CAMPAIGN_RESUME_ENDPOINT,
             "future_live_approval_phrase_prefix": FUTURE_LIVE_APPROVAL_PHRASE_PREFIX,
+            "standing_instrument_env": ENV_STANDING_INSTRUMENT,
         },
     }
 
@@ -545,6 +553,37 @@ def _product_rows_matching(payload: Any, *, expected_product_sku: str, expected_
     return matches
 
 
+def _int_from_payload(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    text = str(value).strip().replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    if not text:
+        return None
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return int(number) if number.is_integer() else None
+
+
+def _product_bid(payload: Mapping[str, Any]) -> int | None:
+    return _int_from_payload(_pick(payload, "bid", "bidCpc", "bid_cpc", "avgBid", "currentBid"))
+
+
+def _product_status(payload: Mapping[str, Any]) -> str:
+    return str(_pick(payload, "status", "productStatus", "state", "archived") or "").strip()
+
+
+def _campaign_daily_budget(payload: Any) -> int | None:
+    return _int_from_payload(_pick(payload, "dailyBudget", "DailyBudget", "data.dailyBudget", "data.DailyBudget"))
+
+
 def _state_is_paused(value: str) -> bool:
     return _normalize_state(value) in PAUSED_CAMPAIGN_STATES
 
@@ -567,6 +606,432 @@ def _write_live_payloads(
     _write_json(Path(paths["core"]), core)
     _write_json(Path(paths["products"]), products)
     return paths
+
+
+def _validate_standing_instrument(
+    *,
+    env_values: Mapping[str, str],
+    plan_file: Path,
+    resolved: Mapping[str, Any],
+) -> dict[str, Any]:
+    path_text = str(env_values.get(ENV_STANDING_INSTRUMENT) or "").strip()
+    if not path_text:
+        return {"present": False, "source": "", "errors": []}
+    path = Path(path_text).expanduser()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return {
+            "present": False,
+            "source": str(path),
+            "errors": [f"standing_instrument_unreadable:{type(exc).__name__}"],
+        }
+
+    errors: list[str] = []
+    upper_text = text.upper()
+    if FUTURE_LIVE_APPROVAL_PHRASE_PREFIX not in text:
+        errors.append("standing_instrument_missing_exact_live_apply_phrase_prefix")
+    if str(resolved.get("merchant_id")) not in text:
+        errors.append("standing_instrument_missing_merchant_id")
+    if str(resolved.get("store_code")) not in text:
+        errors.append("standing_instrument_missing_store_code")
+
+    standing_authority = STANDING_BID_AUTOPILOT_MARKER in upper_text
+    if standing_authority:
+        if str(resolved.get("store") or "").upper() != "ACMEWEAR":
+            errors.append("standing_instrument_store_must_be_acmewear")
+        if "ACMEWEAR INTERNAL MARKETING CAMPAIGNS ONLY" not in upper_text:
+            errors.append("standing_instrument_missing_acmewear_campaign_scope")
+        if "FLOOR 40 KZT" not in upper_text:
+            errors.append("standing_instrument_missing_floor_40")
+        if "CEILING 200 KZT" not in upper_text:
+            errors.append("standing_instrument_missing_ceiling_200")
+
+        actions = list(resolved.get("actions") or [])
+        if not actions or len(actions) > STANDING_BID_MAX_ACTIONS:
+            errors.append(f"standing_instrument_action_count_out_of_bounds:{len(actions)}")
+        seen_campaigns: set[str] = set()
+        for action in actions:
+            campaign_id = str(action.get("campaign_id") or "")
+            if action.get("operation") != "product_bid":
+                errors.append(f"standing_instrument_operation_not_product_bid:{action.get('operation')}")
+                continue
+            if campaign_id in seen_campaigns:
+                errors.append(f"standing_instrument_duplicate_campaign_step:{campaign_id}")
+            seen_campaigns.add(campaign_id)
+            gates = action["control"]["preflight_gates"]
+            targets = action["control"].get("target_values", {})
+            old_bid = int(gates.get("expected_current_bid") or 0)
+            new_bid = int(targets.get("new_bid") or 0)
+            if not (STANDING_BID_FLOOR_KZT <= new_bid <= STANDING_BID_CEILING_KZT):
+                errors.append(
+                    f"standing_instrument_bid_out_of_bounds:{campaign_id}:{new_bid}"
+                )
+            if old_bid <= 0 or new_bid == old_bid:
+                errors.append(f"standing_instrument_invalid_bid_step:{campaign_id}:{old_bid}_to_{new_bid}")
+            elif abs(new_bid - old_bid) / old_bid > STANDING_BID_MAX_STEP_PCT + 1e-12:
+                errors.append(
+                    f"standing_instrument_step_exceeds_20pct:{campaign_id}:{old_bid}_to_{new_bid}"
+                )
+
+        return {
+            "present": not errors,
+            "source": str(path),
+            "errors": errors,
+            "authority_mode": "standing_bid_autopilot",
+        }
+
+    if str(plan_file) not in text and str(plan_file.resolve()) not in text:
+        errors.append("standing_instrument_missing_plan_file")
+
+    for action in resolved.get("actions", []):
+        gates = action["control"]["preflight_gates"]
+        targets = action["control"].get("target_values", {})
+        campaign_id = str(action.get("campaign_id"))
+        sku = str(gates.get("sku") or "")
+        old_bid = str(gates.get("expected_current_bid") or "")
+        new_bid = str(targets.get("new_bid") or "")
+        if campaign_id not in text:
+            errors.append(f"standing_instrument_missing_campaign:{campaign_id}")
+        if sku and sku not in text:
+            errors.append(f"standing_instrument_missing_sku:{sku}")
+        if old_bid and new_bid:
+            arrow = f"{old_bid}→{new_bid}"
+            ascii_arrow = f"{old_bid}->{new_bid}"
+            spaced = f"{old_bid} to {new_bid}"
+            if arrow not in text and ascii_arrow not in text and spaced not in text:
+                errors.append(f"standing_instrument_missing_bid_delta:{campaign_id}:{old_bid}_to_{new_bid}")
+
+    return {
+        "present": not errors,
+        "source": str(path),
+        "errors": errors,
+        "authority_mode": "exact_plan",
+    }
+
+
+def _default_product_bid_live_runner(
+    *,
+    resolved: Mapping[str, Any],
+    run_dir: Path,
+    env_file: Path | None,
+    headless: bool,
+) -> dict[str, Any]:
+    from playwright.sync_api import sync_playwright
+
+    from .kaspi_marketing import (
+        CAMPAIGN_CORE_URL,
+        CAMPAIGN_PRODUCTS_URL,
+        MARKETING_CAMPAIGNS_URL,
+        build_marketing_headers,
+        login_kaspi_marketing,
+        resolve_marketing_credentials,
+        _request_json,
+    )
+    from .kaspi_merchant_common import merchant_browser_launch_kwargs
+
+    store = str(resolved["store"])
+    merchant_id = str(resolved["merchant_id"])
+    store_code = str(resolved["store_code"])
+    target_date = str(resolved["target_date"])
+    actions = list(resolved.get("actions") or [])
+    creds = resolve_marketing_credentials(store, env_file=env_file, merchant_id=merchant_id, store_code=store_code)
+    if creds.merchant_id != merchant_id:
+        raise RuntimeError(f"merchant_id_mismatch:{creds.merchant_id}!={merchant_id}")
+    if creds.store_code != store_code:
+        raise RuntimeError(f"store_code_mismatch:{creds.store_code}!={store_code}")
+
+    preflight_errors: list[str] = []
+    postverify_errors: list[str] = []
+    action_results: list[dict[str, Any]] = []
+    artifact_paths: list[str] = []
+    diff_rows: list[dict[str, Any]] = []
+    live_writes_executed = False
+    campaign_list_url = (
+        f"{MARKETING_API_ORIGIN}/advertising/products/api/v5/merchant/{merchant_id}"
+        f"/Campaigns?StartDate={target_date}&EndDate={target_date}"
+    )
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(**merchant_browser_launch_kwargs(headless=headless))
+        try:
+            context = browser.new_context(viewport={"width": 1440, "height": 1400})
+            page = context.new_page()
+            login_kaspi_marketing(page, login_value=creds.login, password_value=creds.password)
+            headers = build_marketing_headers(context.cookies(MARKETING_API_ORIGIN), MARKETING_CAMPAIGNS_URL)
+
+            preflight: dict[str, dict[str, Any]] = {}
+            for action in actions:
+                campaign_id = str(action["campaign_id"])
+                gates = action["control"]["preflight_gates"]
+                expected_sku = str(gates["sku"])
+                expected_bid = int(gates["expected_current_bid"])
+                campaign_list = _request_json(context, url=campaign_list_url, headers=headers)
+                core = _request_json(
+                    context,
+                    url=CAMPAIGN_CORE_URL.format(merchant_id=merchant_id, campaign_id=campaign_id),
+                    headers=headers,
+                )
+                products = _request_json(
+                    context,
+                    url=CAMPAIGN_PRODUCTS_URL.format(
+                        merchant_id=merchant_id,
+                        campaign_id=campaign_id,
+                        date=target_date,
+                    ),
+                    headers=headers,
+                )
+                artifact_paths.extend(
+                    _write_live_payloads(
+                        run_dir=run_dir,
+                        prefix="pre",
+                        campaign_id=campaign_id,
+                        campaign_list=campaign_list,
+                        core=core,
+                        products=products,
+                    ).values()
+                )
+                list_count = _campaign_list_identity_count(campaign_list, campaign_id)
+                core_id = _campaign_identity(core, campaign_id)
+                state = _campaign_state(core)
+                budget = _campaign_daily_budget(core)
+                matches = _product_rows_matching(
+                    products,
+                    expected_product_sku=expected_sku,
+                    expected_merchant_sku="",
+                )
+                if list_count != 1:
+                    preflight_errors.append(f"{campaign_id}:campaign_list_identity_count:{list_count}")
+                if core_id != campaign_id:
+                    preflight_errors.append(f"{campaign_id}:campaign_core_identity:{core_id}")
+                if len(matches) != 1:
+                    preflight_errors.append(f"{campaign_id}:{expected_sku}:product_identity_match_count:{len(matches)}")
+                    continue
+                product = matches[0]
+                bid = _product_bid(product)
+                if bid != expected_bid:
+                    preflight_errors.append(f"{campaign_id}:{expected_sku}:bid:{bid}!={expected_bid}")
+                preflight[action["action_id"]] = {
+                    "campaign_id": campaign_id,
+                    "sku": expected_sku,
+                    "bid": bid,
+                    "product_status": _product_status(product),
+                    "campaign_state": state,
+                    "daily_budget": budget,
+                    "merchant_sku": str(_pick(product, "merchantSku", "merchantSKU", "offerId", "jsonMerchantSku") or ""),
+                }
+
+            if preflight_errors:
+                return {
+                    "gate": "YELLOW",
+                    "status": "blocked_preflight_failed",
+                    "preflight_errors": preflight_errors,
+                    "postverify_errors": [],
+                    "live_writes_executed": False,
+                    "live_apply_implemented": True,
+                    "action_results": action_results,
+                    "artifact_paths": artifact_paths,
+                }
+
+            for action in actions:
+                gates = action["control"]["preflight_gates"]
+                targets = action["control"]["target_values"]
+                campaign_id = str(action["campaign_id"])
+                sku = str(gates["sku"])
+                new_bid = int(targets["new_bid"])
+                endpoint_url = f"{MARKETING_API_ORIGIN}{action['control']['endpoint_path']}"
+                xsrf = ""
+                for cookie in context.cookies(MARKETING_API_ORIGIN):
+                    if cookie.get("name") == "XSRF-TOKEN":
+                        xsrf = str(cookie.get("value") or "")
+                        break
+                payload = {"skuList": [sku], "bid": new_bid}
+                response = page.evaluate(
+                    """
+                    async ({url, payload, xsrf}) => {
+                      const headers = {
+                        "accept": "application/json, text/plain, */*",
+                        "content-type": "application/json",
+                        "x-requested-with": "XMLHttpRequest"
+                      };
+                      if (xsrf) headers["x-xsrf-token"] = xsrf;
+                      const started = performance.now();
+                      const resp = await fetch(url, {
+                        method: "PUT",
+                        headers,
+                        body: JSON.stringify(payload),
+                        credentials: "include"
+                      });
+                      const text = await resp.text();
+                      let bodyJson = null;
+                      try { bodyJson = JSON.parse(text); } catch (err) {}
+                      return {
+                        status: resp.status,
+                        ok: resp.ok,
+                        elapsed_ms: Math.round(performance.now() - started),
+                        body_json: bodyJson,
+                        body_text_snippet: text.slice(0, 1000)
+                      };
+                    }
+                    """,
+                    {"url": endpoint_url, "payload": payload, "xsrf": xsrf},
+                )
+                artifact_path = run_dir / f"apply_{campaign_id}_{sku}_update_bid_response.json"
+                _write_json(artifact_path, {"response": response, "payload_redacted": payload})
+                artifact_paths.append(str(artifact_path))
+                live_writes_executed = True
+                action_results.append(
+                    {
+                        "action_id": action["action_id"],
+                        "campaign_id": campaign_id,
+                        "sku": sku,
+                        "status": "product_bid_request_sent",
+                        "response_status": response.get("status"),
+                        "response_ok": response.get("ok"),
+                        "payload_redacted": payload,
+                    }
+                )
+                if not response.get("ok"):
+                    postverify_errors.append(f"{campaign_id}:{sku}:update_bid_response_status:{response.get('status')}")
+
+            page.wait_for_timeout(2000)
+            headers = build_marketing_headers(context.cookies(MARKETING_API_ORIGIN), MARKETING_CAMPAIGNS_URL)
+            for action in actions:
+                gates = action["control"]["preflight_gates"]
+                targets = action["control"]["target_values"]
+                campaign_id = str(action["campaign_id"])
+                sku = str(gates["sku"])
+                expected_old = int(gates["expected_current_bid"])
+                expected_new = int(targets["new_bid"])
+                campaign_list = _request_json(context, url=campaign_list_url, headers=headers)
+                core = _request_json(
+                    context,
+                    url=CAMPAIGN_CORE_URL.format(merchant_id=merchant_id, campaign_id=campaign_id),
+                    headers=headers,
+                )
+                products = _request_json(
+                    context,
+                    url=CAMPAIGN_PRODUCTS_URL.format(
+                        merchant_id=merchant_id,
+                        campaign_id=campaign_id,
+                        date=target_date,
+                    ),
+                    headers=headers,
+                )
+                artifact_paths.extend(
+                    _write_live_payloads(
+                        run_dir=run_dir,
+                        prefix="post",
+                        campaign_id=campaign_id,
+                        campaign_list=campaign_list,
+                        core=core,
+                        products=products,
+                    ).values()
+                )
+                list_count = _campaign_list_identity_count(campaign_list, campaign_id)
+                core_id = _campaign_identity(core, campaign_id)
+                matches = _product_rows_matching(products, expected_product_sku=sku, expected_merchant_sku="")
+                if list_count != 1:
+                    postverify_errors.append(f"{campaign_id}:post_campaign_list_identity_count:{list_count}")
+                if core_id != campaign_id:
+                    postverify_errors.append(f"{campaign_id}:post_campaign_core_identity:{core_id}")
+                if len(matches) != 1:
+                    postverify_errors.append(f"{campaign_id}:{sku}:post_product_identity_match_count:{len(matches)}")
+                    continue
+                product = matches[0]
+                post_bid = _product_bid(product)
+                post_status = _product_status(product)
+                post_state = _campaign_state(core)
+                post_budget = _campaign_daily_budget(core)
+                before = preflight[action["action_id"]]
+                if post_bid != expected_new:
+                    postverify_errors.append(f"{campaign_id}:{sku}:post_bid:{post_bid}!={expected_new}")
+                if post_status != before["product_status"]:
+                    postverify_errors.append(f"{campaign_id}:{sku}:product_status_changed:{before['product_status']}->{post_status}")
+                if _normalize_state(post_state) != _normalize_state(before["campaign_state"]):
+                    postverify_errors.append(f"{campaign_id}:campaign_state_changed:{before['campaign_state']}->{post_state}")
+                if post_budget != before["daily_budget"]:
+                    postverify_errors.append(f"{campaign_id}:daily_budget_changed:{before['daily_budget']}->{post_budget}")
+                diff_rows.append(
+                    {
+                        "campaign_id": campaign_id,
+                        "sku": sku,
+                        "field": "product_bid_kzt",
+                        "before": before["bid"],
+                        "after": post_bid,
+                        "expected_before": expected_old,
+                        "expected_after": expected_new,
+                        "result": "PASS" if post_bid == expected_new and before["bid"] == expected_old else "FAIL",
+                    }
+                )
+                diff_rows.append(
+                    {
+                        "campaign_id": campaign_id,
+                        "sku": sku,
+                        "field": "product_status",
+                        "before": before["product_status"],
+                        "after": post_status,
+                        "expected_before": before["product_status"],
+                        "expected_after": before["product_status"],
+                        "result": "PASS" if post_status == before["product_status"] else "FAIL",
+                    }
+                )
+                diff_rows.append(
+                    {
+                        "campaign_id": campaign_id,
+                        "sku": sku,
+                        "field": "campaign_state",
+                        "before": before["campaign_state"],
+                        "after": post_state,
+                        "expected_before": before["campaign_state"],
+                        "expected_after": before["campaign_state"],
+                        "result": "PASS" if _normalize_state(post_state) == _normalize_state(before["campaign_state"]) else "FAIL",
+                    }
+                )
+                diff_rows.append(
+                    {
+                        "campaign_id": campaign_id,
+                        "sku": sku,
+                        "field": "daily_budget",
+                        "before": before["daily_budget"],
+                        "after": post_budget,
+                        "expected_before": before["daily_budget"],
+                        "expected_after": before["daily_budget"],
+                        "result": "PASS" if post_budget == before["daily_budget"] else "FAIL",
+                    }
+                )
+        finally:
+            browser.close()
+
+    diff_path = run_dir / "before_after_product_bid_diff.csv"
+    with diff_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "campaign_id",
+                "sku",
+                "field",
+                "before",
+                "after",
+                "expected_before",
+                "expected_after",
+                "result",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(diff_rows)
+    artifact_paths.append(str(diff_path))
+
+    return {
+        "gate": "RED" if postverify_errors else "GREEN",
+        "status": "product_bid_live_apply_verified" if not postverify_errors else "postverify_failed",
+        "preflight_errors": preflight_errors,
+        "postverify_errors": postverify_errors,
+        "live_writes_executed": live_writes_executed,
+        "live_apply_implemented": True,
+        "action_results": action_results,
+        "artifact_paths": artifact_paths,
+    }
 
 
 def _default_campaign_suspend_live_runner(
@@ -853,7 +1318,7 @@ def _render_closeout(*, summary: Mapping[str, Any], resolved: Mapping[str, Any])
             "",
             "- Dry-run resolver-only mode performs no authentication and no external mutation.",
             f"- Future live apply requires `--confirm` plus `{ENV_CONFIRM_GATE}={ENV_CONFIRM_VALUE}`.",
-            "- Confirmed live apply is implemented only for exact `campaign_suspend` plans with owner approval present.",
+            "- Confirmed live apply is implemented only for exact `campaign_suspend` or exact `product_bid` plans with owner approval present.",
             "- No secrets, cookies, token values, authorization headers, storage state, or PII are written.",
             "",
         ]
@@ -887,6 +1352,19 @@ def run_directapi_control(
         raise DirectAPIControlPlanError(["choose_exactly_one_of_dry_run_or_confirm"])
 
     resolved = load_and_resolve_plan(plan_file)
+    env_values = env if env is not None else os.environ
+    standing_instrument = _validate_standing_instrument(
+        env_values=env_values,
+        plan_file=plan_file,
+        resolved=resolved,
+    )
+    operations = {action["operation"] for action in resolved["actions"]}
+    owner_approval_present = bool(resolved.get("owner_approval_present") or standing_instrument.get("present"))
+    owner_approval_source = str(resolved.get("owner_approval_source") or "")
+    if standing_instrument.get("present") and operations == {"product_bid"}:
+        owner_approval_source = "standing_instrument_env"
+    elif standing_instrument.get("present") and not owner_approval_source:
+        owner_approval_source = "standing_instrument_env"
     run_id = f"{timestamp or _timestamp()}_directapi_control"
     run_dir = run_root / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -896,25 +1374,31 @@ def run_directapi_control(
     status = "dry_run_resolver_ready"
     block_reason = ""
     live_writes_executed = False
+    live_write_authorized = False
     live_apply_implemented = True
     live_result: dict[str, Any] = {}
 
     if confirm:
         gate = "YELLOW"
-        env_values = env if env is not None else os.environ
         if env_values.get(ENV_CONFIRM_GATE) != ENV_CONFIRM_VALUE:
             status = "blocked_confirm_env_gate_missing"
             block_reason = f"missing_required_env_gate:{ENV_CONFIRM_GATE}"
-        elif not resolved.get("owner_approval_present"):
+        elif operations == {"product_bid"} and not standing_instrument.get("present"):
+            status = "blocked_standing_instrument_invalid"
+            block_reason = ";".join(
+                str(item) for item in standing_instrument.get("errors") or ["standing_instrument_env_missing"]
+            )
+        elif standing_instrument.get("errors") and not resolved.get("owner_approval_present"):
+            status = "blocked_standing_instrument_invalid"
+            block_reason = ";".join(str(item) for item in standing_instrument.get("errors") or [])
+        elif not owner_approval_present:
             status = "blocked_owner_approval_missing"
             block_reason = "missing_owner_approval_phrase_file_or_field"
-        elif {action["operation"] for action in resolved["actions"]} != {"campaign_suspend"}:
-            status = "blocked_live_apply_supported_only_for_campaign_suspend"
-            block_reason = "live_apply_supported_only_for_campaign_suspend"
-        else:
+        elif operations == {"campaign_suspend"}:
+            live_write_authorized = True
             runner = live_runner or _default_campaign_suspend_live_runner
             live_result = runner(
-                resolved=resolved,
+                resolved={**resolved, "owner_approval_present": owner_approval_present, "owner_approval_source": owner_approval_source},
                 run_dir=run_dir,
                 env_file=env_file,
                 headless=headless,
@@ -923,10 +1407,29 @@ def run_directapi_control(
             status = str(live_result.get("status") or "live_apply_result_missing_status")
             live_writes_executed = bool(live_result.get("live_writes_executed"))
             live_apply_implemented = bool(live_result.get("live_apply_implemented", True))
+        elif operations == {"product_bid"}:
+            live_write_authorized = True
+            runner = live_runner or _default_product_bid_live_runner
+            live_result = runner(
+                resolved={**resolved, "owner_approval_present": owner_approval_present, "owner_approval_source": owner_approval_source},
+                run_dir=run_dir,
+                env_file=env_file,
+                headless=headless,
+            )
+            gate = str(live_result.get("gate") or "RED")
+            status = str(live_result.get("status") or "live_apply_result_missing_status")
+            live_writes_executed = bool(live_result.get("live_writes_executed"))
+            live_apply_implemented = bool(live_result.get("live_apply_implemented", True))
+        else:
+            status = "blocked_live_apply_supported_only_for_campaign_suspend_or_product_bid"
+            block_reason = "live_apply_supported_only_for_campaign_suspend_or_product_bid"
 
     generated_at = datetime.now().isoformat(timespec="seconds")
     resolved_payload = {
         **resolved,
+        "owner_approval_present": owner_approval_present,
+        "owner_approval_source": owner_approval_source,
+        "standing_instrument": standing_instrument,
         "run_id": run_id,
         "run_dir": str(run_dir),
         "generated_at_local": generated_at,
@@ -953,8 +1456,10 @@ def run_directapi_control(
         "closeout_path": str(closeout_path),
         "action_count": resolved["action_count"],
         "operation_endpoint_set": resolved["operation_endpoint_set"],
-        "owner_approval_present": resolved["owner_approval_present"],
-        "live_write_authorized": resolved["live_write_authorized"],
+        "owner_approval_present": owner_approval_present,
+        "owner_approval_source": owner_approval_source,
+        "standing_instrument": standing_instrument,
+        "live_write_authorized": live_write_authorized,
         "live_writes_executed": live_writes_executed,
         "live_apply_implemented": live_apply_implemented,
         "block_reason": block_reason,
