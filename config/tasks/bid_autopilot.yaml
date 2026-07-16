@@ -23,12 +23,20 @@ unit_contribution_bases:
     source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
     source_family: LINE51
     source_column: unit_contribution_kzt
+  LINE61:
+    unit_contribution_kzt: 13000
+    source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
+    source_family: LINE61
+    source_column: unit_contribution_kzt
   LINE31:
     unit_contribution_kzt: 11200
     source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
     source_family: LINE31
     source_column: unit_contribution_kzt
 
+# Excluded: 2690256 has no validated contribution basis at its current price.
+# Excluded W2 Active bundles: 2794148, 2794150, 2794152, 2794153 fail the contribution gate.
+# Excluded W2 OutOfStock bundles: 2794142, 2794144 fail the current-sellability gate.
 campaigns:
   - campaign_id: "2380614"
     expected_sku: 19102598b
@@ -52,4 +60,24 @@ campaigns:
   - campaign_id: "2695637"
     expected_sku: 20754945b
     product: LINE31 Starry Black
+    unit_contribution_basis: LINE31
+  - campaign_id: "2545773"
+    expected_sku: 19796919b
+    product: LINE61
+    unit_contribution_basis: LINE61
+  - campaign_id: "2629982"
+    expected_sku: 19819350b
+    product: LINE61 K-O TRM
+    unit_contribution_basis: LINE61
+  - campaign_id: "2752402"
+    expected_sku: 21022113b
+    product: LINE31 Misty Blue
+    unit_contribution_basis: LINE31
+  - campaign_id: "2752405"
+    expected_sku: 21022114b
+    product: LINE31 Iris Purple
+    unit_contribution_basis: LINE31
+  - campaign_id: "2862392"
+    expected_sku: 20970889b
+    product: LINE31 IWB Mixed
     unit_contribution_basis: LINE31
