@@ -1,0 +1,8 @@
+schema_version: web_auto.selloff_price_protect.v1
+sku_key_prefixes:
+  - CL_NEW-CLO_KID_ROMBIK_
+product_codes:
+  - "135222379"
+  - "128541983"
+never_raise: true
+owner_decision: AB main orchestrator owner decision 2026-07-17, SPEC A selloff price-protect hook

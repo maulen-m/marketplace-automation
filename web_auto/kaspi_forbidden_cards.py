@@ -11,6 +11,91 @@ ACMEWEAR_LS_REMOVAL_OWNER_DECISION_ID = "acmewear_ls31_ls21_blk_sale_removal_own
 ACMEWEAR_LS_REMOVAL_OWNER_DECISION_LABEL = (
     "owner order 2026-07-06 ACMEWEAR LS31/LS21 BLK child bundles removed from sale"
 )
+BERSERK_OWNER_DECISION_ID = "forbidden_kaspi_offer_cards_berserk_2026_07_17"
+BERSERK_OWNER_DECISION_LABEL = (
+    "owner decision 2026-07-17 forbidden Berserk photo-mismatched Kaspi offer cards"
+)
+BERSERK_FORBIDDEN_PRODUCT_CODES = {
+    "17490091",
+    "18209877",
+    "30132395",
+    "30321330",
+    "30341507",
+    "052039068",
+    "120765596",
+    "120765717",
+    "120765723",
+    "120765725",
+    "120765729",
+    "120770066",
+    "121207859",
+    "121207970",
+    "121208018",
+    "121208087",
+    "121208216",
+    "121208442",
+    "121460063",
+    "121460065",
+    "121460073",
+    "121625146",
+    "121625147",
+    "121625347",
+    "121934234",
+    "121934256",
+    "121934275",
+    "122188558",
+    "122659793",
+    "122661759",
+    "122661796",
+    "128750634",
+    "129966843",
+    "132571892",
+    "132571923",
+    "135106879",
+    "135502266",
+    "135502267",
+    "135502268",
+    "137440176",
+    "138284689",
+    "140937883",
+    "142101032",
+    "142102722",
+    "144019144",
+    "145325867",
+    "145700542",
+    "145700543",
+    "145700546",
+    "145700547",
+    "145700548",
+    "145700549",
+    "145700550",
+    "146683357",
+    "146716915",
+    "146716916",
+    "146716917",
+    "147648414",
+    "147768547",
+    "147772841",
+    "147772845",
+    "150318455",
+    "150318457",
+    "150318620",
+    "150318626",
+    "150318645",
+    "150318674",
+    "150318694",
+    "231117565",
+    "268608760",
+    "598963275",
+    "625888484",
+    "635798142",
+    "697939657",
+    "863780079",
+}
+BERSERK_FORBIDDEN_ARTICLE_PREFIXES = (
+    "CL_NEW-CLO_MEN_BERSERK-RUSH_",
+    "CL_NEW-CLO_MEN_BERSERK-SHIRT_",
+)
 
 FORBIDDEN_KASPI_OFFER_PRODUCT_CODES = {
     # Owner decision 2026-07-03: these Kaspi cards are Nike long sleeves, not sellable Nike T-shirts.
@@ -23,7 +108,7 @@ FORBIDDEN_KASPI_OFFER_PRODUCT_CODES = {
     # Owner order 2026-07-06: ACMEWEAR LS31/LS21 BLK child bundles must not be saleable on ACMEWEAR.
     "165486887",
     "165487403",
-}
+} | BERSERK_FORBIDDEN_PRODUCT_CODES
 FORBIDDEN_KASPI_OFFER_URL_FRAGMENTS = {
     "sportivnyi-kostjum-18107200-643074",
     "suit-31-ls-st",
@@ -59,6 +144,16 @@ FORBIDDEN_KASPI_OFFER_PRODUCT_CODE_RULES.update(
         ),
     }
 )
+FORBIDDEN_KASPI_OFFER_PRODUCT_CODE_RULES.update(
+    {
+        code: (
+            BERSERK_OWNER_DECISION_ID,
+            BERSERK_OWNER_DECISION_LABEL,
+            "forbidden Berserk photo-mismatched offer card",
+        )
+        for code in BERSERK_FORBIDDEN_PRODUCT_CODES
+    }
+)
 FORBIDDEN_KASPI_OFFER_ARTICLE_PREFIX_RULES = {
     "SUIT-31-LS-ST-": (
         ACMEWEAR_LS_REMOVAL_OWNER_DECISION_ID,
@@ -70,6 +165,14 @@ FORBIDDEN_KASPI_OFFER_ARTICLE_PREFIX_RULES = {
         ACMEWEAR_LS_REMOVAL_OWNER_DECISION_LABEL,
         "forbidden ACMEWEAR SUIT-21-LS BLK child bundle",
     ),
+    **{
+        prefix: (
+            BERSERK_OWNER_DECISION_ID,
+            BERSERK_OWNER_DECISION_LABEL,
+            "forbidden Berserk photo-mismatched offer card",
+        )
+        for prefix in BERSERK_FORBIDDEN_ARTICLE_PREFIXES
+    },
 }
 FORBIDDEN_KASPI_OFFER_URL_FRAGMENT_RULES = {
     "sportivnyi-kostjum-18107200-643074": (

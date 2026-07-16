@@ -12,12 +12,18 @@ from zoneinfo import ZoneInfo
 
 from playwright.sync_api import Locator, Page, sync_playwright
 
+from .kaspi_forbidden_cards import (
+    BERSERK_OWNER_DECISION_ID,
+    forbidden_card_match_for_row,
+    stock_cell_is_sellable,
+)
 from .kaspi_merchant_common import login_kaspi_merchant, resolve_store_credentials
 from .kaspi_offer_ui_upload import (
     DEFAULT_ENTRY_URL,
     _merchant_id_js,
     _normalize_barcode,
     _normalize_size_rus,
+    _forbidden_upload_product_reason,
     _product_code_for_search,
     _step_choose_card_js,
     _step_close_stale_success_modal_js,
@@ -42,6 +48,48 @@ DEFAULT_ENV_FILE = Path("~/Docs/Autonomous_business/.env")
 
 class RowExecutionTimeout(RuntimeError):
     pass
+
+
+def _apply_berserk_forbidden_card_guard(
+    rows: list[dict[str, Any]],
+    validation: dict[str, Any],
+    *,
+    enforce_saleable: bool = True,
+) -> dict[str, Any]:
+    """Make the Playwright path fail closed on saleable Berserk rows only."""
+    errors = list(validation.get("errors") or [])
+    blocked = 0
+    allowed_deactivations = 0
+    matched_rows = 0
+    warnings = list(validation.get("warnings") or [])
+    for row in rows:
+        match = forbidden_card_match_for_row(row)
+        if match is None or match.owner_decision != BERSERK_OWNER_DECISION_ID:
+            continue
+        matched_rows += 1
+        reason = _forbidden_upload_product_reason(row)
+        error = f"row {row.get('row_number', '?')}: {reason}"
+        saleable = any(stock_cell_is_sellable(row.get(field)) for field in ("stock_pp1", "stock_pp2"))
+        if saleable:
+            blocked += 1
+            if enforce_saleable:
+                if error not in errors:
+                    errors.append(error)
+            else:
+                errors = [item for item in errors if item != error]
+                warning = f"dry-run only; confirmed Playwright upload would block {error}"
+                if warning not in warnings:
+                    warnings.append(warning)
+        else:
+            allowed_deactivations += 1
+            errors = [item for item in errors if item != error]
+    if matched_rows:
+        validation["errors"] = errors
+        validation["warnings"] = warnings
+        validation["ok"] = not errors
+        validation["berserk_forbidden_saleable_rows_count"] = blocked
+        validation["berserk_forbidden_deactivation_rows_allowed_count"] = allowed_deactivations
+    return validation
 
 
 def parse_step_result(raw: Any) -> dict[str, Any]:
@@ -765,6 +813,11 @@ def run_kaspi_offer_ui_upload_playwright(
         rows,
         required_store_codes=[normalized_store],
         require_black_coverage=not allow_partial_color_batch,
+    )
+    validation = _apply_berserk_forbidden_card_guard(
+        rows,
+        validation,
+        enforce_saleable=bool(confirm and not dry_run),
     )
     price_floor_report = run_dir / "price_floor_clamps.csv"
     write_price_floor_clamp_report(price_floor_report, validation.get("price_floor_clamp_rows", []))

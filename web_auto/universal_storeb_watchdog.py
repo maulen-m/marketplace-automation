@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import yaml
 from openpyxl import load_workbook
 
+from .kaspi_forbidden_cards import BERSERK_OWNER_DECISION_ID, forbidden_card_match_for_row
 from .kaspi_merchant_common import load_env_assignments, normalize_store_name, resolve_store_credentials
 from .kaspi_pricelist_ops import WAREHOUSE_COLUMNS, is_no_like, parse_int
 
@@ -412,7 +413,13 @@ def _load_repricer_state(path: Path | None) -> dict[tuple[str, str], dict[str, A
     return out
 
 
-def _load_target_rows(config: dict[str, Any], repo_root: Path, sources: dict[str, Path | str | None]) -> list[dict[str, Any]]:
+def _load_target_rows(
+    config: dict[str, Any],
+    repo_root: Path,
+    sources: dict[str, Path | str | None],
+    *,
+    suppression_stats: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
     target_path = Path(sources["target_reconciliation_csv"])
     rows = _read_csv_rows(target_path)
     activation_path = sources.get("activation_ledger_csv")
@@ -424,6 +431,7 @@ def _load_target_rows(config: dict[str, Any], repo_root: Path, sources: dict[str
                 activation_keys.add((normalize_store_name(row.get("store") or row.get("target_store")), str(row.get("merchant_sku") or "").strip()))
 
     out: list[dict[str, Any]] = []
+    denied_family_suppressed = 0
     for row in rows:
         store = normalize_store_name(row.get("store") or row.get("target_store") or row.get("store_name"))
         merchant_sku = str(row.get("merchant_sku") or "").strip()
@@ -442,7 +450,13 @@ def _load_target_rows(config: dict[str, Any], repo_root: Path, sources: dict[str
         row["floor_min_price_value"] = _floor_value(row)
         row["is_activation_ledger_row"] = (store, merchant_sku) in activation_keys
         row["is_watch_target"] = live_write_candidate or target_for_activation or active_now or row["is_activation_ledger_row"]
+        denied_match = forbidden_card_match_for_row(row)
+        if denied_match is not None and denied_match.owner_decision == BERSERK_OWNER_DECISION_ID:
+            denied_family_suppressed += 1
+            continue
         out.append(row)
+    if suppression_stats is not None:
+        suppression_stats["denied_family_suppressed"] = denied_family_suppressed
     return out
 
 
@@ -487,7 +501,8 @@ def build_watchdog_report(
     pricelists = _load_pricelist_state(pricelist_paths)
     repricer = _load_repricer_state(repricer_sqlite_path)
     sources = resolve_watchdog_sources(config, repo_root)
-    target_rows = _load_target_rows(config, repo_root, sources)
+    suppression_stats: dict[str, int] = {}
+    target_rows = _load_target_rows(config, repo_root, sources, suppression_stats=suppression_stats)
 
     findings: list[dict[str, Any]] = []
     repricer_store_counts = Counter(store for store, _merchant_sku in repricer.keys())
@@ -724,6 +739,7 @@ def build_watchdog_report(
         "production_write_action_executed": False,
         "auto_correction_enabled": False,
         "target_rows_loaded": len(target_rows),
+        "denied_family_suppressed": suppression_stats.get("denied_family_suppressed", 0),
         "watch_rows_checked": checked_rows,
         "findings_count": len(findings),
         "severity_counts": dict(severity_counts),
@@ -764,6 +780,7 @@ def _render_report(summary: dict[str, Any], findings: list[dict[str, Any]]) -> s
         "- production_write_action_executed: false",
         "- auto_correction_enabled: false",
         f"- target_rows_loaded: {summary['target_rows_loaded']}",
+        f"- denied_family_suppressed: {summary['denied_family_suppressed']}",
         f"- watch_rows_checked: {summary['watch_rows_checked']}",
         f"- findings_count: {summary['findings_count']}",
         "",
