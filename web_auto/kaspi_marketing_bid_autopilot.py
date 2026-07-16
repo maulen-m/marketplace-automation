@@ -137,6 +137,33 @@ def load_autopilot_config(path: Path) -> dict[str, Any]:
     if str(raw.get("store_code") or "") != DEFAULT_STORE_CODE:
         raise ValueError("autopilot_config_store_code_mismatch")
 
+    store_scopes: dict[str, dict[str, str]] = {
+        DEFAULT_STORE: {
+            "store": DEFAULT_STORE,
+            "merchant_id": DEFAULT_MERCHANT_ID,
+            "store_code": DEFAULT_STORE_CODE,
+        }
+    }
+    raw_stores = raw.get("stores") or {}
+    if not isinstance(raw_stores, dict):
+        raise ValueError("autopilot_config_stores_must_be_mapping")
+    for raw_store_name, raw_store_scope in raw_stores.items():
+        store_name = str(raw_store_name or "").strip().upper()
+        if not store_name or not isinstance(raw_store_scope, dict):
+            raise ValueError(f"autopilot_config_store_scope_invalid:{raw_store_name}")
+        merchant_id = str(raw_store_scope.get("merchant_id") or "").strip()
+        store_code = str(raw_store_scope.get("store_code") or "").strip()
+        if not merchant_id or not store_code:
+            raise ValueError(f"autopilot_config_store_scope_incomplete:{store_name}")
+        scope = {
+            "store": store_name,
+            "merchant_id": merchant_id,
+            "store_code": store_code,
+        }
+        if store_name == DEFAULT_STORE and scope != store_scopes[DEFAULT_STORE]:
+            raise ValueError("autopilot_config_default_store_scope_mismatch")
+        store_scopes[store_name] = scope
+
     schedule = raw.get("schedule")
     if not isinstance(schedule, dict):
         raise ValueError("autopilot_config_schedule_must_be_mapping")
@@ -207,6 +234,8 @@ def load_autopilot_config(path: Path) -> dict[str, Any]:
         raise ValueError("autopilot_config_campaigns_missing")
     campaign_ids: list[str] = []
     campaign_families: dict[str, str] = {}
+    campaign_stores: dict[str, str] = {}
+    campaign_scopes: dict[str, dict[str, str]] = {}
     expected_skus: dict[str, str] = {}
     unit_contributions: dict[str, float] = {}
     unit_contribution_sources: dict[str, str] = {}
@@ -217,12 +246,20 @@ def load_autopilot_config(path: Path) -> dict[str, Any]:
         campaign_id = str(raw_campaign.get("campaign_id") or "").strip()
         expected_sku = str(raw_campaign.get("expected_sku") or "").strip()
         basis_name = str(raw_campaign.get("unit_contribution_basis") or "").strip()
-        if not campaign_id or not expected_sku or basis_name not in bases:
+        campaign_store = str(raw_campaign.get("store") or DEFAULT_STORE).strip().upper()
+        if (
+            not campaign_id
+            or not expected_sku
+            or basis_name not in bases
+            or campaign_store not in store_scopes
+        ):
             raise ValueError(f"autopilot_config_campaign_incomplete:{index}")
         if campaign_id in campaign_ids:
             raise ValueError(f"autopilot_config_duplicate_campaign:{campaign_id}")
         campaign_ids.append(campaign_id)
         campaign_families[campaign_id] = basis_name
+        campaign_stores[campaign_id] = campaign_store
+        campaign_scopes[campaign_id] = dict(store_scopes[campaign_store])
         expected_skus[campaign_id] = expected_sku
         unit_contributions[campaign_id] = float(bases[basis_name]["unit_contribution_kzt"])
         unit_contribution_sources[campaign_id] = str(bases[basis_name]["source"])
@@ -244,6 +281,9 @@ def load_autopilot_config(path: Path) -> dict[str, Any]:
         "path": str(path.resolve()),
         "campaign_ids": campaign_ids,
         "campaign_families": campaign_families,
+        "campaign_stores": campaign_stores,
+        "campaign_scopes": campaign_scopes,
+        "store_scopes": store_scopes,
         "expected_skus": expected_skus,
         "unit_contribution_by_campaign": unit_contributions,
         "unit_contribution_sources": unit_contribution_sources,
@@ -490,19 +530,33 @@ def append_ledger_rows(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             fh.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def load_campaign_rows(db_path: Path, campaign_id: str) -> list[DailyProductMetrics]:
+def load_campaign_rows(
+    db_path: Path,
+    campaign_id: str,
+    *,
+    merchant_id: str | None = None,
+    store_code: str | None = None,
+) -> list[DailyProductMetrics]:
+    where_parts = ["campaign_id = ?"]
+    params: list[str] = [campaign_id]
+    if merchant_id:
+        where_parts.append("merchant_id = ?")
+        params.append(str(merchant_id))
+    if store_code:
+        where_parts.append("store_code = ?")
+        params.append(str(store_code))
     uri = f"file:{db_path}?mode=ro"
     with sqlite3.connect(uri, uri=True) as conn:
         conn.row_factory = sqlite3.Row
         raw_rows = conn.execute(
-            """
+            f"""
             SELECT date, campaign_id, campaign_name, sku_key, product_status, bid_cpc,
                    views, cost, orders_total, json_sku, json_merchant_sku, ingested_at
             FROM campaign_product_daily_current
-            WHERE campaign_id = ?
+            WHERE {' AND '.join(where_parts)}
             ORDER BY date, ingested_at
             """,
-            (campaign_id,),
+            params,
         ).fetchall()
 
     latest_by_date: dict[str, sqlite3.Row] = {}
@@ -749,12 +803,15 @@ def build_directapi_plan(
     actions: Sequence[Mapping[str, Any]],
     target_date: str,
     owner_approval_file: Path | None,
+    store: str = DEFAULT_STORE,
+    merchant_id: str = DEFAULT_MERCHANT_ID,
+    store_code: str = DEFAULT_STORE_CODE,
 ) -> dict[str, Any]:
     plan: dict[str, Any] = {
         "schema_version": DIRECTAPI_SCHEMA_VERSION,
-        "store": DEFAULT_STORE,
-        "merchant_id": DEFAULT_MERCHANT_ID,
-        "store_code": DEFAULT_STORE_CODE,
+        "store": str(store),
+        "merchant_id": str(merchant_id),
+        "store_code": str(store_code),
         "target_date": target_date,
         "actions": [],
     }
@@ -800,7 +857,7 @@ def render_report(summary: Mapping[str, Any]) -> str:
     ]
     for item in summary.get("evaluations", []):
         lines.append(
-            f"- `{item.get('campaign_id')}` `{item.get('decision')}`: "
+            f"- `{item.get('store')}` `{item.get('campaign_id')}` `{item.get('decision')}`: "
             f"{', '.join(item.get('reasons') or ['action_planned'])}"
         )
     lines.extend(
@@ -828,6 +885,7 @@ def run_bid_autopilot(
     unit_contribution_by_campaign: Mapping[str, float] | None = None,
     unit_contribution_sources: Mapping[str, str] | None = None,
     expected_skus: Mapping[str, str] | None = None,
+    campaign_scopes: Mapping[str, Mapping[str, str]] | None = None,
     increase_holds: Mapping[str, Mapping[str, str]] | None = None,
     config_path: str = "",
     dry_run: bool = True,
@@ -854,6 +912,7 @@ def run_bid_autopilot(
     unit_map = dict(unit_contribution_by_campaign or {})
     unit_sources = dict(unit_contribution_sources or {})
     expected_sku_map = dict(expected_skus or {})
+    campaign_scope_map = dict(campaign_scopes or {})
     increase_hold_map = dict(increase_holds or {})
     ledger_rows = load_ledger_rows(ledger_path)
 
@@ -861,8 +920,19 @@ def run_bid_autopilot(
     readback: dict[str, Any] = {}
     data_errors: list[str] = []
     for campaign_id in campaign_ids:
+        scope = {
+            "store": DEFAULT_STORE,
+            "merchant_id": DEFAULT_MERCHANT_ID,
+            "store_code": DEFAULT_STORE_CODE,
+            **dict(campaign_scope_map.get(str(campaign_id)) or {}),
+        }
         try:
-            rows = load_campaign_rows(db_path, str(campaign_id))
+            rows = load_campaign_rows(
+                db_path,
+                str(campaign_id),
+                merchant_id=str(scope["merchant_id"]),
+                store_code=str(scope["store_code"]),
+            )
         except Exception as exc:
             rows = []
             data_errors.append(f"{campaign_id}:db_read_failed:{type(exc).__name__}:{exc}")
@@ -894,6 +964,16 @@ def run_bid_autopilot(
                 ceiling_bid=ceiling_bid,
                 max_step_pct=max_step_pct,
             )
+        if isinstance(evaluation.get("action"), Mapping):
+            evaluation = {
+                **evaluation,
+                "action": {
+                    **dict(evaluation["action"]),
+                    "store": str(scope["store"]),
+                    "merchant_id": str(scope["merchant_id"]),
+                    "store_code": str(scope["store_code"]),
+                },
+            }
         increase_hold = dict(increase_hold_map.get(str(campaign_id)) or {})
         if evaluation.get("decision") == "STEP_UP" and increase_hold.get("before_date"):
             hold_before_date = datetime.fromisoformat(increase_hold["before_date"]).date()
@@ -909,6 +989,9 @@ def run_bid_autopilot(
                 }
         evaluation_payload = {
             "campaign_id": str(campaign_id),
+            "store": str(scope["store"]),
+            "merchant_id": str(scope["merchant_id"]),
+            "store_code": str(scope["store_code"]),
             "campaign_name": current.campaign_name if current else "",
             "latest_date": current.date if current else "",
             "current_bid_kzt": current.bid_kzt if current else None,
@@ -940,8 +1023,11 @@ def run_bid_autopilot(
     owner_instrument = standing_instrument_path(env_values)
     owner_instrument_for_plan = owner_instrument if owner_instrument and owner_instrument.is_file() else None
     directapi_plan_path = ""
+    directapi_plan_paths: dict[str, str] = {}
     directapi_dry_summary: dict[str, Any] = {}
+    directapi_dry_summaries: dict[str, dict[str, Any]] = {}
     directapi_confirm_summary: dict[str, Any] = {}
+    directapi_confirm_summaries: dict[str, dict[str, Any]] = {}
     live_writes_executed = False
     status = "no_actions_planned"
     gate = "GREEN"
@@ -952,23 +1038,52 @@ def run_bid_autopilot(
             if plan_only_actions
             else "actions_planned_dry_run_ready"
         )
+        action_groups: dict[str, dict[str, Any]] = {}
+        for action in actions:
+            store = str(action.get("store") or DEFAULT_STORE)
+            merchant_id = str(action.get("merchant_id") or DEFAULT_MERCHANT_ID)
+            store_code = str(action.get("store_code") or DEFAULT_STORE_CODE)
+            scope_key = f"{store}:{merchant_id}:{store_code}"
+            group = action_groups.setdefault(
+                scope_key,
+                {
+                    "store": store,
+                    "merchant_id": merchant_id,
+                    "store_code": store_code,
+                    "actions": [],
+                },
+            )
+            group["actions"].append(action)
         target_date = max(str(item.get("latest_date") or "") for item in evaluations) or now_value.date().isoformat()
-        directapi_plan = build_directapi_plan(
-            actions=actions,
-            target_date=target_date,
-            owner_approval_file=owner_instrument_for_plan,
-        )
-        plan_file = run_dir / "directapi_control_plan.json"
-        _write_json(plan_file, directapi_plan)
-        directapi_plan_path = str(plan_file)
-        directapi_dry_summary = directapi_runner(
-            plan_file=plan_file,
-            dry_run=True,
-            confirm=False,
-            run_root=run_dir / "directapi",
-            timestamp=f"{timestamp or _timestamp()}_dryrun",
-            env=dict(env_values),
-        )
+        for scope_key, group in action_groups.items():
+            store_slug = str(group["store"]).lower().replace("-", "_")
+            single_group = len(action_groups) == 1
+            plan_file = run_dir / (
+                "directapi_control_plan.json"
+                if single_group
+                else f"directapi_control_plan_{store_slug}.json"
+            )
+            directapi_plan = build_directapi_plan(
+                actions=group["actions"],
+                target_date=target_date,
+                owner_approval_file=owner_instrument_for_plan,
+                store=group["store"],
+                merchant_id=group["merchant_id"],
+                store_code=group["store_code"],
+            )
+            _write_json(plan_file, directapi_plan)
+            directapi_plan_paths[scope_key] = str(plan_file)
+            dry_summary = directapi_runner(
+                plan_file=plan_file,
+                dry_run=True,
+                confirm=False,
+                run_root=run_dir / "directapi" / ("" if single_group else store_slug),
+                timestamp=f"{timestamp or _timestamp()}_{store_slug}_dryrun",
+                env=dict(env_values),
+            )
+            directapi_dry_summaries[scope_key] = dry_summary
+        directapi_plan_path = next(iter(directapi_plan_paths.values()), "")
+        directapi_dry_summary = next(iter(directapi_dry_summaries.values()), {})
         if confirm:
             if not owner_instrument_for_plan:
                 gate = "YELLOW"
@@ -976,17 +1091,33 @@ def run_bid_autopilot(
             else:
                 confirm_env = dict(env_values)
                 confirm_env[ENV_CONFIRM_GATE] = ENV_CONFIRM_VALUE
-                directapi_confirm_summary = directapi_runner(
-                    plan_file=plan_file,
-                    dry_run=False,
-                    confirm=True,
-                    run_root=run_dir / "directapi",
-                    timestamp=f"{timestamp or _timestamp()}_confirm",
-                    env=confirm_env,
+                for scope_key, group in action_groups.items():
+                    store_slug = str(group["store"]).lower().replace("-", "_")
+                    single_group = len(action_groups) == 1
+                    confirm_summary = directapi_runner(
+                        plan_file=Path(directapi_plan_paths[scope_key]),
+                        dry_run=False,
+                        confirm=True,
+                        run_root=run_dir / "directapi" / ("" if single_group else store_slug),
+                        timestamp=f"{timestamp or _timestamp()}_{store_slug}_confirm",
+                        env=confirm_env,
+                    )
+                    directapi_confirm_summaries[scope_key] = confirm_summary
+                directapi_confirm_summary = next(iter(directapi_confirm_summaries.values()), {})
+                confirm_gates = {
+                    str(item.get("gate") or "YELLOW")
+                    for item in directapi_confirm_summaries.values()
+                }
+                gate = "GREEN" if confirm_gates == {"GREEN"} else "YELLOW"
+                status = (
+                    f"directapi_confirm_{directapi_confirm_summary.get('status')}"
+                    if len(directapi_confirm_summaries) == 1
+                    else "directapi_confirm_multi_store_completed"
                 )
-                gate = str(directapi_confirm_summary.get("gate") or "YELLOW")
-                status = f"directapi_confirm_{directapi_confirm_summary.get('status')}"
-                live_writes_executed = bool(directapi_confirm_summary.get("live_writes_executed"))
+                live_writes_executed = any(
+                    bool(item.get("live_writes_executed"))
+                    for item in directapi_confirm_summaries.values()
+                )
 
     if data_errors:
         gate = "YELLOW"
@@ -1009,6 +1140,10 @@ def run_bid_autopilot(
             action_change_status = (
                 change_status if included_in_directapi_plan else "planned_portfolio_cap_exceeded"
             )
+            action_store = str(action.get("store") or DEFAULT_STORE)
+            action_merchant_id = str(action.get("merchant_id") or DEFAULT_MERCHANT_ID)
+            action_store_code = str(action.get("store_code") or DEFAULT_STORE_CODE)
+            action_scope_key = f"{action_store}:{action_merchant_id}:{action_store_code}"
             ledger_payloads.append(
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -1016,6 +1151,9 @@ def run_bid_autopilot(
                     "applied_at": applied_at,
                     "run_dir": str(run_dir),
                     "campaign_id": action["campaign_id"],
+                    "store": action_store,
+                    "merchant_id": action_merchant_id,
+                    "store_code": action_store_code,
                     "campaign_name": action["campaign_name"],
                     "sku": action["sku"],
                     "merchant_sku": action["merchant_sku"],
@@ -1025,7 +1163,11 @@ def run_bid_autopilot(
                     "change_status": action_change_status,
                     "owner_authority_label": OWNER_AUTHORITY_LABEL,
                     "owner_instrument_path": str(owner_instrument_for_plan or ""),
-                    "directapi_plan_path": directapi_plan_path if included_in_directapi_plan else "",
+                    "directapi_plan_path": (
+                        directapi_plan_paths.get(action_scope_key, "")
+                        if included_in_directapi_plan
+                        else ""
+                    ),
                     "included_in_directapi_plan": included_in_directapi_plan,
                 }
             )
@@ -1043,6 +1185,23 @@ def run_bid_autopilot(
         "ledger_path": str(ledger_path),
         "config_path": config_path,
         "campaign_ids": list(campaign_ids),
+        "campaign_scopes": {
+            str(campaign_id): {
+                "store": str(
+                    dict(campaign_scope_map.get(str(campaign_id)) or {}).get("store")
+                    or DEFAULT_STORE
+                ),
+                "merchant_id": str(
+                    dict(campaign_scope_map.get(str(campaign_id)) or {}).get("merchant_id")
+                    or DEFAULT_MERCHANT_ID
+                ),
+                "store_code": str(
+                    dict(campaign_scope_map.get(str(campaign_id)) or {}).get("store_code")
+                    or DEFAULT_STORE_CODE
+                ),
+            }
+            for campaign_id in campaign_ids
+        },
         "evaluations": evaluations,
         "planned_actions": actions,
         "plan_only_actions": plan_only_actions,
@@ -1057,10 +1216,13 @@ def run_bid_autopilot(
         },
         "data_errors": data_errors,
         "directapi_plan_path": directapi_plan_path,
+        "directapi_plan_paths": directapi_plan_paths,
         "directapi_dry_run_summary_path": str(directapi_dry_summary.get("summary_path") or ""),
         "directapi_confirm_summary_path": str(directapi_confirm_summary.get("summary_path") or ""),
         "directapi_dry_run_summary": directapi_dry_summary,
+        "directapi_dry_run_summaries": directapi_dry_summaries,
         "directapi_confirm_summary": directapi_confirm_summary,
+        "directapi_confirm_summaries": directapi_confirm_summaries,
         "ledger_rows_appended": len(ledger_payloads),
         "live_writes_executed": live_writes_executed,
         "standing_instrument_env": ENV_STANDING_INSTRUMENT,
@@ -1127,6 +1289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             unit_contribution_by_campaign=unit_map,
             unit_contribution_sources=unit_sources,
             expected_skus=config["expected_skus"],
+            campaign_scopes=config["campaign_scopes"],
             increase_holds=config["increase_holds"],
             config_path=config["path"],
             dry_run=dry_run,

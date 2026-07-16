@@ -4,6 +4,11 @@ store: ACMEWEAR
 merchant_id: "759051"
 store_code: "30137883"
 
+stores:
+  UNIVERSAL:
+    merchant_id: "761413"
+    store_code: "30000001"
+
 schedule:
   local_time: "11:30"
   default_mode: dry_run
@@ -32,6 +37,11 @@ unit_contribution_bases:
     unit_contribution_kzt: 11200
     source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
     source_family: LINE31
+    source_column: unit_contribution_kzt
+  KID_ROMBIK_UNIVERSAL_7990:
+    unit_contribution_kzt: 1544
+    source_path: bid_autopilot_unit_contribution_sources.csv
+    source_family: KID_ROMBIK_UNIVERSAL_7990
     source_column: unit_contribution_kzt
 
 # Excluded: 2690256 has no validated contribution basis at its current price.
@@ -81,3 +91,11 @@ campaigns:
     expected_sku: 20970889b
     product: LINE31 IWB Mixed
     unit_contribution_basis: LINE31
+  - campaign_id: "2572825"
+    store: UNIVERSAL
+    expected_sku: 11862247b
+    product: KID_ROMBIK at 7990
+    unit_contribution_basis: KID_ROMBIK_UNIVERSAL_7990
+    increase_hold_before_date: "2026-07-18"
+    increase_hold_reason: owner_raised_bid_20260717_observe_first
+    increase_hold_authority: OWNER_MESSAGE_20260717_NO_BID_CHANGE_TONIGHT
