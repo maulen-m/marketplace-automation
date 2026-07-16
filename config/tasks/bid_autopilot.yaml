@@ -1,0 +1,55 @@
+schema_version: web_auto.kaspi_marketing_bid_autopilot_config.v1
+
+store: ACMEWEAR
+merchant_id: "759051"
+store_code: "30137883"
+
+schedule:
+  local_time: "11:30"
+  default_mode: dry_run
+  confirm_mode_env: WEB_AUTO_BID_AUTOPILOT_SCHEDULE_MODE
+  confirm_mode_value: confirm
+
+safety:
+  step_pct: 0.15
+  max_step_pct_24h: 0.20
+  floor_bid_kzt: 40
+  ceiling_bid_kzt: 200
+  max_steps_per_run: 3
+
+unit_contribution_bases:
+  LINE51:
+    unit_contribution_kzt: 6900
+    source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
+    source_family: LINE51
+    source_column: unit_contribution_kzt
+  LINE31:
+    unit_contribution_kzt: 11200
+    source_path: ../../../Business_3/Facebook_ads/exports/validation/profit_truth_20260712/family_truth_table.csv
+    source_family: LINE31
+    source_column: unit_contribution_kzt
+
+campaigns:
+  - campaign_id: "2380614"
+    expected_sku: 19102598b
+    product: LINE51 group 1
+    unit_contribution_basis: LINE51
+  - campaign_id: "2626530"
+    expected_sku: 20386415b
+    product: LINE51 group 2
+    unit_contribution_basis: LINE51
+    increase_hold_before_date: "2026-07-18"
+    increase_hold_reason: b51_repositioning_pending_reeval_0718
+    increase_hold_authority: OWNER_VERDICT_CHAIN_CORRECTION_20260714_SECTION_4_HOLD
+  - campaign_id: "2903195"
+    expected_sku: 20887378b
+    product: LINE31 Olive/Cardamom
+    unit_contribution_basis: LINE31
+  - campaign_id: "2910290"
+    expected_sku: 21793800b
+    product: LINE31 Whale Blue
+    unit_contribution_basis: LINE31
+  - campaign_id: "2695637"
+    expected_sku: 20754945b
+    product: LINE31 Starry Black
+    unit_contribution_basis: LINE31
