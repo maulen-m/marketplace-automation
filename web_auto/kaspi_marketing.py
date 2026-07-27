@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
@@ -335,33 +336,57 @@ def _collect_campaign_payloads(
     expected_fragments = {
         "overview": f"/api/v4/merchant/{merchant_id}/Overview/{campaign_id}",
         "core": f"/api/v1/merchant/{merchant_id}/Campaign/{campaign_id}",
-        "products": f"/api/v5/merchant/{merchant_id}/campaign/{campaign_id}/products?StartDate={target_date}&EndDate={target_date}",
-        "categories": f"/api/v4/merchant/{merchant_id}/campaign/{campaign_id}/products-categories?StartDate={target_date}&EndDate={target_date}",
         "daily_views": f"/api/v3/merchant/{merchant_id}/overview/daily/{campaign_id}/views",
+    }
+    dated_path_prefixes = {
+        "products": f"/api/v5/merchant/{merchant_id}/campaign/{campaign_id}/products",
+        "categories": f"/api/v4/merchant/{merchant_id}/campaign/{campaign_id}/products-categories",
     }
     payloads: dict[str, Any] = {}
     errors: list[dict[str, Any]] = []
+    effective_ranges: dict[str, dict[str, str]] = {}
 
     def on_response(resp) -> None:
         url = resp.url
+        parsed_url = urlsplit(url)
+        matched_key = ""
         for key, fragment in expected_fragments.items():
-            if fragment not in url:
-                continue
-            try:
-                status = resp.status
-            except Exception:
-                status = 0
-            if status != 200:
-                errors.append({"key": key, "status": status, "url": url})
-                return
-            try:
-                payloads[key] = resp.json()
-            except Exception:
-                try:
-                    payloads[key] = json.loads(resp.text())
-                except Exception:
-                    payloads[key] = {"raw_text": resp.text()}
+            if fragment in url:
+                matched_key = key
+                break
+        if not matched_key:
+            for key, path_prefix in dated_path_prefixes.items():
+                if parsed_url.path.endswith(path_prefix):
+                    matched_key = key
+                    break
+        if not matched_key:
             return
+        try:
+            status = resp.status
+        except Exception:
+            status = 0
+        if status != 200:
+            errors.append({"key": matched_key, "status": status, "url": url})
+            return
+        try:
+            payloads[matched_key] = resp.json()
+        except Exception:
+            try:
+                payloads[matched_key] = json.loads(resp.text())
+            except Exception:
+                payloads[matched_key] = {"raw_text": resp.text()}
+        if matched_key in dated_path_prefixes:
+            query = {
+                key.lower(): values
+                for key, values in parse_qs(parsed_url.query, keep_blank_values=True).items()
+            }
+            start_date = (query.get("startdate") or [""])[0]
+            end_date = (query.get("enddate") or [""])[0]
+            if start_date and end_date:
+                effective_ranges[matched_key] = {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
 
     page.on("response", on_response)
     try:
@@ -380,7 +405,27 @@ def _collect_campaign_payloads(
     if missing:
         raise RuntimeError(f"marketing_payloads_missing:{campaign_id}:{','.join(missing)}")
     payloads["_meta"] = {"detail_url": target_detail, "errors": errors}
+    for key, effective_range in effective_ranges.items():
+        payloads["_meta"][f"effective_{key}_range"] = effective_range
     return payloads
+
+
+def _resolve_effective_ingestion_date(
+    *,
+    target_date: str,
+    effective_products_range: Any,
+) -> str:
+    if not isinstance(effective_products_range, dict):
+        return target_date
+    start_date = str(effective_products_range.get("start_date") or "").strip()
+    end_date = str(effective_products_range.get("end_date") or "").strip()
+    if not start_date or not end_date:
+        return target_date
+    if start_date != end_date:
+        raise RuntimeError(
+            f"marketing_effective_products_range_not_single_day:{start_date}:{end_date}"
+        )
+    return start_date
 
 
 def _list_payload(data: Any) -> list[dict[str, Any]]:
@@ -746,14 +791,23 @@ def run_kaspi_marketing_fetch(
             products = payloads["products"]
             categories = payloads.get("categories", {})
             daily_views = payloads.get("daily_views", {})
+            payload_meta = payloads.get("_meta", {})
+            effective_products_range = payload_meta.get("effective_products_range")
+            effective_date = _resolve_effective_ingestion_date(
+                target_date=resolved_date,
+                effective_products_range=effective_products_range,
+            )
             payload = {
                 "campaign_id": campaign_id,
                 "target_date": resolved_date,
+                "effective_date": effective_date,
                 "merchant_id": creds.merchant_id,
                 "store_code": creds.store_code,
-                "detail_url": payloads.get("_meta", {}).get("detail_url", ""),
+                "detail_url": payload_meta.get("detail_url", ""),
+                "effective_products_range": effective_products_range,
+                "effective_categories_range": payload_meta.get("effective_categories_range"),
                 "cookies_seen": [cookie.get("name") for cookie in context.cookies("https://marketing.kaspi.kz")],
-                "network_errors": payloads.get("_meta", {}).get("errors", []),
+                "network_errors": payload_meta.get("errors", []),
                 "overview": overview,
                 "core": core,
                 "products": products,
@@ -762,7 +816,7 @@ def run_kaspi_marketing_fetch(
             }
             _write_json(raw_dir / f"campaign_{campaign_id}.json", payload)
             campaign_row = normalize_campaign_daily_row(
-                target_date=resolved_date,
+                target_date=effective_date,
                 merchant_id=creds.merchant_id,
                 store_code=creds.store_code,
                 campaign_id=campaign_id,
@@ -772,7 +826,7 @@ def run_kaspi_marketing_fetch(
             )
             campaign_rows.append(campaign_row)
             normalized_products = normalize_campaign_product_rows(
-                target_date=resolved_date,
+                target_date=effective_date,
                 merchant_id=creds.merchant_id,
                 store_code=creds.store_code,
                 campaign_id=campaign_id,
