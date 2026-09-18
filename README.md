@@ -1,198 +1,99 @@
-# Web_automation — Practical Repo Guide
+# marketplace-automation
 
-This repo automates Kaspi/Repricer operational workflows for store pricing, offer identity mapping, stock-aware pricelist generation, and competitor-control safety loops.
+Browser and API automation for running a marketplace seller account: pricelist
+generation, offer upload, competitor-aware repricing, and the safety controls
+that stop an automated price loop from destroying margin.
 
-Primary in-scope stores:
-- `UNIVERSAL` (`30000001`)
-- `STORE-B` (`30000002`)
+Targets [Kaspi.kz](https://kaspi.kz) merchant cabinet and a third-party
+repricing SaaS. Playwright for the UI paths, direct API where one exists.
+Sanitized public synthesis of a production ops repo.
 
-## 1) What This Repo Does
+---
 
-Core jobs:
-- Build upload-ready Kaspi pricelists from current stock + offer mappings.
-- Keep live Repricer min/max/current prices aligned to business rules.
-- Map Kaspi offers to internal `sku_key` truth with deterministic fallbacks.
-- Maintain safety controls: OOS demotion pricing, competitor ignore lists, non-sell blacklists.
-- Generate traceable outputs (`exports/`, `runs/`) with backups and verification.
+## The problem with automated repricing
 
-## 2) Where Things Live
+A repricer that only tracks the lowest competitor converges on zero. A repricer
+that ignores competitors loses the buy box. The interesting work is in the
+guardrails, and most of this repo is guardrails.
 
-- Logic:
-  - `inventory/`
-  - `web_auto/`
-- Task configs:
-  - `config/tasks/`
-- Stable business/ops docs:
-  - `Docs/`
-- Runtime outputs:
-  - `exports/` (workbooks/csv artifacts)
-  - `runs/` (run summaries and logs)
-- Operator memory/tracking:
-  - `.claude/`
+**Price floors** (`web_auto/kaspi_price_floors.py`,
+`config/price_floor_article_map.yaml`) — a per-article floor derived from COGS
+and marketplace commission. No automated path may write below it, ever.
 
-## 3) Canonical Terms (Important)
+**Out-of-stock demotion** — a zero-stock offer is pushed to a deliberately
+uncompetitive price rather than deactivated, so the listing keeps its history
+and reviews without taking orders it cannot fill.
 
-- `sku_key`:
-  - Internal canonical SKU identifier (single-truth SKU key).
-- `sku_id_ksp`:
-  - Merchant-side Kaspi SKU/article (`артикул`), often embedded in offer rows.
-- `kaspi_sku`:
-  - Additional Kaspi SKU field used as fallback identity key.
-- `resolved_url`:
-  - Normalized Kaspi offer URL, the strongest identity anchor.
-  - Invariant: `1 URL -> 1 sku_key`.
-- `kaspi_offer_name`:
-  - Kaspi-system canonical offer name (idempotent).
-- `kaspi_name_source`:
-  - Merchant custom naming (non-idempotent); do not treat as canonical identity.
-- `resolved_kaspi_offer_name`:
-  - Resolved canonical Kaspi offer name used in workflows.
-- `final_attached_size`:
-  - Final operational size attached to an offer row (used for stock mapping/allocation).
+**Competitor exclusion** (`web_auto/repricer_competitors.py`,
+`web_auto/competition_rules.py`) — partner and own-account storefronts are kept
+in ignore lists, because racing your own second store to the bottom is the
+easiest way to lose money automatically.
 
-## 4) Offer Identification Logic (How Mapping Works)
+**Dumping detection** (`web_auto/repricer_dumping.py`) — identifies competitors
+pricing below any plausible cost, which the repricer must not chase.
 
-Deterministic priority:
-1. `resolved_url` / `link` exact match
-2. `sku_id_ksp` exact match
-3. `kaspi_sku` exact match
+**Unified truth** (`web_auto/repricer_unified_truth.py`) — the repricer's view
+and the marketplace's view of the same offer disagree routinely. One reconciled
+record decides.
 
-If unresolved:
-- Keep row unresolved (do not force risky edits).
-- Use controlled backfill only when evidence is strong.
+## Layout
 
-Key rule:
-- URL is the strongest stable cross-store identifier and should dominate merges/backfills.
-
-## 5) offers_book Workbook Model
-
-Main workbook:
-- `exports/offers_book.xlsx`
-
-Critical sheets:
-- `offers_merged`:
-  - Offer-level rows across stores with identity columns (`resolved_url`, `resolved_sku_key`, names, store, status fields).
-- `size_level`:
-  - Size attachment layer keyed by `offer_row_index`.
-  - Holds `final_attached_size` and size-rule provenance.
-
-Operational use:
-- `offers_merged` provides identity.
-- `size_level.final_attached_size` provides size for stock lookup/allocation.
-
-## 6) Size Logic (What "Final Size" Means)
-
-High-level behavior:
-- URL/text extraction first (URL preferred, offer-name fallback).
-- Probability/consensus over historical signals.
-- Tie-break: larger size wins for equal share.
-- Kids ladder is capped to: `22,24,26,28,30,S`.
-- Electronics (`ELS`) use `ONE_SIZE`.
-
-Special overrides exist for defined families (documented in `Docs/kaspi_item_truth.md`).
-
-## 7) Pricelist Build Logic (End-to-End)
-
-Main script:
-- `inventory/build_pricelist_snapshots_and_uploads.py`
-
-Inputs:
-- Source On/Off templates:
-  - `Docs/price_lists/21.02.2026_09_19/...`
-- Offers identity/size:
-  - `exports/offers_book.xlsx`
-- Warehouse snapshot:
-  - `exports/stock_snapshots/...`
-- Profit floor truth:
-  - `Docs/inventory/Dim_sku_light_v7.md` as fallback SKU anchors
-  - `exports/pricelist_snapshots/min_price_floor_35pct_by_sku_v6.csv`
-
-Flow:
-1. Load and merge store On/Off source sheets.
-2. Attach offer identity (`sku_key`, URL, names) and `final_attached_size`.
-3. Resolve stock by `(sku_key, final_attached_size)`.
-4. Allocate stock between stores (business allocation rules).
-5. Apply force-off blacklists/restrictions.
-6. Compute/attach `min_price_input` and `max_price_input`:
-  - in-stock `min` follows floor35 (`Min_price_35pct`) unless explicit override.
-7. Write snapshot + upload outputs using strict template columns.
-8. Enforce numeric cell format for numeric columns (Kaspi upload requirement).
-9. Backup files and append edit log.
-
-Outputs:
-- `exports/pricelist_snapshots/universal_snapshot_<date>.xlsx`
-- `exports/pricelist_snapshots/store-b_snapshot_<date>.xlsx`
-- `exports/pricelist_snapshots/upload/*_upload_<date>.xlsx`
-
-## 8) Live Repricer Redflag Logic
-
-Main apply script:
-- `inventory/apply_repricer_minmax_from_snapshots.py`
-
-What it enforces:
-- OOS safety locks where required (`14990/14990` behavior by rule scope).
-- Min/Max target sync from snapshot rules.
-- DLRO:
-  - `Dynamic Live Raise Opportunities` (`live_price_raise_updates`).
-  - Raise live price toward valid external competitor floor within target min/max bounds.
-
-Companion competitor-ignore automation:
-- `web-auto run repricer-competitors ... --api --api-verify --confirm`
-- Ensures our own stores/target sellers are in ignore lists.
-
-## 9) Current Key Pricing Controls (Summary)
-
-Detailed truth is in:
-- `Docs/inventory/repricer_live_price_rules.md`
-- `Docs/kaspi_item_truth.md`
-
-Notable active behavior:
-- In-stock min is floor35-driven.
-- Shared URLs (`UNIVERSAL` + `STORE-B`) use store-priority spread: `UNIVERSAL` leads by at least `1` KZT on min (implemented as raise-only on STORE-B min when feasible).
-- Shirt-family max `4990` applies to explicit allowlist (+ Nike-shirt fallback), with exclusions.
-- Kid suit families (`KID-31`, `KID_ROMBIK`) are pinned to in-stock max `14990`.
-- Line52 lock list behavior is URL-scoped and store-scoped by rule.
-
-## 10) Most Useful Commands
-
-- Redflag/DLRO dry scan:
-```bash
-set -a; source .env; set +a
-PYTHONPATH=. ./.venv/bin/python inventory/apply_repricer_minmax_from_snapshots.py \
-  --snapshot-date 2026-03-02 --headless --dry-run --verify
+```
+web_auto/                 49 modules
+  auth.py                 session/storage-state handling
+  kaspi_pricelist_*.py    download, safe-patch, upload, verify
+  kaspi_offer_ui_upload*  Playwright existing-card offer onboarding
+  kaspi_marketing_*.py    ad controls, bid autopilot, direct-API pipeline
+  repricer_*.py           competitor scan, min-price sync, protection, export
+  kaspi_price_floors.py   the floor that nothing may cross
+  checkpoint.py           restorable state before any write batch
+  offer_flow_registry.py  declarative offer-state machines
+config/tasks/             one YAML per scheduled job
+scripts/                  one-shot builders and validators
+skills/                   an operational playbook for the offer control plane
 ```
 
-- Redflag/DLRO live apply:
+## Safety model
+
+Every write path follows the same shape:
+
+1. **Read and snapshot** current live state (`kaspi_hourly_snapshot.py`).
+2. **Compute** the intended change, offline.
+3. **Checkpoint** — write the restorable state (`checkpoint.py`).
+4. **Dry-run** — emit the diff; this is the default.
+5. **Apply** only under an explicit flag.
+6. **Verify by fresh readback** — re-fetch ACTIVE/ARCHIVE state and assert the
+   result, rather than trusting the write's own response.
+
+Step 6 exists because the merchant UI reports success on uploads that are
+accepted but not processed. "Uploaded" is not "applied."
+
+## Running it
+
 ```bash
-set -a; source .env; set +a
-PYTHONPATH=. ./.venv/bin/python inventory/apply_repricer_minmax_from_snapshots.py \
-  --snapshot-date 2026-03-02 --headless --confirm --verify
+pip install -r requirements.txt
+playwright install chromium
+cp .env.example .env
+
+python3 -m web_auto pricelist download --store STORE-A
+python3 -m web_auto pricelist patch --in current.xlsx --out upload.xlsx --dry-run
+python3 -m web_auto repricer sync-min-price --dry-run
 ```
 
-- Competitor-ignore verify/apply:
-```bash
-set -a; source .env; set +a
-./web-auto --json run repricer-competitors \
-  --config config/tasks/repricer_competitors.yaml \
-  --account app_1 --stores 30000001,30000002 \
-  --api --api-verify --confirm --headless
-```
+Nothing writes without `--apply`.
 
-- Build snapshots + uploads:
-```bash
-./.venv/bin/python inventory/build_pricelist_snapshots_and_uploads.py --confirm ...
-```
+## What is not in this repo
 
-## 11) Single Source of Truth Docs
+Exported workbooks and parquet datasets, inventory snapshots, run logs,
+authenticated browser storage state, credentials, and `.claude/` working memory
+— all removed from the full history. Brand, store and SKU identifiers are
+placeholders; the third-party repricing SaaS appears as `Repricer`.
 
-If you read only a few docs, read these in order:
-1. `Docs/kaspi_item_truth.md`
-2. `Docs/inventory/repricer_live_price_rules.md`
-3. `.claude/OPERATING.md`
-4. `AGENTS.md`
+## Provenance
 
-## 12) Practical Rule of Thumb
+32 commits with their original January–July 2026 author dates; development
+branches consolidated into `main`.
 
-- Never change offer identity based on weak text similarity when URL evidence exists.
-- Never relax min/max safety rules to chase sales blindly.
-- Treat DLRO as continuous market drift handling, not a one-time cleanup.
+## License
+
+MIT — see [LICENSE](LICENSE).
